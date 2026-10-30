@@ -467,8 +467,9 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
         inter.push({ group: label, label, value: `\\text{${pts.length / 2} 个交点}`, num: null, how: '', why: '交点过多，仅在图上标出', shape: null })
       }
       for (let k = 0; k < pts.length && k < 24; k += 2) {
-        const x = pts[k]
-        const y = pts[k + 1]
+        const snap = (v: number) => (Math.abs(v) < 1e-6 ? 0 : v)
+        const x = snap(pts[k])
+        const y = snap(pts[k + 1])
         marks.push({ p: [x, y], label: `${A.name}∩${B.name}` })
         if (pts.length <= 24) inter.push({ group: label, label: `P_{${k / 2 + 1}}`, value: `\\left(${engine.nice(x).split(' ')[0]},\\ ${engine.nice(y).split(' ')[0]}\\right)`, num: null, how: A.kind === 'curve' && B.kind === 'curve' ? `${A.name}(x) = ${B.name}(x)` : '\\text{联立方程}', why: `≈ (${fmt(x)}, ${fmt(y)})`, shape: null })
       }
