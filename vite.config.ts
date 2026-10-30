@@ -18,4 +18,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 47322,
   },
+  build: {
+    // Plotly (~4.6 MB) is its own lazily imported chunk, loaded only when a plot opens.
+    chunkSizeWarningLimit: 5000,
+  },
 })
