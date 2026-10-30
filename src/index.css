@@ -1,0 +1,189 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource/caveat/500.css";
+@import "@fontsource/caveat/700.css";
+@import "katex/dist/katex.min.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-hand: 'Caveat', "Kaiti SC", "STKaiti", "KaiTi", "LXGW WenKai", cursive;
+    --color-kraft-50: #f5ead8;
+    --color-kraft-100: #ecdcc0;
+    --color-kraft-200: #e0c79f;
+    --color-kraft-300: #cfac7e;
+    --color-kraft-400: #ba8f5f;
+    --color-kraft-500: #9f7248;
+    --color-kraft-600: #7f5836;
+    --color-kraft-700: #5f4128;
+    --color-kraft-800: #432d1c;
+    --color-ink: #2e2116;
+    --color-ink-blue: #2f4a6d;
+    --color-ink-red: #9b3b2a;
+    --color-ink-green: #4d6b3c;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Kraft palette — no white chrome anywhere */
+:root {
+    --background: #cfac7e;
+    --foreground: #2e2116;
+    --card: #ecdcc0;
+    --card-foreground: #2e2116;
+    --popover: #ead7b6;
+    --popover-foreground: #2e2116;
+    --primary: #5f4128;
+    --primary-foreground: #f5ead8;
+    --secondary: #dcc199;
+    --secondary-foreground: #3d2a1a;
+    --muted: #dcc49f;
+    --muted-foreground: #6b4f35;
+    --accent: #d8bb8e;
+    --accent-foreground: #2e2116;
+    --destructive: #a3402e;
+    --border: rgba(84, 56, 30, 0.22);
+    --input: rgba(84, 56, 30, 0.28);
+    --ring: #8a5a33;
+    --chart-1: #2f4a6d;
+    --chart-2: #9b3b2a;
+    --chart-3: #4d6b3c;
+    --chart-4: #8a5a1f;
+    --chart-5: #5b3f6e;
+    --radius: 0.75rem;
+    --sidebar: #e0c79f;
+    --sidebar-foreground: #2e2116;
+    --sidebar-primary: #5f4128;
+    --sidebar-primary-foreground: #f5ead8;
+    --sidebar-accent: #d8bb8e;
+    --sidebar-accent-foreground: #2e2116;
+    --sidebar-border: rgba(84, 56, 30, 0.22);
+    --sidebar-ring: #8a5a33;
+
+    --paper-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.32  0 0 0 0 0.2  0 0 0 0 0.09  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    --paper-fibers: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='420'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.012 0.42' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.27  0 0 0 0 0.12  0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer components {
+  /* the scrapbook page itself */
+  .kraft-page {
+    background-color: #c9a473;
+    background-image:
+      radial-gradient(ellipse at 50% 40%, rgba(255, 238, 205, 0.32), transparent 70%),
+      radial-gradient(ellipse at 50% 120%, rgba(70, 40, 15, 0.28), transparent 60%),
+      var(--paper-fibers),
+      var(--paper-noise);
+    background-blend-mode: normal, multiply, multiply, multiply;
+  }
+  /* lighter kraft for floating chrome */
+  .kraft-panel {
+    background-color: #e6d1ad;
+    background-image: linear-gradient(rgba(255, 246, 228, 0.35), rgba(255, 246, 228, 0.1)), var(--paper-noise);
+    background-blend-mode: normal, multiply;
+    border: 1px solid rgba(84, 56, 30, 0.2);
+    box-shadow:
+      0 1px 0 rgba(255, 248, 232, 0.6) inset,
+      0 10px 30px -12px rgba(60, 35, 15, 0.45),
+      0 2px 6px -2px rgba(60, 35, 15, 0.25);
+  }
+  .kraft-card {
+    background-color: #efe2c8;
+    background-image: linear-gradient(rgba(255, 250, 238, 0.5), rgba(255, 250, 238, 0.15)), var(--paper-noise);
+    background-blend-mode: normal, multiply;
+    box-shadow:
+      0 1px 0 rgba(255, 250, 238, 0.8) inset,
+      0 14px 24px -14px rgba(55, 32, 12, 0.6),
+      0 3px 6px -3px rgba(55, 32, 12, 0.3);
+  }
+  .washi {
+    background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.28) 0 6px, transparent 6px 12px);
+    mask-image: linear-gradient(90deg, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
+  }
+  .hand {
+    font-family: var(--font-hand);
+  }
+  .dot-grid {
+    background-image: radial-gradient(rgba(70, 42, 18, 0.22) 1px, transparent 1.4px);
+  }
+}
+
+.katex {
+  font-size: 1.08em;
+}
+.katex-display {
+  margin: 0;
+}
+
+/* plotly mode bar on kraft */
+.js-plotly-plot .plotly .modebar {
+  background: transparent !important;
+}
+.js-plotly-plot .plotly .modebar-btn path {
+  fill: #6b4f35 !important;
+}
+
+@media (pointer: coarse) {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
