@@ -11,7 +11,8 @@
     "build:wasm": "cd crates/mathcore && wasm-pack build --target web --release --out-dir ../../src/wasm/pkg --out-name mathcore && rm -f ../../src/wasm/pkg/.gitignore",
     "test:rust": "cd crates/mathcore && cargo test",
     "smoke": "tsx scripts/smoke.ts",
-    "e2e": "tsx scripts/e2e-plots.ts"
+    "e2e": "tsx scripts/e2e-plots.ts",
+    "e2e:sheet": "tsx scripts/e2e-sheet.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

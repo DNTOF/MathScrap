@@ -1,5 +1,5 @@
 /**
- * Browser check of every plot path: for each formula case, load a blank page, add the card
+ * Browser check of every plot path: for each formula case, load a blank sheet, write the formula
  * through `window.mathscrap.tools`, open its coordinate system, and assert that ink really
  * landed on the axes — SVG line/contour points inside the 2D plot area, and coloured pixels
  * in a screenshot of the plot (2D and WebGL 3D alike).
@@ -76,7 +76,7 @@ async function run(viewport: { width: number; height: number }, subset?: number[
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
-  await page.addInitScript(() => localStorage.setItem('mathscrap.doc.v1', JSON.stringify({ strokes: [], cards: [], stickers: [] })))
+  await page.addInitScript(() => localStorage.setItem('mathscrap.doc.v2', JSON.stringify({ strokes: [], cards: [], stickers: [] })))
   const tag = viewport.width < 500 ? 'phone' : 'desktop'
   let failed = 0
   const list = subset ? subset.map((i) => cases[i]) : cases
