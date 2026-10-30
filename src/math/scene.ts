@@ -1,0 +1,654 @@
+import { engine, getStats, resetStats, type Env, type RustFact } from '@/wasm/engine'
+import { kindLabel, parseCard, statementLatex, type Ref, type Statement } from './statements'
+
+export const INK = ['#2f4a6d', '#9b3b2a', '#4d6b3c', '#8a5a1f', '#5b3f6e', '#2e6f6a', '#7a2f4f']
+
+export const RANGE = 20
+
+export interface CardInput {
+  id: string
+  text: string
+}
+
+export type PlotObj =
+  | { type: 'curve'; name: string; expr: string; color: string }
+  | { type: 'implicit2'; name: string; F: string; color: string }
+  | { type: 'surface'; name: string; expr: string; color: string }
+  | { type: 'plane'; name: string; n: number[]; d: number; color: string }
+  | { type: 'implicit3'; name: string; F: string; color: string }
+  | { type: 'points'; pts: { name: string; p: number[] }[]; polygon: boolean; color: string }
+  | { type: 'triangle'; verts: [number, number][]; names: string; color: string; dashed: boolean }
+  | { type: 'vector'; name: string; v: number[]; color: string }
+  | { type: 'param'; name: string; comps: string[]; color: string }
+  | { type: 'marks'; pts: { p: number[]; label: string }[] }
+
+export interface FactSection {
+  id: string
+  title: string
+  subtitle?: string
+  tone: 'solve' | 'geo' | 'func' | 'vec' | 'inter' | 'warn'
+  facts: RustFact[]
+}
+
+export interface SolvedUnknowns {
+  unknowns: string[]
+  solutions: number[][]
+  index: number
+  exact: boolean
+  conditions: string[]
+  note: string
+}
+
+export interface Analysis {
+  dim: 2 | 3
+  dimReason: string
+  givens: { latex: string; kind: string; cardId: string }[]
+  errors: { src: string; message: string }[]
+  solve: SolvedUnknowns | null
+  env: Env
+  sections: FactSection[]
+  factCount: number
+  objects: PlotObj[]
+  equalAspect: boolean
+  stats: { calls: number; ms: number }
+}
+
+interface Item {
+  st: Statement
+  cardId: string
+  idx: number
+}
+
+const sub = (src: string, name: string, w: string) => engine.substitute(src, name, `(${w})`)
+
+function freeVars(src: string): string[] {
+  const r = engine.inspect(src)
+  return r.ok ? r.vars : []
+}
+
+function isCurveLike(s: Statement) {
+  return s.kind === 'curve' || s.kind === 'implicit2' || s.kind === 'surface' || s.kind === 'implicit3'
+}
+
+function angleValueSrc(v: string) {
+  return /°|pi|π/.test(v) ? v : `(${v})°`
+}
+
+/**
+ * Build a full analysis for the given cards. `primary` is the card the user opened;
+ * `solutionIndex` picks among multiple solutions of the unknowns.
+ */
+export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
+  resetStats()
+  const items: Item[] = []
+  cards.forEach((c) => parseCard(c.text).forEach((st) => items.push({ st, cardId: c.id, idx: items.length })))
+
+  const errors = items.filter((i) => i.st.kind === 'error').map((i) => ({ src: i.st.src, message: (i.st as { message: string }).message }))
+  const good = items.filter((i) => i.st.kind !== 'error')
+  const givens = good.map((i) => ({ latex: statementLatex(i.st), kind: kindLabel(i.st), cardId: i.cardId }))
+
+  // ---- names ---------------------------------------------------------------
+  const names = new Map<Item, string>()
+  const used = new Set<string>()
+  good.forEach((i) => {
+    const n = (i.st as { name?: string }).name
+    if (n) used.add(n)
+  })
+  const nextName = (pool: string[], fallback: (k: number) => string) => {
+    for (const p of pool) if (!used.has(p)) {
+      used.add(p)
+      return p
+    }
+    let k = 1
+    while (used.has(fallback(k))) k++
+    used.add(fallback(k))
+    return fallback(k)
+  }
+  let anon = 0
+  for (const i of good) {
+    const st = i.st
+    if (st.kind === 'point') names.set(i, st.name || `P_${++anon}`)
+    else if (st.kind === 'curve') names.set(i, st.name ?? nextName(['f', 'g', 'h', 'u', 'w'], (k) => `f_${k}`))
+    else if (st.kind === 'surface') names.set(i, st.name ?? nextName(['S'], (k) => `S_${k}`))
+    else if ('name' in st && st.name) names.set(i, st.name)
+  }
+
+  // ---- symbol tables ---------------------------------------------------------
+  const points = new Map<string, string[]>()
+  const vectors = new Map<string, string[]>()
+  const funcs = new Map<string, string>()
+  for (const i of good) {
+    if (i.st.kind === 'point') points.set(names.get(i)!, i.st.coords)
+    if (i.st.kind === 'vector') vectors.set(i.st.name, i.st.comps)
+    if (i.st.kind === 'curve') funcs.set(names.get(i)!, i.st.expr)
+  }
+
+  // ---- unknowns ---------------------------------------------------------------
+  const unknownSet = new Set<string>()
+  const addVars = (src: string, bound: string[]) => freeVars(src).forEach((v) => !bound.includes(v) && unknownSet.add(v))
+  for (const { st } of good) {
+    switch (st.kind) {
+      case 'curve':
+        addVars(st.expr, ['x'])
+        break
+      case 'implicit2':
+        addVars(st.F, ['x', 'y'])
+        break
+      case 'surface':
+        addVars(st.expr, ['x', 'y'])
+        break
+      case 'implicit3':
+        addVars(st.F, ['x', 'y', 'z'])
+        break
+      case 'param':
+        st.comps.forEach((c) => addVars(c, ['t']))
+        break
+      case 'point':
+        st.coords.forEach((c) => addVars(c, []))
+        break
+      case 'vector':
+        st.comps.forEach((c) => addVars(c, []))
+        break
+      case 'constraint': {
+        const c = st.c
+        if (c.type === 'len' || c.type === 'angle') addVars(c.value, [])
+        if (c.type === 'fcall') {
+          addVars(c.arg, [])
+          addVars(c.value, [])
+        }
+        if (c.type === 'through' && c.coords) c.coords.forEach((x) => addVars(x, []))
+        if (c.type === 'equation') addVars(c.F, [])
+        break
+      }
+      default:
+        break
+    }
+  }
+  const unknowns = [...unknownSet]
+
+  // ---- residual equations from constraints -------------------------------------
+  const residuals: string[] = []
+  const conditions: string[] = []
+  const constraintErrors: { src: string; message: string }[] = []
+  const refComps = (r: Ref): string[] | null => {
+    if (r.kind === 'vec') return vectors.get(r.name) ?? null
+    const P = points.get(r.p)
+    const Q = points.get(r.q)
+    if (!P || !Q) return null
+    const dim = Math.max(P.length, Q.length)
+    return Array.from({ length: dim }, (_, k) => `(${Q[k] ?? '0'}) - (${P[k] ?? '0'})`)
+  }
+  const dot = (u: string[], v: string[]) => u.map((a, k) => `(${a})*(${v[k] ?? '0'})`).join(' + ')
+  const norm2 = (u: string[]) => u.map((a) => `(${a})^2`).join(' + ')
+
+  good.forEach((item, pos) => {
+    const st = item.st
+    if (st.kind !== 'constraint') return
+    const c = st.c
+    const before = residuals.length
+    const fail = (message: string) => constraintErrors.push({ src: st.src, message })
+    switch (c.type) {
+      case 'perp':
+      case 'para': {
+        const u = refComps(c.a)
+        const v = refComps(c.b)
+        if (!u || !v) return fail('找不到相关的点或向量，请先写出它们')
+        if (c.type === 'perp') residuals.push(dot(u, v))
+        else if (Math.max(u.length, v.length) === 2) residuals.push(`(${u[0]})*(${v[1] ?? '0'}) - (${u[1]})*(${v[0]})`)
+        else {
+          const [a1, a2, a3] = [u[0], u[1], u[2] ?? '0']
+          const [b1, b2, b3] = [v[0], v[1], v[2] ?? '0']
+          residuals.push(`(${a2})*(${b3}) - (${a3})*(${b2})`, `(${a3})*(${b1}) - (${a1})*(${b3})`, `(${a1})*(${b2}) - (${a2})*(${b1})`)
+        }
+        break
+      }
+      case 'len': {
+        const u = refComps(c.ref)
+        if (!u) return fail('找不到相关的点或向量')
+        residuals.push(`${norm2(u)} - (${c.value})^2`)
+        break
+      }
+      case 'angle': {
+        const P = points.get(c.p)
+        const Q = points.get(c.q)
+        const R = points.get(c.r)
+        if (!P || !Q || !R) return fail('∠ 需要先定义三个点')
+        const u = P.map((p, k) => `(${p}) - (${Q[k] ?? '0'})`)
+        const v = R.map((r, k) => `(${r}) - (${Q[k] ?? '0'})`)
+        residuals.push(`${dot(u, v)} - sqrt(${norm2(u)})*sqrt(${norm2(v)})*cos(${angleValueSrc(c.value)})`)
+        break
+      }
+      case 'through': {
+        const coords = c.coords ?? (c.point ? points.get(c.point) : null)
+        if (!coords) return fail('找不到这个点')
+        let target: Item | undefined
+        for (let k = pos - 1; k >= 0; k--) {
+          if (good[k].cardId === item.cardId && isCurveLike(good[k].st)) {
+            target = good[k]
+            break
+          }
+        }
+        target ??= good.find((g) => isCurveLike(g.st))
+        if (!target) return fail('“过某点”需要先写出一条曲线，例如 y = kx + b')
+        const t = target.st
+        const [p, q, r] = coords
+        if (t.kind === 'curve') residuals.push(`(${sub(t.expr, 'x', p)}) - (${q})`)
+        else if (t.kind === 'implicit2') residuals.push(sub(sub(t.F, 'x', p), 'y', q ?? '0'))
+        else if (t.kind === 'surface') residuals.push(`(${sub(sub(t.expr, 'x', p), 'y', q ?? '0')}) - (${r ?? '0'})`)
+        else if (t.kind === 'implicit3') residuals.push(sub(sub(sub(t.F, 'x', p), 'y', q ?? '0'), 'z', r ?? '0'))
+        break
+      }
+      case 'fcall': {
+        const e = funcs.get(c.fname)
+        if (!e) return fail(`还没有定义函数 ${c.fname}(x)`)
+        if (c.deriv) {
+          const h = '0.000001'
+          residuals.push(`((${sub(e, 'x', `(${c.arg})+${h}`)}) - (${sub(e, 'x', `(${c.arg})-${h}`)}))/(2*${h}) - (${c.value})`)
+        } else residuals.push(`(${sub(e, 'x', c.arg)}) - (${c.value})`)
+        break
+      }
+      case 'equation':
+        residuals.push(c.F)
+        break
+    }
+    if (residuals.length > before) conditions.push(statementLatex(st))
+  })
+  errors.push(...constraintErrors)
+
+  // ---- solve --------------------------------------------------------------------
+  let env: Env = {}
+  let solve: SolvedUnknowns | null = null
+  const sections: FactSection[] = []
+  if (unknowns.length) {
+    if (!residuals.length) {
+      unknowns.forEach((u) => (env[u] = 1))
+      solve = { unknowns, solutions: [], index: 0, exact: false, conditions, note: `含未知量 ${unknowns.join(', ')}，但还没有条件。暂按 ${unknowns.map((u) => `${u}=1`).join(', ')} 绘图——试着加上「过(1, 3)」或「AB ⊥ BC」。` }
+    } else {
+      const r = engine.solveSystem(residuals, unknowns)
+      const negatives = (s: number[]) => s.filter((v) => v < 0).length
+      const sols = [...r.solutions].sort((a, b) => negatives(a) - negatives(b))
+      const index = Math.min(solutionIndex, Math.max(0, sols.length - 1))
+      if (sols.length) unknowns.forEach((u, k) => (env[u] = sols[index][k]))
+      else unknowns.forEach((u) => (env[u] = 1))
+      const missing = unknowns.length - residuals.length
+      let note = ''
+      if (r.error) note = `条件里有无法解析的内容：${r.error}`
+      else if (!sols.length) note = '没有找到满足所有条件的解。'
+      else if (!r.exact) note = '这些条件不能同时精确满足，下面是误差最小的近似解（请检查条件是否矛盾）。'
+      else if (missing > 0) note = `条件比未知量少 ${missing} 个，解不唯一；这里展示其中一组。`
+      else if (sols.length > 1) note = `共有 ${sols.length} 组解，可在上方切换。`
+      solve = { unknowns, solutions: sols, index, exact: r.exact, conditions, note }
+      const how = conditions.length ? `\\begin{cases} ${conditions.join(' \\\\ ')} \\end{cases}` : ''
+      sections.push({
+        id: 'solve',
+        title: '解出未知量',
+        subtitle: `联立 ${residuals.length} 个方程 · Rust 多起点 LM 求解`,
+        tone: sols.length && r.exact ? 'solve' : 'warn',
+        facts: sols.length
+          ? unknowns.map((u, k) => ({ group: '未知量', label: engine.latex(u), value: engine.nice(sols[index][k]), num: sols[index][k], how, why: sols.length > 1 ? `第 ${index + 1} / ${sols.length} 组解` : '唯一解', shape: null }))
+          : [{ group: '未知量', label: unknowns.join(','), value: '\\text{无解}', num: null, how, why: '条件矛盾或超出搜索范围', shape: null }],
+      })
+    }
+  }
+
+  const num = (src: string) => engine.eval(src, env)
+  const objects: PlotObj[] = []
+  let color = 0
+  const nextColor = () => INK[color++ % INK.length]
+
+  // ---- triangles -------------------------------------------------------------------
+  let equalAspect = false
+  for (const i of good) {
+    if (i.st.kind !== 'triangle') continue
+    equalAspect = true
+    const st = i.st
+    const known: Record<string, number> = {}
+    for (const [k, v] of Object.entries(st.known)) {
+      known[k] = /[ABC]/.test(k) ? num(angleValueSrc(v)) : num(v)
+    }
+    const res = engine.triangle(known)
+    const givenFacts: RustFact[] = Object.entries(st.known).map(([k, v]) => ({
+      group: '已知',
+      label: k === 'S' ? 'S' : /[ABC]/.test(k) ? `\\angle ${st.names['ABC'.indexOf(k)]}` : st.names.toLowerCase()['abc'.indexOf(k)],
+      value: /[ABC]/.test(k) ? engine.latex(angleValueSrc(v)) : engine.latex(v),
+      num: known[k],
+      how: '',
+      why: '题目给出',
+      shape: null,
+    }))
+    if (res.error) {
+      sections.push({ id: `tri-${i.idx}`, title: `△${st.names}`, subtitle: '解三角形', tone: 'warn', facts: [...givenFacts, { group: '无法求解', label: '\\text{提示}', value: `\\text{${res.error}}`, num: null, how: '', why: '', shape: null }] })
+      continue
+    }
+    const renamed = (f: RustFact) => ({ ...f, label: renameTri(f.label, st.names), how: renameTri(f.how, st.names) })
+    res.cases.forEach((cs, k) => {
+      sections.push({
+        id: `tri-${i.idx}-${k}`,
+        title: `△${st.names}${res.cases.length > 1 ? ` · 第 ${k + 1} 解` : ''}`,
+        subtitle: cs.note,
+        tone: 'geo',
+        facts: [...(k === 0 ? givenFacts : []), ...cs.facts.map(renamed)],
+      })
+      objects.push({ type: 'triangle', verts: cs.vertices, names: st.names, color: nextColor(), dashed: k > 0 })
+    })
+  }
+
+  // ---- points ------------------------------------------------------------------------
+  const numPoints: { name: string; p: number[] }[] = []
+  for (const [name, coords] of points) {
+    const p = coords.map(num)
+    if (p.every(Number.isFinite)) numPoints.push({ name, p })
+    else errors.push({ src: name, message: `点 ${name} 的坐标无法求值` })
+  }
+  const pts2 = numPoints.filter((p) => p.p.length === 2)
+  const pts3 = numPoints.filter((p) => p.p.length === 3)
+  if (numPoints.length) {
+    equalAspect = true
+    const group = pts3.length ? pts3 : pts2
+    const facts = engine.points(group)
+    if (facts.length) {
+      const title = group.length >= 3 ? `${group.length === 3 ? '△' : group.length === 4 ? '四边形 ' : '多边形 '}${group.map((p) => p.name).join('')}` : `点 ${group.map((p) => p.name).join(', ')}`
+      sections.push({ id: 'points', title, subtitle: pts3.length ? '空间坐标几何' : '坐标几何', tone: 'geo', facts })
+    }
+    objects.push({ type: 'points', pts: group, polygon: group.length >= 3, color: '#3b2a1a' })
+  }
+
+  // ---- curves: classify lines / conics / general functions -----------------------------
+  type Curve = { item: Item; name: string; kind: 'curve' | 'implicit2'; src: string; line?: { a: number; b: number; c: number } }
+  const curves: Curve[] = []
+  for (const i of good) {
+    if (i.st.kind === 'curve') {
+      const co = engine.linearCoeffs(i.st.expr, ['x'], env)
+      const name = names.get(i)!
+      const c: Curve = { item: i, name, kind: 'curve', src: i.st.expr }
+      if (co) c.line = { a: -co[0], b: 1, c: co[1] }
+      curves.push(c)
+    } else if (i.st.kind === 'implicit2') {
+      const co = engine.linearCoeffs(i.st.F, ['x', 'y'], env)
+      const isLine = !!co && (co[0] !== 0 || co[1] !== 0)
+      const name = i.st.name ?? (isLine ? nextName(['l', 'm', 'n'], (k) => `l_${k}`) : nextName(['C'], (k) => `C_${k}`))
+      names.set(i, name)
+      const c: Curve = { item: i, name, kind: 'implicit2', src: i.st.F }
+      if (isLine && co) c.line = { a: co[0], b: co[1], c: -co[2] }
+      curves.push(c)
+    }
+  }
+  curves.forEach((c) => {
+    const col = nextColor()
+    objects.push(c.kind === 'curve' ? { type: 'curve', name: c.name, expr: c.src, color: col } : { type: 'implicit2', name: c.name, F: c.src, color: col })
+  })
+
+  const lines = curves.filter((c) => c.line)
+  if (lines.length) {
+    const facts = engine.lines(lines.map((l) => ({ name: l.name, ...l.line! })), pts2)
+    sections.push({ id: 'lines', title: lines.length > 1 ? `直线 ${lines.map((l) => l.name).join(', ')}` : `直线 ${lines[0].name}`, subtitle: '斜率 · 截距 · 位置关系', tone: 'func', facts })
+  }
+
+  for (const c of curves) {
+    if (c.line) continue
+    if (c.kind === 'implicit2') {
+      const facts = engine.conic(c.src, env, c.name)
+      if (facts.length) {
+        equalAspect = true
+        sections.push({ id: `conic-${c.name}`, title: `曲线 ${c.name}`, subtitle: '圆锥曲线识别（配方 / 特征值）', tone: 'func', facts })
+      }
+      continue
+    }
+    const facts: RustFact[] = []
+    const gaps = engine.domainGaps(c.src, 'x', env, -RANGE, RANGE)
+    if (gaps.length) {
+      const parts: string[] = []
+      for (let k = 0; k < gaps.length; k += 2) {
+        const a = gaps[k]
+        const b = gaps[k + 1]
+        if (Math.abs(b - a) < 1e-6) parts.push(`x \\ne ${fmt(a)}`)
+        else parts.push(`x \\notin (${a <= -RANGE + 1e-6 ? '-\\infty' : fmt(a)},\\ ${b >= RANGE - 1e-6 ? '+\\infty' : fmt(b)})`)
+      }
+      facts.push({ group: '定义域', label: 'D', value: parts.join(',\\ '), num: null, how: domainHint(c.src), why: '数值扫描定义域', shape: null })
+    } else {
+      const poles = poleHints(c.src, env)
+      facts.push({ group: '定义域', label: 'D', value: poles.length ? poles.map((p) => `x \\ne ${fmt(p)}`).join(',\\ ') : '\\mathbb{R}', num: null, how: domainHint(c.src), why: poles.length ? '分母为 0 处无定义' : '在扫描范围内处处有定义', shape: null })
+    }
+    const y0 = engine.eval(c.src, { ...env, x: 0 })
+    if (Number.isFinite(y0)) facts.push({ group: '截距与零点', label: `${c.name}(0)`, value: engine.nice(y0), num: y0, how: `x = 0`, why: '与 y 轴交点', shape: { type: 'point', x: 0, y: y0, label: `${c.name}(0)` } })
+    const zs = engine.roots(c.src, 'x', env, -RANGE, RANGE)
+    if (zs.length && zs.length <= 12) zs.forEach((z, k) => facts.push({ group: '截距与零点', label: `x_{${k + 1}}`, value: engine.nice(z), num: z, how: `${c.name}(x) = 0`, why: '零点', shape: { type: 'point', x: z, y: 0, label: `零点 x=${fmt(z)}` } }))
+    else if (zs.length > 12) facts.push({ group: '截距与零点', label: '\\text{零点}', value: `\\text{共 ${zs.length} 个（周期性）}`, num: null, how: '', why: `在 [-${RANGE}, ${RANGE}] 内`, shape: null })
+    else facts.push({ group: '截距与零点', label: '\\text{零点}', value: '\\text{无}', num: null, how: '', why: `在 [-${RANGE}, ${RANGE}] 内没有实根`, shape: null })
+    const ex = engine.extrema(c.src, 'x', env, -RANGE, RANGE)
+    if (ex.length && ex.length <= 10)
+      ex.forEach((e) => facts.push({ group: '极值', label: e.kind === 'max' ? '\\text{极大值}' : '\\text{极小值}', value: `${c.name}(${fmt(e.x)}) = ${engine.nice(e.y)}`, num: e.y, how: `${c.name}'(x) = 0`, why: '导数变号', shape: { type: 'point', x: e.x, y: e.y, label: e.kind === 'max' ? '极大' : '极小' } }))
+    else if (ex.length > 10) facts.push({ group: '极值', label: '\\text{极值}', value: `\\text{共 ${ex.length} 个}`, num: null, how: '', why: '周期性振荡', shape: null })
+    for (const p of pts2) {
+      const v = engine.eval(c.src, { ...env, x: p.p[0] })
+      if (Math.abs(v - p.p[1]) < 1e-7) facts.push({ group: '点与曲线', label: `${p.name} \\in ${c.name}`, value: '\\checkmark', num: null, how: `${c.name}(${fmt(p.p[0])}) = ${fmt(p.p[1])}`, why: '代入成立', shape: null })
+    }
+    sections.push({ id: `fn-${c.name}`, title: `函数 ${c.name}(x)`, subtitle: '定义域 · 零点 · 极值', tone: 'func', facts })
+  }
+
+  // ---- pairwise intersections (skip line-line, handled above) ----------------------------
+  const inter: RustFact[] = []
+  const marks: { p: number[]; label: string }[] = []
+  for (let a = 0; a < curves.length; a++) {
+    for (let b = a + 1; b < curves.length; b++) {
+      const A = curves[a]
+      const B = curves[b]
+      if (A.line && B.line) continue
+      let pts: number[] = []
+      if (A.kind === 'curve' && B.kind === 'curve') pts = engine.intersectCurves(A.src, B.src, env, -RANGE, RANGE)
+      else if (A.kind === 'curve' || B.kind === 'curve') {
+        const [f, F] = A.kind === 'curve' ? [A, B] : [B, A]
+        pts = engine.intersectCurveImplicit(f.src, F.src, env, -RANGE, RANGE)
+      } else {
+        const r = engine.solveSystem([A.src, B.src], ['x', 'y'], env)
+        if (r.exact) pts = r.solutions.flat()
+      }
+      const label = `${A.name} \\cap ${B.name}`
+      if (!pts.length) {
+        inter.push({ group: label, label, value: '\\varnothing', num: null, how: '', why: '没有交点（在搜索范围内）', shape: null })
+        continue
+      }
+      if (pts.length > 24) {
+        inter.push({ group: label, label, value: `\\text{${pts.length / 2} 个交点}`, num: null, how: '', why: '交点过多，仅在图上标出', shape: null })
+      }
+      for (let k = 0; k < pts.length && k < 24; k += 2) {
+        const x = pts[k]
+        const y = pts[k + 1]
+        marks.push({ p: [x, y], label: `${A.name}∩${B.name}` })
+        if (pts.length <= 24) inter.push({ group: label, label: `P_{${k / 2 + 1}}`, value: `\\left(${engine.nice(x).split(' ')[0]},\\ ${engine.nice(y).split(' ')[0]}\\right)`, num: null, how: A.kind === 'curve' && B.kind === 'curve' ? `${A.name}(x) = ${B.name}(x)` : '\\text{联立方程}', why: `≈ (${fmt(x)}, ${fmt(y)})`, shape: null })
+      }
+    }
+  }
+  if (inter.length) sections.push({ id: 'inter', title: '交点', subtitle: '两两联立 · Rust 求根', tone: 'inter', facts: inter })
+
+  // ---- vectors ----------------------------------------------------------------------------
+  const numVecs: { name: string; v: number[] }[] = []
+  for (const [name, comps] of vectors) {
+    const v = comps.map(num)
+    if (v.every(Number.isFinite)) numVecs.push({ name, v })
+  }
+  if (numVecs.length) {
+    sections.push({ id: 'vectors', title: `向量 ${numVecs.map((v) => v.name).join(', ')}`, subtitle: '模长 · 夹角 · 数量积 / 向量积', tone: 'vec', facts: engine.vectors(numVecs) })
+    numVecs.forEach((v) => objects.push({ type: 'vector', name: v.name, v: v.v, color: nextColor() }))
+  }
+
+  // ---- 3D: planes / surfaces / implicit ------------------------------------------------------
+  const planes: { name: string; n: number[]; d: number }[] = []
+  for (const i of good) {
+    if (i.st.kind === 'implicit3') {
+      const co = engine.linearCoeffs(i.st.F, ['x', 'y', 'z'], env)
+      if (co && (co[0] || co[1] || co[2])) {
+        const name = i.st.name ?? nextName(['α', 'β', 'γ'], (k) => `π_${k}`)
+        planes.push({ name, n: co.slice(0, 3), d: -co[3] })
+        objects.push({ type: 'plane', name, n: co.slice(0, 3), d: -co[3], color: nextColor() })
+      } else {
+        const name = i.st.name ?? nextName(['Σ'], (k) => `Σ_${k}`)
+        objects.push({ type: 'implicit3', name, F: i.st.F, color: nextColor() })
+        const sphere = sphereFacts(i.st.F, env)
+        if (sphere.length) sections.push({ id: `sph-${i.idx}`, title: `曲面 ${name}`, subtitle: '球面识别', tone: 'func', facts: sphere })
+      }
+    } else if (i.st.kind === 'surface') {
+      const name = names.get(i)!
+      objects.push({ type: 'surface', name, expr: i.st.expr, color: nextColor() })
+      const grid = engine.sampleGrid(i.st.expr, 'x', 'y', env, -5, 5, -5, 5, 81, 81)
+      let lo = Infinity
+      let hi = -Infinity
+      let loAt = [0, 0]
+      let hiAt = [0, 0]
+      grid.forEach((v, k) => {
+        if (!Number.isFinite(v)) return
+        const x = -5 + (k % 81) * 0.125
+        const y = -5 + Math.floor(k / 81) * 0.125
+        if (v < lo) {
+          lo = v
+          loAt = [x, y]
+        }
+        if (v > hi) {
+          hi = v
+          hiAt = [x, y]
+        }
+      })
+      const z0 = engine.eval(i.st.expr, { ...env, x: 0, y: 0 })
+      const facts: RustFact[] = []
+      if (Number.isFinite(z0)) facts.push({ group: '取值', label: 'z(0,0)', value: engine.nice(z0), num: z0, how: '', why: '原点处的高度', shape: { type: 'point3', x: 0, y: 0, z: z0, label: 'z(0,0)' } })
+      if (Number.isFinite(lo)) {
+        facts.push({ group: '取值', label: '\\max z', value: `${fmt(hi)}`, num: hi, how: `(x, y) \\approx (${fmt(hiAt[0])}, ${fmt(hiAt[1])})`, why: '在 [-5,5]² 网格上', shape: { type: 'point3', x: hiAt[0], y: hiAt[1], z: hi, label: '最高点' } })
+        facts.push({ group: '取值', label: '\\min z', value: `${fmt(lo)}`, num: lo, how: `(x, y) \\approx (${fmt(loAt[0])}, ${fmt(loAt[1])})`, why: '在 [-5,5]² 网格上', shape: { type: 'point3', x: loAt[0], y: loAt[1], z: lo, label: '最低点' } })
+      }
+      const nanCount = grid.filter((v) => !Number.isFinite(v)).length
+      if (nanCount) facts.push({ group: '定义域', label: 'D', value: `\\text{约 ${Math.round((100 * nanCount) / grid.length)}\\% 的网格点无定义}`, num: null, how: domainHint(i.st.expr), why: '数值扫描', shape: null })
+      sections.push({ id: `surf-${name}`, title: `曲面 z = ${name}(x, y)`, subtitle: '网格采样 81×81', tone: 'func', facts })
+    } else if (i.st.kind === 'param') {
+      objects.push({ type: 'param', name: i.st.name, comps: i.st.comps, color: nextColor() })
+    }
+  }
+  if (planes.length) sections.push({ id: 'planes', title: `平面 ${planes.map((p) => p.name).join(', ')}`, subtitle: '法向量 · 夹角 · 交线 / 交点', tone: 'geo', facts: engine.planes(planes, pts3) })
+
+  if (marks.length) objects.push({ type: 'marks', pts: marks })
+
+  // ---- dimension ---------------------------------------------------------------------------
+  const reasons3: string[] = []
+  if (good.some((i) => i.st.kind === 'surface')) reasons3.push('z = f(x, y) 是空间曲面')
+  if (planes.length) reasons3.push('含 x, y, z 的线性方程是平面')
+  if (good.some((i) => i.st.kind === 'implicit3') && !planes.length) reasons3.push('三元方程是空间曲面')
+  if (pts3.length) reasons3.push('点有三个坐标')
+  if (numVecs.some((v) => v.v.length === 3)) reasons3.push('向量有三个分量')
+  if (good.some((i) => i.st.kind === 'param' && i.st.comps.length === 3)) reasons3.push('参数曲线有三个分量')
+  const dim: 2 | 3 = reasons3.length ? 3 : 2
+  const dimReason = dim === 3 ? reasons3[0] : good.some((i) => i.st.kind === 'triangle' || i.st.kind === 'point') ? '平面几何：只涉及 x, y' : '只含 x, y：平面直角坐标系'
+
+  const factCount = sections.reduce((n, s) => n + s.facts.filter((f) => f.group !== '已知').length, 0)
+  return { dim, dimReason, givens, errors, solve, env, sections, factCount, objects, equalAspect, stats: getStats() }
+}
+
+function renameTri(s: string, names: string) {
+  if (names === 'ABC') return s
+  const map: Record<string, string> = { A: names[0], B: names[1], C: names[2] }
+  return s.replace(/\\angle ([ABC])/g, (_, k) => `\\angle ${map[k]}`)
+}
+
+export function fmt(v: number) {
+  if (!Number.isFinite(v)) return String(v)
+  const r = Math.round(v * 1e4) / 1e4
+  return Object.is(r, -0) ? '0' : String(r)
+}
+
+function domainHint(src: string) {
+  const hints: string[] = []
+  if (/\bln|log|lg/.test(src)) hints.push('\\ln u: u > 0')
+  if (/sqrt|√/.test(src)) hints.push('\\sqrt{u}: u \\ge 0')
+  if (/\//.test(src)) hints.push('\\frac{p}{q}: q \\ne 0')
+  if (/tan/.test(src)) hints.push('\\tan u: u \\ne \\frac{\\pi}{2} + k\\pi')
+  if (/asin|acos|arcsin|arccos/.test(src)) hints.push('|u| \\le 1')
+  return hints.join(',\\ ')
+}
+
+/** Isolated poles (e.g. 1/x at 0) are invisible to grid scans; probe denominators directly. */
+function poleHints(src: string, env: Env) {
+  if (!src.includes('/')) return []
+  const out: number[] = []
+  for (let x = -RANGE; x <= RANGE; x += 0.5) {
+    const v = engine.eval(src, { ...env, x })
+    if (!Number.isFinite(v)) out.push(x)
+  }
+  return out.slice(0, 6)
+}
+
+function sphereFacts(F: string, env: Env): RustFact[] {
+  // F = x² + y² + z² + Dx + Ey + Fz + G (up to a common factor)
+  const f = (x: number, y: number, z: number) => engine.eval(F, { ...env, x, y, z })
+  const g = f(0, 0, 0)
+  const ax = (f(1, 0, 0) + f(-1, 0, 0)) / 2 - g
+  const ay = (f(0, 1, 0) + f(0, -1, 0)) / 2 - g
+  const az = (f(0, 0, 1) + f(0, 0, -1)) / 2 - g
+  if (!(Math.abs(ax - ay) < 1e-9 && Math.abs(ay - az) < 1e-9 && Math.abs(ax) > 1e-12)) return []
+  const D = (f(1, 0, 0) - f(-1, 0, 0)) / 2 / ax
+  const E = (f(0, 1, 0) - f(0, -1, 0)) / 2 / ax
+  const G = (f(0, 0, 1) - f(0, 0, -1)) / 2 / ax
+  const c = [-D / 2, -E / 2, -G / 2]
+  const test = f(2.3, -1.1, 0.7) / ax
+  const pred = 2.3 ** 2 + 1.1 ** 2 + 0.7 ** 2 + D * 2.3 - E * 1.1 + G * 0.7 + g / ax
+  if (Math.abs(test - pred) > 1e-7 * (1 + Math.abs(test))) return []
+  const r2 = c[0] ** 2 + c[1] ** 2 + c[2] ** 2 - g / ax
+  if (r2 <= 0) return []
+  const r = Math.sqrt(r2)
+  return [
+    { group: '球面', label: '\\text{类型}', value: '\\text{球面}', num: null, how: '(x-a)^2 + (y-b)^2 + (z-c)^2 = r^2', why: '配方', shape: null },
+    { group: '球面', label: '\\text{球心}', value: `\\left(${fmt(c[0])},\\ ${fmt(c[1])},\\ ${fmt(c[2])}\\right)`, num: null, how: '', why: '配方', shape: { type: 'point3', x: c[0], y: c[1], z: c[2], label: '球心' } },
+    { group: '球面', label: 'r', value: engine.nice(r), num: r, how: '', why: '半径', shape: null },
+    { group: '球面', label: 'V', value: engine.nice((4 / 3) * Math.PI * r ** 3), num: null, how: '\\frac43\\pi r^3', why: '体积', shape: null },
+    { group: '球面', label: 'S', value: engine.nice(4 * Math.PI * r * r), num: null, how: '4\\pi r^2', why: '表面积', shape: null },
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// Light-weight per-card summary for the canvas
+
+export interface CardSummary {
+  lines: { latex: string; kind: string; error?: string }[]
+  dim: 2 | 3
+  plottable: boolean
+  factCount: number
+  headline: string
+  hasUnknowns: boolean
+  kinds: Statement['kind'][]
+}
+
+const summaryCache = new Map<string, CardSummary>()
+
+export function summarizeCard(text: string): CardSummary {
+  const hit = summaryCache.get(text)
+  if (hit) return hit
+  const sts = parseCard(text)
+  const lines = sts.map((s) => ({ latex: statementLatex(s), kind: kindLabel(s), error: s.kind === 'error' ? s.message : undefined }))
+  let a: Analysis | null = null
+  try {
+    a = analyze([{ id: 'card', text }])
+  } catch {
+    a = null
+  }
+  const ok = sts.filter((s) => s.kind !== 'error')
+  const kinds = new Set(ok.map((s) => s.kind))
+  let headline = '公式'
+  if (kinds.has('triangle')) headline = '解三角形'
+  else if (kinds.has('point') && ok.filter((s) => s.kind === 'point').length >= 2) headline = '坐标几何'
+  else if (a?.solve) headline = '待定系数 / 求未知量'
+  else if (kinds.has('vector')) headline = '向量'
+  else if (kinds.has('surface')) headline = '空间曲面'
+  else if (kinds.has('implicit3')) headline = '空间方程'
+  else if (kinds.has('implicit2')) headline = '平面曲线'
+  else if (kinds.has('curve')) headline = '函数'
+  else if (kinds.has('param')) headline = '参数曲线'
+  const summary: CardSummary = {
+    lines,
+    dim: a?.dim ?? 2,
+    plottable: ok.length > 0 && !!a && (a.objects.length > 0 || a.factCount > 0),
+    factCount: a?.factCount ?? 0,
+    headline,
+    hasUnknowns: !!a?.solve,
+    kinds: [...kinds],
+  }
+  if (summaryCache.size > 300) summaryCache.clear()
+  summaryCache.set(text, summary)
+  return summary
+}

@@ -1,0 +1,333 @@
+import { engine } from '@/wasm/engine'
+
+/** A reference to a direction: segment AB (from points) or a named vector. */
+export type Ref = { kind: 'seg'; p: string; q: string } | { kind: 'vec'; name: string }
+
+export type Constraint =
+  | { type: 'perp' | 'para'; a: Ref; b: Ref }
+  | { type: 'len'; ref: Ref; value: string }
+  | { type: 'angle'; p: string; q: string; r: string; value: string }
+  | { type: 'through'; coords: string[] | null; point: string | null }
+  | { type: 'fcall'; fname: string; arg: string; value: string; deriv: boolean }
+  | { type: 'equation'; F: string }
+
+export type Statement =
+  | { kind: 'curve'; name?: string; expr: string; src: string }
+  | { kind: 'implicit2'; name?: string; F: string; src: string }
+  | { kind: 'surface'; name?: string; expr: string; src: string }
+  | { kind: 'implicit3'; name?: string; F: string; src: string }
+  | { kind: 'point'; name: string; coords: string[]; src: string }
+  | { kind: 'vector'; name: string; comps: string[]; src: string }
+  | { kind: 'param'; name: string; comps: string[]; src: string }
+  | { kind: 'triangle'; names: string; known: Record<string, string>; src: string }
+  | { kind: 'constraint'; c: Constraint; src: string }
+  | { kind: 'error'; message: string; src: string }
+
+export function normalize(text: string): string {
+  return text
+    .replace(/（/g, '(')
+    .replace(/）/g, ')')
+    .replace(/，/g, ',')
+    .replace(/；/g, ';')
+    .replace(/＝/g, '=')
+    .replace(/：/g, ':')
+    .replace(/＋/g, '+')
+    .replace(/[－−–]/g, '-')
+    .replace(/_\|_/g, '⊥')
+    .replace(/\bperp\b/gi, '⊥')
+    .replace(/\bparallel\b/gi, '∥')
+    .replace(/\/\//g, '∥')
+    .replace(/\|\|/g, '∥')
+    .replace(/[<⟨]([^<>⟨⟩=]*,[^<>⟨⟩=]*)[>⟩]/g, '($1)')
+    .replace(/\bangle\s*/gi, '∠')
+    .replace(/\bdeg\b/g, '°')
+    .replace(/\\vec\{?([a-z])\}?/g, '$1')
+    .replace(/\bvec\s+([a-z])/g, '$1')
+}
+
+export function splitTop(src: string, seps: string[]): string[] {
+  const out: string[] = []
+  let depth = 0
+  let cur = ''
+  for (const ch of src) {
+    if ('([{'.includes(ch)) depth++
+    else if (')]}'.includes(ch)) depth--
+    if (depth === 0 && seps.includes(ch)) {
+      out.push(cur)
+      cur = ''
+    } else cur += ch
+  }
+  out.push(cur)
+  return out.map((s) => s.trim()).filter(Boolean)
+}
+
+/** "(a, b, c)" → ["a","b","c"]; null when not a 2–3 component tuple. */
+export function tupleParts(src: string): string[] | null {
+  const t = src.trim()
+  if (!t.startsWith('(') || !t.endsWith(')')) return null
+  // make sure the outer parens enclose everything
+  let depth = 0
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] === '(') depth++
+    else if (t[i] === ')') depth--
+    if (depth === 0 && i < t.length - 1) return null
+  }
+  const parts = splitTop(t.slice(1, -1), [','])
+  return parts.length >= 2 && parts.length <= 3 ? parts : null
+}
+
+const TRI_RE = /^(?:△|triangle|tri|三角形)\s*([A-Z]{3})?\s*:?\s*(.*)$/i
+
+function parseRef(s: string): Ref | null {
+  const t = s.trim().replace(/^\|(.*)\|$/, '$1')
+  if (/^[A-Z][A-Z]$/.test(t)) return { kind: 'seg', p: t[0], q: t[1] }
+  if (/^[a-z](_\w+)?$/.test(t)) return { kind: 'vec', name: t }
+  return null
+}
+
+function vars(src: string): string[] | null {
+  const r = engine.inspect(src)
+  return r.ok ? r.vars : null
+}
+
+function err(src: string, message: string): Statement {
+  return { kind: 'error', message, src }
+}
+
+function classifyPart(part: string): Statement[] {
+  const src = part.trim()
+  if (!src) return []
+
+  // 过(1,3) / through (1,3) and (2,5) / 过点A
+  const through = src.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.*)$/i)
+  if (through) {
+    const rest = through[1]
+    const pieces = rest.split(/\s*(?:和|与|及|and|&)\s*/).filter(Boolean)
+    const out: Statement[] = []
+    for (const p of pieces) {
+      const tp = tupleParts(p)
+      if (tp) out.push({ kind: 'constraint', c: { type: 'through', coords: tp, point: null }, src: `过 ${p}` })
+      else if (/^[A-Z]$/.test(p.trim())) out.push({ kind: 'constraint', c: { type: 'through', coords: null, point: p.trim() }, src: `过 ${p}` })
+      else out.push(err(p, '“过”后面写点坐标，例如 过(1, 3)'))
+    }
+    return out
+  }
+
+  // ∠ABC = 60°
+  const ang = src.match(/^∠\s*([A-Z])([A-Z])([A-Z])\s*=\s*(.+)$/)
+  if (ang) return [{ kind: 'constraint', c: { type: 'angle', p: ang[1], q: ang[2], r: ang[3], value: ang[4] }, src }]
+
+  // AB ⊥ CD, a ∥ b
+  const rel = src.match(/^(.+?)\s*([⊥∥])\s*(.+)$/)
+  if (rel) {
+    const a = parseRef(rel[1])
+    const b = parseRef(rel[3])
+    if (!a || !b) return [err(src, '⊥ / ∥ 两边请写线段（如 AB）或向量名（如 a）')]
+    return [{ kind: 'constraint', c: { type: rel[2] === '⊥' ? 'perp' : 'para', a, b }, src }]
+  }
+
+  // r(t) = (cos t, sin t, t)
+  const param = src.match(/^([a-zA-Z](?:_\w+)?)\s*\(\s*t\s*\)\s*=\s*(.+)$/)
+  if (param) {
+    const tp = tupleParts(param[2])
+    if (tp) return [{ kind: 'param', name: param[1], comps: tp, src }]
+  }
+
+  // Points: A(1, 2) / A = (1, 2, 3)
+  const point = src.match(/^([A-Z][0-9']*)\s*=?\s*(\(.+\))$/)
+  if (point) {
+    const tp = tupleParts(point[2])
+    if (tp) return [{ kind: 'point', name: point[1], coords: tp, src }]
+  }
+
+  // Vectors: a = (1, 2) ; also AB = (1, 2) as a vector
+  const vec = src.match(/^([a-z](?:_\w+)?|[A-Z]{2})\s*=\s*(\(.+\))$/)
+  if (vec) {
+    const tp = tupleParts(vec[2])
+    if (tp) return [{ kind: 'vector', name: vec[1], comps: tp, src }]
+  }
+
+  // bare tuple → anonymous point
+  const bare = tupleParts(src)
+  if (bare) return [{ kind: 'point', name: '', coords: bare, src }]
+
+  // |AB| = 5, AB = 5, |a| = 3
+  const len = src.match(/^(\|[A-Za-z](?:_\w+)?[A-Z]?\||[A-Z][A-Z])\s*=\s*(.+)$/)
+  if (len) {
+    const ref = parseRef(len[1])
+    if (ref) return [{ kind: 'constraint', c: { type: 'len', ref, value: len[2] }, src }]
+  }
+
+  const sides = splitTop(src, ['='])
+  if (sides.length > 2) return [err(src, '一个式子里只能有一个等号')]
+
+  if (sides.length === 1) {
+    const v = vars(src)
+    if (!v) return [err(src, engine.inspect(src).error ?? '无法解析')]
+    if (v.includes('z')) return [{ kind: 'implicit3', F: src, src: `${src} = 0` }]
+    if (v.includes('y')) return [{ kind: 'surface', expr: src, src: `z = ${src}` }]
+    return [{ kind: 'curve', expr: src, src: `y = ${src}` }]
+  }
+
+  const [lhs, rhs] = sides
+  const lhsT = lhs.replace(/\s+/g, '')
+
+  // f(2) = 5, f'(1) = 0
+  const fcall = lhsT.match(/^([a-z])('?)\((.+)\)$/)
+  if (fcall && fcall[3] !== 'x' && !/^x,y$/.test(fcall[3])) {
+    return [{ kind: 'constraint', c: { type: 'fcall', fname: fcall[1], deriv: fcall[2] === "'", arg: fcall[3], value: rhs }, src }]
+  }
+
+  const named = lhsT.match(/^([a-zA-Z](?:_\w+)?)\((x|x,y)\)$/)
+  if (lhsT === 'y' || (named && named[2] === 'x')) {
+    const v = vars(rhs)
+    if (!v) return [err(src, engine.inspect(rhs).error ?? '无法解析')]
+    const name = named ? named[1] : undefined
+    if (v.includes('y')) return [{ kind: 'implicit2', name, F: `(${lhs}) - (${rhs})`, src }]
+    if (v.includes('z')) return [{ kind: 'implicit3', name, F: `(${lhsT === 'y' ? 'y' : lhs}) - (${rhs})`, src }]
+    return [{ kind: 'curve', name, expr: rhs, src }]
+  }
+  if (lhsT === 'z' || (named && named[2] === 'x,y')) {
+    const v = vars(rhs)
+    if (!v) return [err(src, engine.inspect(rhs).error ?? '无法解析')]
+    if (v.includes('z')) return [{ kind: 'implicit3', F: `(z) - (${rhs})`, src }]
+    return [{ kind: 'surface', name: named ? named[1] : undefined, expr: rhs, src }]
+  }
+
+  const F = `(${lhs}) - (${rhs})`
+  const v = vars(F)
+  if (!v) {
+    const e = engine.inspect(lhs).ok ? engine.inspect(rhs).error : engine.inspect(lhs).error
+    return [err(src, e ?? '无法解析')]
+  }
+  if (v.includes('z')) return [{ kind: 'implicit3', F, src }]
+  if (v.includes('x') || v.includes('y')) return [{ kind: 'implicit2', F, src }]
+  if (v.length === 0) return [err(src, '这是一个纯数字等式，没有可画的对象')]
+  return [{ kind: 'constraint', c: { type: 'equation', F }, src }]
+}
+
+function parseTriangle(line: string): Statement | null {
+  const m = line.match(TRI_RE)
+  if (!m) return null
+  const names = m[1] ?? 'ABC'
+  const lower = names.toLowerCase()
+  const known: Record<string, string> = {}
+  const body = m[2].replace(/∠/g, '')
+  for (const raw of body.split(/[,;\s]+(?=[A-Za-z]\s*=|S\s*=)/)) {
+    const kv = raw.split('=')
+    if (kv.length !== 2) continue
+    const k = kv[0].trim().replace(/[,;]/g, '')
+    const v = kv[1].trim().replace(/[,;]$/, '')
+    if (!v) continue
+    let key: string | null = null
+    if (k === 'S' || k === 'area') key = 'S'
+    else if (names.includes(k)) key = 'ABC'[names.indexOf(k)]
+    else if (lower.includes(k)) key = 'abc'[lower.indexOf(k)]
+    if (key) known[key] = v
+  }
+  if (!Object.keys(known).length) return { kind: 'error', message: '三角形请写成 △ABC: a=3, b=4, C=90°', src: line }
+  return { kind: 'triangle', names, known, src: line }
+}
+
+/** Parse a card's text into statements (one per line / `;` / top-level comma). */
+export function parseCard(text: string): Statement[] {
+  const out: Statement[] = []
+  const lines = normalize(text)
+    .split(/\n/)
+    .flatMap((l) => splitTop(l, [';']))
+  for (const line of lines) {
+    const tri = parseTriangle(line)
+    if (tri) {
+      out.push(tri)
+      continue
+    }
+    for (const part of splitTop(line, [','])) out.push(...classifyPart(part))
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// LaTeX for statements
+
+function refLatex(r: Ref) {
+  return r.kind === 'seg' ? `${r.p}${r.q}` : `\\vec{${r.name}}`
+}
+
+function exprLatex(src: string) {
+  return engine.latex(src)
+}
+
+function angleValueLatex(v: string) {
+  return /°|pi|π/.test(v) ? exprLatex(v) : `${exprLatex(v)}^{\\circ}`
+}
+
+export function statementLatex(s: Statement): string {
+  switch (s.kind) {
+    case 'triangle': {
+      const parts = Object.entries(s.known).map(([k, v]) => {
+        const nm = k === 'S' ? 'S' : /[ABC]/.test(k) ? `\\angle ${s.names['ABC'.indexOf(k)]}` : s.names.toLowerCase()['abc'.indexOf(k)]
+        return `${nm} = ${/[ABC]/.test(k) ? angleValueLatex(v) : exprLatex(v)}`
+      })
+      return `\\triangle ${s.names}:\\ ${parts.join(',\\ ')}`
+    }
+    case 'point':
+      return `${s.name ? s.name : ''}\\left(${s.coords.map(exprLatex).join(',\\ ')}\\right)`
+    case 'vector':
+      return `${/^[A-Z]{2}$/.test(s.name) ? `\\overrightarrow{${s.name}}` : `\\vec{${s.name}}`} = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
+    case 'param':
+      return `\\vec{${s.name}}(t) = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
+    case 'constraint': {
+      const c = s.c
+      switch (c.type) {
+        case 'perp':
+          return `${refLatex(c.a)} \\perp ${refLatex(c.b)}`
+        case 'para':
+          return `${refLatex(c.a)} \\parallel ${refLatex(c.b)}`
+        case 'len':
+          return `\\left|${refLatex(c.ref)}\\right| = ${exprLatex(c.value)}`
+        case 'angle':
+          return `\\angle ${c.p}${c.q}${c.r} = ${angleValueLatex(c.value)}`
+        case 'through':
+          return `\\text{过 } ${c.point ?? `\\left(${(c.coords ?? []).map(exprLatex).join(',\\ ')}\\right)`}`
+        case 'fcall':
+          return `${c.fname}${c.deriv ? "'" : ''}\\left(${exprLatex(c.arg)}\\right) = ${exprLatex(c.value)}`
+        case 'equation':
+          return exprLatex(s.src)
+      }
+      return exprLatex(s.src)
+    }
+    case 'curve':
+      return `${s.name ? `${s.name}\\left(x\\right)` : 'y'} = ${exprLatex(s.expr)}`
+    case 'surface':
+      return `${s.name ? `${s.name}\\left(x,\\ y\\right)` : 'z'} = ${exprLatex(s.expr)}`
+    case 'error':
+      return `\\text{${s.src.replace(/[\\{}$&#%_^]/g, ' ')}}`
+    default:
+      return exprLatex(s.src)
+  }
+}
+
+export function kindLabel(s: Statement): string {
+  switch (s.kind) {
+    case 'curve':
+      return '函数'
+    case 'implicit2':
+      return '平面曲线'
+    case 'surface':
+      return '空间曲面'
+    case 'implicit3':
+      return '空间方程'
+    case 'point':
+      return '点'
+    case 'vector':
+      return '向量'
+    case 'param':
+      return '参数曲线'
+    case 'triangle':
+      return '解三角形'
+    case 'constraint':
+      return '条件'
+    case 'error':
+      return '待修正'
+  }
+}
