@@ -8,7 +8,7 @@ export const SAMPLES: { title: string; text: string; note: string }[] = [
   { title: '空间曲面', text: 'z = sin(x)cos(y)', note: '3D · 自由旋转' },
   { title: '两平面交线', text: 'x + y + z = 3\nx - y + 2z = 1', note: '3D · 法向量、夹角、交线' },
   { title: '待定系数', text: 'f(x) = ax^2 + bx + c\nf(0) = 1; f(1) = 0; f(3) = 4', note: '三个条件 → a, b, c' },
-  { title: '向量垂直求参数', text: 'a = (1, 2, 2); b = (2, 1, k)\na ⊥ b', note: '3D · k = −2，叉积、夹角' },
+  { title: '向量垂直求参数', text: '𝐚 = (1, 2, 2); 𝐛 = (2, 1, k)\n𝐚 ⊥ 𝐛', note: '3D · k = −2，叉积、夹角' },
   { title: '圆与直线', text: 'x^2 + y^2 - 4x + 2y = 4\ny = x - 1', note: '识别圆心半径 + 交点' },
   { title: '平行四边形判定', text: 'A(0,0), B(4,0), C(5,3), D(1,3)', note: '对边平行 → 平行四边形' },
   { title: '直线过两点', text: 'y = kx + b, 过(1, 3), 过(2, 5)', note: 'k = 2, b = 1' },

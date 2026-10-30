@@ -80,51 +80,128 @@ function collectBounds(a: Analysis, shapes: RustShape[]) {
     } else if (sh.type === 'point' && (sh.label === '圆心' || sh.label === '中心' || sh.label.startsWith('F'))) add(sh.x, sh.y)
   }
   for (const sh of shapes) if (sh.type === 'point') add(sh.x, sh.y)
+  for (const o of a.objects) if (o.type === 'implicit2') zeroSetBox(o.F, a.env)?.forEach(([x, y]) => add(x, y))
   return { xs, ys }
 }
 
-/** Initial 2D window: geometry fits its bounding box; functions use a robust y percentile. */
+/** Corners of the zero set of F(x, y) on a coarse grid, when the curve is bounded (ellipse, circle, closed loops). */
+function zeroSetBox(F: string, env: Env): [number, number][] | null {
+  const n = 161
+  const L = 20
+  const z = engine.sampleGrid(F, 'x', 'y', env, -L, L, -L, L, n, n)
+  const step = (2 * L) / (n - 1)
+  let x0 = Infinity
+  let x1 = -Infinity
+  let y0 = Infinity
+  let y1 = -Infinity
+  for (let j = 0; j < n - 1; j++)
+    for (let i = 0; i < n - 1; i++) {
+      const v = z[j * n + i]
+      const r = z[j * n + i + 1]
+      const u = z[(j + 1) * n + i]
+      if (!Number.isFinite(v)) continue
+      if ((Number.isFinite(r) && Math.sign(v) !== Math.sign(r)) || (Number.isFinite(u) && Math.sign(v) !== Math.sign(u))) {
+        const x = -L + i * step
+        const y = -L + j * step
+        x0 = Math.min(x0, x)
+        x1 = Math.max(x1, x + step)
+        y0 = Math.min(y0, y)
+        y1 = Math.max(y1, y + step)
+      }
+    }
+  if (!Number.isFinite(x0) || x0 <= -L + 2 * step || x1 >= L - 2 * step || y0 <= -L + 2 * step || y1 >= L - 2 * step) return null
+  return [
+    [x0, y0],
+    [x1, y1],
+  ]
+}
+
+function percentile(sorted: number[], t: number) {
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(t * (sorted.length - 1))))]
+}
+
+/** Points the eye should land on: zeros, extrema, intercepts, intersections, roots, given points. */
+function keyPoints(a: Analysis): [number, number][] {
+  const out: [number, number][] = []
+  const add = (x: number, y: number) => Number.isFinite(x) && Number.isFinite(y) && Math.abs(x) < 1e6 && Math.abs(y) < 1e6 && out.push([x, y])
+  for (const f of a.sections.flatMap((s) => s.facts)) if (f.shape?.type === 'point') add(f.shape.x, f.shape.y)
+  for (const o of a.objects) {
+    if (o.type === 'marks') o.pts.forEach((p) => add(p.p[0], p.p[1]))
+    if (o.type === 'roots') o.xs.forEach((x) => add(x, 0))
+    if (o.type === 'points') o.pts.forEach((p) => add(p.p[0], p.p[1] ?? 0))
+  }
+  return out
+}
+
+/**
+ * Initial 2D window. Geometry fits its bounding box at 1:1. Functions frame their key
+ * points, then fit y to the curves inside that x-window, capping the y-span relative
+ * to the x-span so steep curves (x³, eˣ) don't flatten everything else into a line.
+ */
 export function initialRanges(a: Analysis): Ranges {
   const { xs, ys } = collectBounds(a, [])
-  let x: [number, number] = [-6, 6]
-  let y: [number, number] = [-6, 6]
+  for (const o of a.objects) if (o.type === 'roots') o.xs.forEach((x) => (xs.push(x), ys.push(0)))
   if (xs.length >= 2 && a.equalAspect) {
     const x0 = Math.min(...xs, 0)
     const x1 = Math.max(...xs, 0)
     const y0 = Math.min(...ys, 0)
     const y1 = Math.max(...ys, 0)
     const pad = Math.max(x1 - x0, y1 - y0) * 0.18 + 0.8
-    x = [x0 - pad, x1 + pad]
-    y = [y0 - pad, y1 + pad]
-    return { x, y }
+    return { x: [x0 - pad, x1 + pad], y: [y0 - pad, y1 + pad] }
   }
-  if (xs.length) {
-    const lo = Math.min(...xs)
-    const hi = Math.max(...xs)
-    x = [Math.min(-6, lo - 2), Math.max(6, hi + 2)]
+
+  const curves = a.objects.filter((o): o is Extract<PlotObj, { type: 'curve' }> => o.type === 'curve')
+  const periodic = curves.some((c) => engine.roots(c.expr, 'x', a.env, -20, 20).length > 12)
+  let keys = keyPoints(a)
+  if (keys.length > 10) keys = [...keys].sort((p, q) => Math.hypot(...p) - Math.hypot(...q)).slice(0, 10)
+
+  let x: [number, number]
+  if (periodic) x = [-2 * Math.PI - 0.6, 2 * Math.PI + 0.6]
+  else if (keys.length) {
+    let lo = Math.min(...keys.map((k) => k[0]))
+    let hi = Math.max(...keys.map((k) => k[0]))
+    if (lo > 0 && lo < 8) lo = 0
+    if (hi < 0 && hi > -8) hi = 0
+    const pad = Math.max(2, (hi - lo) * 0.35)
+    x = [lo - pad, hi + pad]
+  } else x = [-6, 6]
+  if (x[1] - x[0] < 8) {
+    const m = (x[0] + x[1]) / 2
+    x = [m - 4, m + 4]
   }
-  const vals: number[] = [...ys]
-  for (const o of a.objects) {
-    if (o.type !== 'curve') continue
-    const s = engine.sampleCurve(o.expr, 'x', a.env, x[0], x[1], 400)
-    s.forEach((v) => Number.isFinite(v) && vals.push(v))
-  }
-  if (vals.length) {
-    vals.sort((p, q) => p - q)
-    const p = (t: number) => vals[Math.min(vals.length - 1, Math.max(0, Math.floor(t * (vals.length - 1))))]
-    let lo = p(0.04)
-    let hi = p(0.96)
-    lo = Math.min(lo, 0)
-    hi = Math.max(hi, 0)
-    if (hi - lo < 4) {
-      const m = (hi + lo) / 2
-      lo = m - 2
-      hi = m + 2
+  const wx = x[1] - x[0]
+
+  const vals: number[] = []
+  for (const c of curves) engine.sampleCurve(c.expr, 'x', a.env, x[0], x[1], 600).forEach((v) => Number.isFinite(v) && vals.push(v))
+  const keyYs = keys.filter((k) => k[0] >= x[0] && k[0] <= x[1]).map((k) => k[1])
+  if (!vals.length && !keyYs.length) return { x, y: [-wx / 2, wx / 2] }
+  vals.sort((p, q) => p - q)
+  let lo = Math.min(vals.length ? percentile(vals, 0.02) : Infinity, ...keyYs)
+  let hi = Math.max(vals.length ? percentile(vals, 0.98) : -Infinity, ...keyYs)
+  const maxSpan = Math.max(8, wx * 2)
+  if (hi - lo > maxSpan) {
+    const kLo = keyYs.length ? Math.min(...keyYs) : 0
+    const kHi = keyYs.length ? Math.max(...keyYs) : 0
+    if (kHi - kLo >= maxSpan) [lo, hi] = [kLo, kHi]
+    else {
+      // slide a maxSpan window that keeps the key points, toward where the curve has data
+      const below = vals.filter((v) => v < kLo).length
+      const above = vals.filter((v) => v > kHi).length
+      const room = maxSpan - (kHi - kLo)
+      const share = below + above ? below / (below + above) : 0.5
+      lo = kLo - room * share
+      hi = kHi + room * (1 - share)
     }
-    const pad = (hi - lo) * 0.12
-    y = [lo - pad, hi + pad]
   }
-  return { x, y }
+  if (lo > 0 && lo < (hi - lo) * 0.6) lo = 0
+  if (hi < 0 && -hi < (hi - lo) * 0.6) hi = 0
+  if (hi - lo < 4) {
+    const m = (hi + lo) / 2
+    lo = m - 2
+    hi = m + 2
+  }
+  const pad = (hi - lo) * 0.1
+  return { x, y: [lo - pad, hi + pad] }
 }
 
 function shapeTraces2d(shapes: RustShape[]): Trace[] {
@@ -204,7 +281,7 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[]): { da
       }
       case 'vector':
         annotations.push({ x: o.v[0], y: o.v[1], ax: 0, ay: 0, xref: 'x', yref: 'y', axref: 'x', ayref: 'y', showarrow: true, arrowhead: 2, arrowsize: 1.3, arrowwidth: 2.4, arrowcolor: o.color, text: '' })
-        data.push({ type: 'scatter', mode: 'text', x: [o.v[0]], y: [o.v[1]], text: [`  ${o.name}`], textposition: 'middle right', textfont: { size: 15, color: o.color }, name: o.name, showlegend: false, hovertemplate: `${o.name} = (%{x}, %{y})<extra></extra>` })
+        data.push({ type: 'scatter', mode: 'text', x: [o.v[0]], y: [o.v[1]], text: [`  <b>${o.name}</b>`], textposition: 'middle right', textfont: { size: 15, color: o.color }, name: o.name, showlegend: false, hovertemplate: `${o.name} = (%{x}, %{y})<extra></extra>` })
         break
       case 'param': {
         const [t0, t1] = paramRange(o.comps)
@@ -213,6 +290,10 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[]): { da
         data.push({ type: 'scatter', mode: 'lines', x: Array.from(xs), y: Array.from(ys), line: { color: o.color, width: 2.6 }, name: `${o.name}(t)` })
         break
       }
+      case 'roots':
+        if (o.xs.length)
+          data.push({ type: 'scatter', mode: 'markers+text', x: o.xs, y: o.xs.map(() => 0), text: o.xs.map((x) => `x=${+x.toFixed(4)}`), textposition: 'bottom center', textfont: { size: 12, color: '#9b3b2a' }, marker: { size: 11, symbol: 'diamond', color: '#9b3b2a', line: { color: INK, width: 1 } }, name: o.name, hovertemplate: 'x = %{x:.6f}<extra></extra>' })
+        break
       case 'marks':
         data.push({ type: 'scatter', mode: 'markers', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.label), marker: { size: 12, symbol: 'circle-open', color: '#9b3b2a', line: { width: 2.6 } }, name: '交点', hovertemplate: '%{text}<br>(%{x:.4f}, %{y:.4f})<extra></extra>' })
         break
@@ -352,17 +433,48 @@ function arrow3(v: number[], color: string, name: string, dashed = false): Trace
   ]
 }
 
+/**
+ * z-range for the 3D scene: [-R, R] for geometry; surfaces z = f(x, y) widen it to their
+ * robust value range so a bowl like x² + y² isn't clipped at the cube's lid.
+ */
+function zRange3(a: Analysis, R: number, grids: Float64Array[]): [number, number] {
+  if (!grids.length) return [-R, R]
+  const vals: number[] = []
+  grids.forEach((g) => g.forEach((v) => Number.isFinite(v) && vals.push(v)))
+  if (!vals.length) return [-R, R]
+  vals.sort((p, q) => p - q)
+  let lo = percentile(vals, 0.01)
+  let hi = percentile(vals, 0.99)
+  const others = a.objects.some((o) => o.type !== 'surface')
+  if (others) {
+    lo = Math.min(lo, -R)
+    hi = Math.max(hi, R)
+  }
+  if (hi - lo < 2) {
+    const m = (hi + lo) / 2
+    lo = m - 1
+    hi = m + 1
+  }
+  const pad = (hi - lo) * 0.06
+  return [lo - pad, hi + pad]
+}
+
 export function buildFigure3d(a: Analysis, shapes: RustShape[]): { data: Trace[]; layout: Layout } {
   const data: Trace[] = []
   const R = bound3(a, shapes)
+  const n3 = 72
+  const grids = new Map<string, Float64Array>()
+  for (const o of a.objects) if (o.type === 'surface') grids.set(o.name, engine.sampleGrid(o.expr, 'x', 'y', a.env, -R, R, -R, R, n3, n3))
+  const zr = zRange3(a, R, [...grids.values()])
+  const zSpan = zr[1] - zr[0]
   for (const o of a.objects) {
     switch (o.type) {
       case 'surface': {
-        const n = 72
+        const n = n3
         const g = linspace(-R, R, n)
-        const z = engine.sampleGrid(o.expr, 'x', 'y', a.env, -R, R, -R, R, n, n)
+        const z = grids.get(o.name)!
         const rows: (number | null)[][] = []
-        for (let j = 0; j < n; j++) rows.push(Array.from(z.subarray(j * n, (j + 1) * n), (v) => (Number.isFinite(v) && Math.abs(v) < R * 6 ? v : null)))
+        for (let j = 0; j < n; j++) rows.push(Array.from(z.subarray(j * n, (j + 1) * n), (v) => (Number.isFinite(v) && v > zr[0] - zSpan && v < zr[1] + zSpan ? v : null)))
         data.push({
           type: 'surface',
           x: g,
@@ -430,7 +542,7 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[]): { data: Trace[]
         }
         break
       case 'vector':
-        data.push(...arrow3([o.v[0], o.v[1], o.v[2] ?? 0], o.color, o.name))
+        data.push(...arrow3([o.v[0], o.v[1], o.v[2] ?? 0], o.color, /^[A-Z]{2}$/.test(o.name) ? o.name : `<b>${o.name}</b>`))
         break
       case 'param': {
         const [t0, t1] = paramRange(o.comps)
@@ -454,7 +566,7 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[]): { data: Trace[]
     if (s.type === 'arrow3') data.push(...arrow3([s.x, s.y, s.z], '#b9852a', s.label, true))
   }
 
-  const ax = (title: string) => ({ title: { text: title }, range: [-R, R], backgroundcolor: '#e9d6b4', showbackground: true, gridcolor: 'rgba(90,60,30,0.22)', zerolinecolor: 'rgba(60,35,15,0.7)', color: '#5f4128', showspikes: false })
+  const ax = (title: string, range: [number, number] = [-R, R]) => ({ title: { text: title }, range, backgroundcolor: '#e9d6b4', showbackground: true, gridcolor: 'rgba(90,60,30,0.22)', zerolinecolor: 'rgba(60,35,15,0.7)', color: '#5f4128', showspikes: false })
   const layout: Layout = {
     paper_bgcolor: 'rgba(0,0,0,0)',
     font: FONT,
@@ -464,7 +576,7 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[]): { data: Trace[]
     scene: {
       xaxis: ax('x'),
       yaxis: ax('y'),
-      zaxis: ax('z'),
+      zaxis: ax('z', zr),
       aspectmode: 'cube',
       dragmode: 'orbit',
       camera: { eye: { x: 1.55, y: 1.35, z: 0.95 } },

@@ -30,7 +30,7 @@ export const mockRecognizer: Recognizer = {
       { text: 'x^2 + y^2 = 4', when: aspect > 3 },
       { text: '△ABC: a = 3, b = 4, C = 90°', when: n >= 8 },
       { text: 'z = sin(x)cos(y)', when: aspect > 2.5 && n >= 6 },
-      { text: 'a = (1, 2, 2)', when: aspect > 1.5 },
+      { text: '𝐚 = (1, 2, 2)', when: aspect > 1.5 },
       { text: 'y = sqrt(x)', when: aspect <= 2.2 },
     ]
     const picked = pool.filter((p) => p.when).map((p) => p.text)

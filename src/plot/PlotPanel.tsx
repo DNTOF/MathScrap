@@ -20,7 +20,7 @@ interface Props {
 function overlayable(text: string, dim: 2 | 3) {
   const s = summarizeCard(text)
   if (!s.plottable || s.dim !== dim || s.hasUnknowns) return false
-  return s.kinds.every((k) => k === 'curve' || k === 'implicit2' || k === 'implicit3' || k === 'surface')
+  return s.kinds.every((k) => k === 'curve' || k === 'equation1' || k === 'implicit2' || k === 'implicit3' || k === 'surface')
 }
 
 export function PlotPanel({ cards, primaryId, onClose }: Props) {

@@ -13,6 +13,7 @@ export interface CardInput {
 export type PlotObj =
   | { type: 'curve'; name: string; expr: string; color: string }
   | { type: 'implicit2'; name: string; F: string; color: string }
+  | { type: 'roots'; name: string; xs: number[] }
   | { type: 'surface'; name: string; expr: string; color: string }
   | { type: 'plane'; name: string; n: number[]; d: number; color: string }
   | { type: 'implicit3'; name: string; F: string; color: string }
@@ -109,6 +110,7 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     const st = i.st
     if (st.kind === 'point') names.set(i, st.name || `P_${++anon}`)
     else if (st.kind === 'curve') names.set(i, st.name ?? nextName(['f', 'g', 'h', 'u', 'w'], (k) => `f_${k}`))
+    else if (st.kind === 'equation1') names.set(i, nextName(['f', 'g', 'h', 'u', 'w'], (k) => `f_${k}`))
     else if (st.kind === 'surface') names.set(i, st.name ?? nextName(['S'], (k) => `S_${k}`))
     else if ('name' in st && st.name) names.set(i, st.name)
   }
@@ -133,6 +135,9 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
         break
       case 'implicit2':
         addVars(st.F, ['x', 'y'])
+        break
+      case 'equation1':
+        addVars(st.F, ['x'])
         break
       case 'surface':
         addVars(st.expr, ['x', 'y'])
@@ -354,10 +359,12 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
   }
 
   // ---- curves: classify lines / conics / general functions -----------------------------
-  type Curve = { item: Item; name: string; kind: 'curve' | 'implicit2'; src: string; line?: { a: number; b: number; c: number } }
+  type Curve = { item: Item; name: string; kind: 'curve' | 'implicit2'; src: string; line?: { a: number; b: number; c: number }; equation?: boolean }
   const curves: Curve[] = []
   for (const i of good) {
-    if (i.st.kind === 'curve') {
+    if (i.st.kind === 'equation1') {
+      curves.push({ item: i, name: names.get(i)!, kind: 'curve', src: i.st.F, equation: true })
+    } else if (i.st.kind === 'curve') {
       const co = engine.linearCoeffs(i.st.expr, ['x'], env)
       const name = names.get(i)!
       const c: Curve = { item: i, name, kind: 'curve', src: i.st.expr }
@@ -385,6 +392,13 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
   }
 
   for (const c of curves) {
+    if (c.equation) {
+      const st = c.item.st as Extract<Statement, { kind: 'equation1' }>
+      const { facts, roots } = equationFacts(st, c.name, env)
+      sections.push({ id: `eq-${c.item.idx}`, title: `方程 ${statementLatex(st)}`, subtitle: `看作 y = ${c.name}(x) 与 x 轴的交点`, tone: 'solve', facts })
+      objects.push({ type: 'roots', name: `${c.name}(x) = 0 的解`, xs: roots })
+      continue
+    }
     if (c.line) continue
     if (c.kind === 'implicit2') {
       const facts = engine.conic(c.src, env, c.name)
@@ -434,6 +448,7 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
       const A = curves[a]
       const B = curves[b]
       if (A.line && B.line) continue
+      if (A.equation || B.equation) continue
       let pts: number[] = []
       if (A.kind === 'curve' && B.kind === 'curve') pts = engine.intersectCurves(A.src, B.src, env, -RANGE, RANGE)
       else if (A.kind === 'curve' || B.kind === 'curve') {
@@ -574,6 +589,90 @@ function poleHints(src: string, env: Env) {
   return out.slice(0, 6)
 }
 
+const tidy = (v: number) => (Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : v)
+
+/** Exact a, b, c when F(x) is a polynomial of degree ≤ 2 in x, else null. */
+function quadraticCoeffs(F: string, env: Env): [number, number, number] | null {
+  const f = (x: number) => engine.eval(F, { ...env, x })
+  const c = f(0)
+  const p = f(1)
+  const m = f(-1)
+  const a = (p + m) / 2 - c
+  const b = (p - m) / 2
+  if (![a, b, c].every(Number.isFinite)) return null
+  for (const t of [2, -3, 0.5, 7.25]) {
+    const pred = a * t * t + b * t + c
+    if (!(Math.abs(f(t) - pred) <= 1e-8 * (1 + Math.abs(pred)))) return null
+  }
+  return [tidy(a), tidy(b), tidy(c)]
+}
+
+/** Solve F(x) = 0: closed form for linear / quadratic, Rust root finding otherwise. */
+function equationFacts(st: Extract<Statement, { kind: 'equation1' }>, name: string, env: Env): { facts: RustFact[]; roots: number[] } {
+  const facts: RustFact[] = []
+  const F = st.F
+  const graph = `${name}(x) = ${engine.latex(F)}`
+  const rootFact = (label: string, x: number, why: string, how = ''): RustFact => ({ group: '方程的解', label, value: engine.nice(x), num: x, how, why, shape: { type: 'point', x, y: 0, label: `x=${fmt(x)}` } })
+  const q = quadraticCoeffs(F, env)
+  if (q && Math.abs(q[0]) > 1e-12) {
+    const [a, b, c] = q
+    const disc = tidy(b * b - 4 * a * c)
+    const h = -b / (2 * a)
+    const k = c - (b * b) / (4 * a)
+    facts.push({ group: '一元二次方程', label: 'a,\\ b,\\ c', value: `${engine.nice(a)},\\ ${engine.nice(b)},\\ ${engine.nice(c)}`, num: null, how: 'ax^2 + bx + c = 0', why: '整理成一般式', shape: null })
+    facts.push({
+      group: '一元二次方程',
+      label: '\\Delta',
+      value: engine.nice(disc),
+      num: disc,
+      how: '\\Delta = b^2 - 4ac',
+      why: disc > 1e-12 ? 'Δ > 0：两个不相等的实根' : Math.abs(disc) <= 1e-12 ? 'Δ = 0：两个相等的实根（重根）' : 'Δ < 0：没有实根，有一对共轭复根',
+      shape: null,
+    })
+    const roots: number[] = []
+    if (Math.abs(disc) <= 1e-12) {
+      roots.push(h)
+      facts.push(rootFact('x_1 = x_2', h, '重根：抛物线与 x 轴相切', 'x = -\\frac{b}{2a}'))
+    } else if (disc > 0) {
+      const r = Math.sqrt(disc)
+      const xs = [(-b - r) / (2 * a), (-b + r) / (2 * a)].sort((u, v) => u - v)
+      roots.push(...xs)
+      xs.forEach((x, i) => facts.push(rootFact(`x_{${i + 1}}`, x, '求根公式', 'x = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}')))
+    } else {
+      const im = Math.sqrt(-disc) / (2 * Math.abs(a))
+      facts.push({ group: '方程的解', label: 'x_{1,2}', value: `${engine.nice(h)} \\pm ${engine.nice(im)}\\,i`, num: null, how: 'x = \\frac{-b \\pm i\\sqrt{-\\Delta}}{2a}', why: '实数范围内无解', shape: null })
+    }
+    facts.push({ group: '根与系数', label: 'x_1 + x_2', value: engine.nice(-b / a), num: -b / a, how: '-\\frac{b}{a}', why: '韦达定理', shape: null })
+    facts.push({ group: '根与系数', label: 'x_1 x_2', value: engine.nice(c / a), num: c / a, how: '\\frac{c}{a}', why: '韦达定理', shape: null })
+    facts.push({ group: '对应的抛物线', label: '\\text{顶点}', value: `\\left(${engine.nice(h).split(' ')[0]},\\ ${engine.nice(k).split(' ')[0]}\\right)`, num: null, how: graph, why: a > 0 ? '开口向上，顶点是最低点' : '开口向下，顶点是最高点', shape: { type: 'point', x: h, y: k, label: '顶点' } })
+    facts.push({ group: '对应的抛物线', label: '\\text{对称轴}', value: `x = ${engine.nice(h)}`, num: h, how: 'x = -\\frac{b}{2a}', why: '配方', shape: null })
+    return { facts, roots }
+  }
+  if (q && Math.abs(q[1]) > 1e-12) {
+    const x = -q[2] / q[1]
+    facts.push(rootFact('x', x, '一元一次方程：移项、系数化为 1', `${engine.nice(q[1])}x = ${engine.nice(-q[2])}`))
+    return { facts, roots: [x] }
+  }
+  if (q) {
+    facts.push({ group: '方程的解', label: '\\text{解}', value: Math.abs(q[2]) < 1e-12 ? '\\text{任意实数}' : '\\text{无解}', num: null, how: graph, why: '化简后不含 x', shape: null })
+    return { facts, roots: [] }
+  }
+  const zs = engine.roots(F, 'x', env, -RANGE, RANGE)
+  const gaps = engine.domainGaps(F, 'x', env, -RANGE, RANGE)
+  if (gaps.length || F.includes('/')) {
+    const hint = domainHint(F)
+    if (hint) facts.push({ group: '定义域', label: '\\text{要求}', value: hint, num: null, how: '', why: '方程有意义的条件', shape: null })
+  }
+  if (!zs.length) facts.push({ group: '方程的解', label: '\\text{解}', value: '\\text{无实根}', num: null, how: graph, why: `在 [-${RANGE}, ${RANGE}] 内 y = ${name}(x) 不碰 x 轴`, shape: null })
+  else if (zs.length > 12) facts.push({ group: '方程的解', label: '\\text{解}', value: `\\text{共 ${zs.length} 个}`, num: null, how: graph, why: `在 [-${RANGE}, ${RANGE}] 内（周期性），已在图上标出`, shape: null })
+  else
+    zs.forEach((x, i) => {
+      const d = (engine.eval(F, { ...env, x: x + 1e-5 }) - engine.eval(F, { ...env, x: x - 1e-5 })) / 2e-5
+      facts.push(rootFact(`x_{${i + 1}}`, x, Math.abs(d) < 1e-4 ? '重根（图像与 x 轴相切）' : 'Rust 数值求根', graph))
+    })
+  return { facts, roots: zs }
+}
+
 function sphereFacts(F: string, env: Env): RustFact[] {
   // F = x² + y² + z² + Dx + Ey + Fz + G (up to a common factor)
   const f = (x: number, y: number, z: number) => engine.eval(F, { ...env, x, y, z })
@@ -636,6 +735,7 @@ export function summarizeCard(text: string): CardSummary {
   else if (kinds.has('vector')) headline = '向量'
   else if (kinds.has('surface')) headline = '空间曲面'
   else if (kinds.has('implicit3')) headline = '空间方程'
+  else if (kinds.has('equation1')) headline = '解方程'
   else if (kinds.has('implicit2')) headline = '平面曲线'
   else if (kinds.has('curve')) headline = '函数'
   else if (kinds.has('param')) headline = '参数曲线'

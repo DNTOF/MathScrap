@@ -722,7 +722,7 @@ fn vlabel(n: &str) -> String {
     if n.len() == 2 && n.chars().all(|c| c.is_ascii_uppercase()) {
         format!("\\overrightarrow{{{}}}", n)
     } else {
-        format!("\\vec{{{}}}", n)
+        format!("\\mathbf{{{}}}", n)
     }
 }
 

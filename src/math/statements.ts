@@ -14,6 +14,8 @@ export type Constraint =
 export type Statement =
   | { kind: 'curve'; name?: string; expr: string; src: string }
   | { kind: 'implicit2'; name?: string; F: string; src: string }
+  /** Equation in x alone (e.g. x^2 + 2x + 1 = 0): solved for x, drawn as y = F(x). */
+  | { kind: 'equation1'; F: string; lhs: string; rhs: string; src: string }
   | { kind: 'surface'; name?: string; expr: string; src: string }
   | { kind: 'implicit3'; name?: string; F: string; src: string }
   | { kind: 'point'; name: string; coords: string[]; src: string }
@@ -23,8 +25,31 @@ export type Statement =
   | { kind: 'constraint'; c: Constraint; src: string }
   | { kind: 'error'; message: string; src: string }
 
-export function normalize(text: string): string {
+const BOLD_A = 0x1d41a
+
+/** Math-bold small letter (𝐚…𝐳) — the canonical spelling of a vector name. */
+export const bold = (letter: string) => String.fromCodePoint(BOLD_A + letter.charCodeAt(0) - 97)
+const BOLD_CLASS = '[\\u{1D41A}-\\u{1D433}]'
+const BOLD_NAME = `${BOLD_CLASS}(?:_\\w+)?`
+const unbold = (name: string) => name.replace(new RegExp(BOLD_CLASS, 'gu'), (c) => String.fromCharCode(97 + c.codePointAt(0)! - BOLD_A))
+const isBoldName = (s: string) => new RegExp(`^${BOLD_NAME}$`, 'u').test(s)
+
+/**
+ * Explicit vector spellings all become math-bold letters: 𝐛, **b**, \mathbf{b}, \bm{b},
+ * \boldsymbol{b}, \vec{b}, vec b, and bold-italic 𝒃. A plain lowercase letter is never a vector
+ * definition (and never a point).
+ */
+function boldify(text: string): string {
   return text
+    .replace(/[\u{1D482}-\u{1D49B}]/gu, (c) => bold(String.fromCharCode(97 + c.codePointAt(0)! - 0x1d482)))
+    .replace(/\\(?:mathbf|bm|boldsymbol|vec)\s*\{\s*([a-z])\s*\}/g, (_, c) => bold(c))
+    .replace(/\\(?:mathbf|bm|boldsymbol|vec)\s+([a-z])(?![a-z])/g, (_, c) => bold(c))
+    .replace(/\*\*([a-z])\*\*/g, (_, c) => bold(c))
+    .replace(/\bvec\s+([a-z])(?![a-z])/g, (_, c) => bold(c))
+}
+
+export function normalize(text: string): string {
+  return boldify(text)
     .replace(/（/g, '(')
     .replace(/）/g, ')')
     .replace(/，/g, ',')
@@ -41,8 +66,6 @@ export function normalize(text: string): string {
     .replace(/[<⟨]([^<>⟨⟩=]*,[^<>⟨⟩=]*)[>⟩]/g, '($1)')
     .replace(/\bangle\s*/gi, '∠')
     .replace(/\bdeg\b/g, '°')
-    .replace(/\\vec\{?([a-z])\}?/g, '$1')
-    .replace(/\bvec\s+([a-z])/g, '$1')
 }
 
 export function splitTop(src: string, seps: string[]): string[] {
@@ -78,9 +101,11 @@ export function tupleParts(src: string): string[] | null {
 
 const TRI_RE = /^(?:△|triangle|tri|三角形)\s*([A-Z]{3})?\s*:?\s*(.*)$/i
 
+/** AB → segment; 𝐚 (or a plain `a` naming an already-defined vector) → vector. */
 function parseRef(s: string): Ref | null {
-  const t = s.trim().replace(/^\|(.*)\|$/, '$1')
+  const t = s.trim().replace(/^\|(.*)\|$/, '$1').trim()
   if (/^[A-Z][A-Z]$/.test(t)) return { kind: 'seg', p: t[0], q: t[1] }
+  if (isBoldName(t)) return { kind: 'vec', name: unbold(t) }
   if (/^[a-z](_\w+)?$/.test(t)) return { kind: 'vec', name: t }
   return null
 }
@@ -122,7 +147,7 @@ function classifyPart(part: string): Statement[] {
   if (rel) {
     const a = parseRef(rel[1])
     const b = parseRef(rel[3])
-    if (!a || !b) return [err(src, '⊥ / ∥ 两边请写线段（如 AB）或向量名（如 a）')]
+    if (!a || !b) return [err(src, '⊥ / ∥ 两边请写线段（如 AB）或粗体向量（如 **a**）')]
     return [{ kind: 'constraint', c: { type: rel[2] === '⊥' ? 'perp' : 'para', a, b }, src }]
   }
 
@@ -140,19 +165,25 @@ function classifyPart(part: string): Statement[] {
     if (tp) return [{ kind: 'point', name: point[1], coords: tp, src }]
   }
 
-  // Vectors: a = (1, 2) ; also AB = (1, 2) as a vector
-  const vec = src.match(/^([a-z](?:_\w+)?|[A-Z]{2})\s*=\s*(\(.+\))$/)
+  // Vectors need an explicit definition: 𝐚 = (1, 2) (typed as **a** = …), or AB = (1, 2)
+  const vec = src.match(new RegExp(`^(${BOLD_NAME}|[A-Z]{2})\\s*=\\s*(\\(.+\\))$`, 'u'))
   if (vec) {
     const tp = tupleParts(vec[2])
-    if (tp) return [{ kind: 'vector', name: vec[1], comps: tp, src }]
+    if (tp) return [{ kind: 'vector', name: unbold(vec[1]), comps: tp, src }]
   }
+  const plainVec = src.match(/^([a-z])(_\w+)?\s*=\s*(\(.+\))$/)
+  if (plainVec && tupleParts(plainVec[3]))
+    return [err(src, `向量要用粗体定义：**${plainVec[1]}** = ${plainVec[3]}（也可写 ${bold(plainVec[1])}、\\mathbf{${plainVec[1]}} 或 \\vec{${plainVec[1]}}）`)]
+  const lowerPoint = src.match(/^([a-z])\s*(\(.+\))$/)
+  if (lowerPoint && tupleParts(lowerPoint[2]) && !(vars(src) ?? []).length)
+    return [err(src, `点用大写字母命名，例如 ${lowerPoint[1].toUpperCase()}${lowerPoint[2]}；向量请写 **${lowerPoint[1]}** = ${lowerPoint[2]}`)]
 
   // bare tuple → anonymous point
   const bare = tupleParts(src)
   if (bare) return [{ kind: 'point', name: '', coords: bare, src }]
 
   // |AB| = 5, AB = 5, |a| = 3
-  const len = src.match(/^(\|[A-Za-z](?:_\w+)?[A-Z]?\||[A-Z][A-Z])\s*=\s*(.+)$/)
+  const len = src.match(new RegExp(`^(\\|(?:${BOLD_NAME}|[A-Za-z](?:_\\w+)?[A-Z]?)\\||[A-Z][A-Z])\\s*=\\s*(.+)$`, 'u'))
   if (len) {
     const ref = parseRef(len[1])
     if (ref) return [{ kind: 'constraint', c: { type: 'len', ref, value: len[2] }, src }]
@@ -201,6 +232,9 @@ function classifyPart(part: string): Statement[] {
     return [err(src, e ?? '无法解析')]
   }
   if (v.includes('z')) return [{ kind: 'implicit3', F, src }]
+  // `x = 3` is the vertical line; any other equation in x alone is something to solve.
+  const verticalLine = lhsT === 'x' && !(vars(rhs) ?? []).includes('x')
+  if (v.includes('x') && !v.includes('y') && !verticalLine) return [{ kind: 'equation1', F, lhs, rhs, src }]
   if (v.includes('x') || v.includes('y')) return [{ kind: 'implicit2', F, src }]
   if (v.length === 0) return [err(src, '这是一个纯数字等式，没有可画的对象')]
   return [{ kind: 'constraint', c: { type: 'equation', F }, src }]
@@ -250,7 +284,7 @@ export function parseCard(text: string): Statement[] {
 // LaTeX for statements
 
 function refLatex(r: Ref) {
-  return r.kind === 'seg' ? `${r.p}${r.q}` : `\\vec{${r.name}}`
+  return r.kind === 'seg' ? `\\overrightarrow{${r.p}${r.q}}` : `\\mathbf{${r.name}}`
 }
 
 function exprLatex(src: string) {
@@ -273,7 +307,7 @@ export function statementLatex(s: Statement): string {
     case 'point':
       return `${s.name ? s.name : ''}\\left(${s.coords.map(exprLatex).join(',\\ ')}\\right)`
     case 'vector':
-      return `${/^[A-Z]{2}$/.test(s.name) ? `\\overrightarrow{${s.name}}` : `\\vec{${s.name}}`} = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
+      return `${/^[A-Z]{2}$/.test(s.name) ? `\\overrightarrow{${s.name}}` : `\\mathbf{${s.name}}`} = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
     case 'param':
       return `\\vec{${s.name}}(t) = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
     case 'constraint': {
@@ -300,6 +334,8 @@ export function statementLatex(s: Statement): string {
       return `${s.name ? `${s.name}\\left(x\\right)` : 'y'} = ${exprLatex(s.expr)}`
     case 'surface':
       return `${s.name ? `${s.name}\\left(x,\\ y\\right)` : 'z'} = ${exprLatex(s.expr)}`
+    case 'equation1':
+      return `${exprLatex(s.lhs)} = ${exprLatex(s.rhs)}`
     case 'error':
       return `\\text{${s.src.replace(/[\\{}$&#%_^]/g, ' ')}}`
     default:
@@ -313,6 +349,8 @@ export function kindLabel(s: Statement): string {
       return '函数'
     case 'implicit2':
       return '平面曲线'
+    case 'equation1':
+      return '方程'
     case 'surface':
       return '空间曲面'
     case 'implicit3':

@@ -5,12 +5,19 @@ import type { Doc } from './types'
 const KEY = 'mathscrap.doc.v1'
 const LIMIT = 120
 
+const RENAMED_SAMPLES: Record<string, string> = {
+  'a = (1, 2, 2); b = (2, 1, k)\na ⊥ b': '𝐚 = (1, 2, 2); 𝐛 = (2, 1, k)\n𝐚 ⊥ 𝐛',
+}
+
+/** Saved pages from before vectors required bold names keep working. */
+const migrateCard = (c: Doc['cards'][number]) => (RENAMED_SAMPLES[c.text] ? { ...c, text: RENAMED_SAMPLES[c.text] } : c)
+
 function load(): Doc {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const d = JSON.parse(raw) as Doc
-      if (Array.isArray(d.cards) && Array.isArray(d.strokes)) return { ...d, stickers: d.stickers ?? [] }
+      if (Array.isArray(d.cards) && Array.isArray(d.strokes)) return { ...d, cards: d.cards.map(migrateCard), stickers: d.stickers ?? [] }
     }
   } catch {
     /* corrupted storage: fall back to the sample page */
