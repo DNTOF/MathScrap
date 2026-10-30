@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "build:wasm": "cd crates/mathcore && wasm-pack build --target web --release --out-dir ../../src/wasm/pkg --out-name mathcore && rm -f ../../src/wasm/pkg/.gitignore",
     "test:rust": "cd crates/mathcore && cargo test",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "e2e": "tsx scripts/e2e-plots.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -34,10 +35,13 @@
     "@types/katex": "^0.16.8",
     "@types/node": "^24.19.2",
     "@types/plotly.js-dist-min": "^2.3.4",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "oxlint": "^1.89.0",
+    "playwright-core": "^1.64.1",
+    "pngjs": "^7.0.0",
     "tsx": "^4.23.15",
     "typescript": "~7.0.2",
     "vite": "^8.3.5"
