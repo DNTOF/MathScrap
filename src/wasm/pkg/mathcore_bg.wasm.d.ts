@@ -1,0 +1,30 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const _eval: (a: number, b: number, c: number, d: number) => number;
+export const conic_analyze: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const domain_gaps: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+export const extrema: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+export const inspect: (a: number, b: number) => [number, number];
+export const intersect_curve_implicit: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+export const intersect_curves: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+export const latex: (a: number, b: number) => [number, number];
+export const linear_coeffs: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const lines_analyze: (a: number, b: number, c: number, d: number) => [number, number];
+export const nice_number: (a: number) => [number, number];
+export const planes_analyze: (a: number, b: number, c: number, d: number) => [number, number];
+export const points_analyze: (a: number, b: number) => [number, number];
+export const roots: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
+export const sample_curve: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
+export const sample_grid: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number];
+export const sample_volume: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
+export const solve_system: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const substitute: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const triangle_solve: (a: number, b: number) => [number, number];
+export const vectors_analyze: (a: number, b: number) => [number, number];
+export const version: () => [number, number];
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;
