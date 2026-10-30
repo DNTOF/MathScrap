@@ -70,4 +70,4 @@ export const cases: [string, string, Expect][] = [
   ['空间螺旋线', 'r(t) = (cos(t), sin(t), t/3)', { dim: 3 }],
   ['空间三点', 'P(1,2,3), Q(0,1,-1), R(2,0,1)', { dim: 3 }],
 ]
-for (const s of SAMPLES) cases.push([`示例 · ${s.title}`, s.text, {}])
+for (const s of SAMPLES) cases.push([`示例 · ${s.title}`, s.blocks.join("\n"), {}])

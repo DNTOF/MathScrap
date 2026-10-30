@@ -1,4 +1,5 @@
-export type Tool = 'pen' | 'marker' | 'eraser' | 'hand'
+/** `select` moves formulas and pans empty paper; `type` places a formula wherever you tap. */
+export type Tool = 'pen' | 'marker' | 'eraser' | 'select' | 'type'
 
 export type PenStyle = 'ink' | 'dashed' | 'dotted' | 'pencil' | 'washi'
 
@@ -9,18 +10,17 @@ export interface Stroke {
   color: string
   width: number
   style: PenStyle | 'marker'
-  /** set once the stroke has been turned into a formula card via handwriting recognition */
+  /** set once the stroke has been turned into a typed formula via handwriting recognition */
   recognized?: boolean
   createdAt: number
 }
 
+/** A formula written directly on the sheet (one or more lines, top-left anchored at x/y). */
 export interface Card {
   id: string
   x: number
   y: number
   text: string
-  rot: number
-  tape: string
 }
 
 export interface Sticker {
@@ -52,7 +52,4 @@ export const INK_COLORS = [
   { name: '姜黄', value: '#b9852a' },
   { name: '粉笔白', value: '#f6eedd' },
 ]
-
-export const TAPES = ['#c9785c', '#8fa47a', '#7d93b0', '#d4a64a', '#b58aa0']
-
 export const uid = () => Math.random().toString(36).slice(2, 10)

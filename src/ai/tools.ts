@@ -9,19 +9,19 @@ import { analyze } from '@/math/scene'
 export const TOOL_SPECS = [
   {
     name: 'page_read',
-    description: '读取当前页：所有公式卡片（原文、位置）以及笔迹数量。',
+    description: '读取当前这张纸：写在纸上的所有公式（原文、位置）以及笔迹数量。',
     inputSchema: { type: 'object', properties: {} },
     status: 'local',
   },
   {
     name: 'page_add_formula',
-    description: '在页面上新增一张公式卡片。text 使用本应用的 ASCII 数学写法，例如 "y = x^2 - 2" 或 "△ABC: a=3, b=4, C=90°"。',
+    description: '在纸上写一个公式（不传 x/y 时写在视野左侧的下一行）。text 使用本应用的 ASCII 数学写法，例如 "y = x^2 - 2" 或 "△ABC: a=3, b=4, C=90°"。',
     inputSchema: { type: 'object', properties: { text: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['text'] },
     status: 'local',
   },
   {
     name: 'page_update_formula',
-    description: '修改某张卡片的公式文本。',
+    description: '改写纸上某个公式的文本。',
     inputSchema: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] },
     status: 'local',
   },
@@ -33,8 +33,8 @@ export const TOOL_SPECS = [
   },
   {
     name: 'plot_open',
-    description: '打开某张卡片的坐标系面板（自动选择 2D / 3D）。',
-    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    description: '打开这张纸共享的坐标系：纸上所有式子画在同一套坐标轴上并联立推导。传 id 时按该式子决定先看平面还是空间。',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
     status: 'local',
   },
   {
@@ -55,14 +55,14 @@ export interface ToolHost {
   getDoc: () => Doc
   addCard: (text: string, x?: number, y?: number) => Card
   updateCard: (id: string, text: string) => void
-  openPlot: (id: string) => void
+  openPlot: (id?: string) => void
 }
 
 export function createToolBridge(host: ToolHost) {
   const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     page_read: () => {
       const d = host.getDoc()
-      return { cards: d.cards.map((c) => ({ id: c.id, text: c.text, x: c.x, y: c.y })), strokes: d.strokes.length }
+      return { formulas: d.cards.map((c) => ({ id: c.id, text: c.text, x: c.x, y: c.y })), strokes: d.strokes.length }
     },
     page_add_formula: (a) => host.addCard(String(a.text), a.x as number | undefined, a.y as number | undefined),
     page_update_formula: (a) => (host.updateCard(String(a.id), String(a.text)), { ok: true }),
@@ -70,7 +70,7 @@ export function createToolBridge(host: ToolHost) {
       const r = analyze(((a.texts as string[]) ?? []).map((text, i) => ({ id: String(i), text })))
       return { dim: r.dim, solve: r.solve, sections: r.sections.map((s) => ({ title: s.title, facts: s.facts.map((f) => ({ label: f.label, value: f.value, why: f.why })) })), errors: r.errors }
     },
-    plot_open: (a) => (host.openPlot(String(a.id)), { ok: true }),
+    plot_open: (a) => (host.openPlot(a.id ? String(a.id) : undefined), { ok: true }),
   }
   return {
     specs: TOOL_SPECS,

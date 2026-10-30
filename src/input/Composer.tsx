@@ -1,8 +1,7 @@
-import { CornerDownLeft, Sigma, Sparkles, X } from 'lucide-react'
-import { useDeferredValue, useEffect, type RefObject } from 'react'
+import { Check, X } from 'lucide-react'
+import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { Tex } from '@/components/Tex'
 import { cn } from '@/lib/utils'
-import { SAMPLES } from '@/board/samples'
 import { summarizeCard } from '@/math/scene'
 import { MathPalette } from './MathPalette'
 import { applySnippet, matchSnippet, nextPlaceholder, type Snippet } from './snippets'
@@ -10,15 +9,19 @@ import { applySnippet, matchSnippet, nextPlaceholder, type Snippet } from './sni
 interface Props {
   value: string
   onChange: (v: string) => void
+  /** commit what was written (an emptied edit erases the formula) */
   onSubmit: () => void
   onCancel: () => void
   editing: boolean
-  focused: boolean
   onFocusChange: (f: boolean) => void
   textareaRef: RefObject<HTMLTextAreaElement | null>
   compact: boolean
   open: boolean
+  /** screen position of the writing spot on the sheet */
+  anchor: { left: number; top: number } | null
 }
+
+const TRY = ['y = x^2 - 2', 'x^2 + y^2 = 4', 'x^2 + 2x + 1 = 0', '△ABC: a=3, b=4, C=90°', 'z = sin(x)cos(y)']
 
 export function insertSnippet(el: HTMLTextAreaElement | null, value: string, onChange: (v: string) => void, s: Snippet) {
   const start = el?.selectionStart ?? value.length
@@ -32,21 +35,44 @@ export function insertSnippet(el: HTMLTextAreaElement | null, value: string, onC
   })
 }
 
-export function Composer({ value, onChange, onSubmit, onCancel, editing, focused, onFocusChange, textareaRef, compact, open }: Props) {
+/**
+ * Writing a formula straight onto the paper: a caret where you tapped, the ink preview
+ * right beneath it, and nothing else. Clicking away writes it down, like a Freeform text box.
+ */
+export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocusChange, textareaRef, compact, open, anchor }: Props) {
   const deferred = useDeferredValue(value)
   const summary = deferred.trim() ? summarizeCard(deferred) : null
-  const hasHole = deferred.includes('□')
+  const hasHole = value.includes('□')
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ w: 420, h: 120 })
+  /** set once Enter / Esc / a button finished this session, so the following blur is a no-op */
+  const settled = useRef(false)
+  const submit = () => {
+    settled.current = true
+    onSubmit()
+  }
+  const cancel = () => {
+    settled.current = true
+    onCancel()
+  }
 
   useEffect(() => {
     const el = textareaRef.current
     if (!el) return
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-  }, [value, textareaRef])
+  }, [value, textareaRef, open])
 
   useEffect(() => {
-    if (open && compact) requestAnimationFrame(() => textareaRef.current?.focus())
-  }, [open, compact, textareaRef])
+    if (!open) return
+    settled.current = false
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [open, anchor?.left, anchor?.top, editing, textareaRef])
+
+  useLayoutEffect(() => {
+    const el = boxRef.current
+    if (el) setSize({ w: el.offsetWidth, h: el.offsetHeight })
+  }, [deferred, open])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget
@@ -66,114 +92,103 @@ export function Composer({ value, onChange, onSubmit, onCancel, editing, focused
     }
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
-      if (value.trim() && !value.includes('□')) onSubmit()
+      if (!hasHole) submit()
       return
     }
     if (e.key === 'Escape') {
       e.preventDefault()
-      onCancel()
-      el.blur()
+      cancel()
     }
   }
 
-  const expanded = focused || !!value.trim()
-  if (compact && !open) return null
+  const onBlur = () => {
+    onFocusChange(false)
+    // switching windows is not "clicking away"
+    if (settled.current || !document.hasFocus() || !open || hasHole) return
+    if (value.trim() || editing) submit()
+    else cancel()
+  }
 
-  return (
-    <div className={cn('fixed z-30 flex flex-col gap-2', compact ? 'inset-x-2 bottom-[calc(76px+env(safe-area-inset-bottom))]' : 'bottom-4 left-1/2 w-[min(760px,calc(100vw-180px))] -translate-x-1/2')} data-no-board>
-      {expanded && (
-        <div className="kraft-panel max-h-[38dvh] overflow-y-auto rounded-2xl px-4 py-3">
-          {summary ? (
-            <>
-              <div className="flex flex-col gap-1.5">
-                {summary.lines.map((l, i) => (
-                  <div key={i} className="flex items-baseline gap-2">
-                    <span className={cn('w-16 shrink-0 text-right text-[10.5px] font-medium', l.error ? 'text-ink-red' : 'text-kraft-600')}>{l.kind}</span>
-                    <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden text-[18px] text-ink">
-                      <Tex tex={l.latex} />
-                      {l.error && <div className="text-[11.5px] text-ink-red">{l.error}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-kraft-600/15 pt-2 text-[12px] text-kraft-700">
-                {hasHole ? (
-                  <span className="text-ink-red">还有 □ 没填，按 Tab 跳过去</span>
-                ) : (
-                  <>
-                    {summary.plottable && <span className="rounded-full bg-kraft-200 px-2 py-0.5">{summary.dim === 3 ? '将用空间坐标系 3D' : '将用平面坐标系 2D'}</span>}
-                    {summary.factCount > 0 && (
-                      <span className="flex items-center gap-1 rounded-full bg-ink-green/90 px-2 py-0.5 text-kraft-50">
-                        <Sparkles className="size-3" />
-                        可推出 {summary.factCount} 项
-                      </span>
-                    )}
-                    <span className="ml-auto text-kraft-500">Enter 贴到页面 · Shift+Enter 换行加条件</span>
-                  </>
-                )}
-              </div>
-            </>
-          ) : (
-            <div>
-              <div className="mb-1.5 text-[12px] text-kraft-600">直接打字就行（x^2、sqrt(x)、2x 都认识），或者点一个例子：</div>
-              <div className="flex flex-wrap gap-1.5">
-                {SAMPLES.slice(0, compact ? 6 : 12).map((s) => (
-                  <button
-                    key={s.title}
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={() => onChange(s.text)}
-                    className="touch-target rounded-lg border border-kraft-600/20 bg-kraft-50/70 px-2 py-1 text-left text-[12px] text-kraft-800 hover:bg-kraft-50"
-                    title={s.note}
-                  >
-                    {s.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+  if (!open) return null
+
+  const keep = (e: React.SyntheticEvent) => e.preventDefault()
+
+  const preview = summary && (
+    <div className="ink-formula flex flex-col gap-0.5 text-[24px] leading-snug">
+      {summary.lines.map((l, i) => (
+        <div key={i} className={cn('whitespace-nowrap', l.error && 'ink-error')}>
+          <Tex tex={l.latex} />
+          {l.error && <div className="hand text-[15px] leading-tight whitespace-normal text-ink-red/90">{l.error}</div>}
         </div>
-      )}
-      <div className="kraft-panel flex items-end gap-2 rounded-2xl p-2">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-kraft-700 text-kraft-50">
-          <Sigma className="size-5" />
-        </div>
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onFocus={() => onFocusChange(true)}
-          onBlur={() => onFocusChange(false)}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          enterKeyHint="done"
-          placeholder={editing ? '修改这张卡片…' : compact ? '写公式，例如 y = x^2 - 2' : '写公式或条件，回车贴到页面 · 例如 y = x^2 - 2 或 △ABC: a=3, b=4, C=90°   （按 / 聚焦）'}
-          className="min-h-10 flex-1 resize-none bg-transparent py-2 font-mono text-[16px] leading-6 text-ink outline-none placeholder:font-sans placeholder:text-[13.5px] placeholder:text-kraft-600/80"
-        />
-        {(value || editing || compact) && (
-          <button
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={onCancel}
-            className="touch-target grid size-10 shrink-0 place-items-center rounded-xl text-kraft-700 hover:bg-kraft-200"
-            aria-label="取消"
-            title="取消 (Esc)"
-          >
+      ))}
+    </div>
+  )
+
+  const field = (
+    <textarea
+      ref={textareaRef}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      onFocus={() => onFocusChange(true)}
+      onBlur={onBlur}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      enterKeyHint="done"
+      aria-label="在纸上写公式"
+      placeholder={editing ? '改写这个式子…' : '写一个式子…'}
+      className="min-h-9 w-full resize-none bg-transparent py-1.5 font-mono text-[17px] leading-6 text-ink outline-none placeholder:font-sans placeholder:text-[15px] placeholder:text-kraft-800/45"
+    />
+  )
+
+  const tips = !value.trim() && !editing && (
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[12px] text-kraft-800/60">
+      <span>试试</span>
+      {TRY.map((t) => (
+        <button key={t} onPointerDown={keep} onMouseDown={keep} onClick={() => onChange(t)} className="rounded-md px-1 font-mono text-kraft-800/80 underline decoration-kraft-800/25 underline-offset-2 hover:bg-kraft-800/8">
+          {t}
+        </button>
+      ))}
+    </div>
+  )
+
+  const footer = (
+    <div className="text-[11px] text-kraft-800/55">{hasHole ? <span className="text-ink-red">还有 □ 没填，按 Tab 跳过去</span> : 'Enter 写上 · Shift+Enter 换行加条件 · Esc 放弃'}</div>
+  )
+
+  if (compact) {
+    return (
+      <div className="paper-chrome fixed inset-x-2 bottom-[calc(80px+env(safe-area-inset-bottom))] z-30 flex flex-col gap-2 rounded-3xl px-3 pt-2 pb-2.5" data-no-board>
+        {preview && <div className="max-h-[26dvh] overflow-auto">{preview}</div>}
+        <div className="flex items-end gap-1.5 border-b border-dashed border-kraft-800/30">
+          {field}
+          <button onPointerDown={keep} onMouseDown={keep} onClick={cancel} className="touch-target grid size-9 shrink-0 place-items-center rounded-full text-kraft-700" aria-label="放弃">
             <X className="size-4.5" />
           </button>
-        )}
-        <button
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={onSubmit}
-          disabled={!value.trim() || hasHole}
-          className="touch-target flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-kraft-700 px-3.5 text-[13.5px] font-medium text-kraft-50 transition hover:bg-kraft-800 disabled:opacity-40"
-        >
-          <CornerDownLeft className="size-4" />
-          {editing ? '更新' : '贴上'}
-        </button>
+          <button onPointerDown={keep} onMouseDown={keep} onClick={submit} disabled={hasHole || (!value.trim() && !editing)} className="touch-target mb-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-kraft-800 text-kraft-50 disabled:opacity-35" aria-label="写上">
+            <Check className="size-4.5" />
+          </button>
+        </div>
+        {tips}
+        <MathPalette layout="row" onInsert={(s) => insertSnippet(textareaRef.current, value, onChange, s)} />
       </div>
-      {compact && <MathPalette layout="row" onInsert={(s) => insertSnippet(textareaRef.current, value, onChange, s)} />}
+    )
+  }
+
+  const a = anchor ?? { left: window.innerWidth / 2 - 200, top: window.innerHeight / 3 }
+  const left = Math.max(16, Math.min(a.left, window.innerWidth - size.w - 300))
+  const top = Math.max(64, Math.min(a.top, window.innerHeight - size.h - 96))
+
+  return (
+    <div ref={boxRef} className="fixed z-30 flex w-[min(460px,calc(100vw-340px))] flex-col gap-1.5 animate-in fade-in" style={{ left: left - 10, top: top - 6 }} data-no-board>
+      <div className="rounded-xl border border-dashed border-kraft-800/40 bg-kraft-50/15 px-2.5 py-1">{field}</div>
+      <div className="flex flex-col gap-1.5 px-2.5">
+        {preview}
+        {tips}
+        {footer}
+      </div>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FormulaCard } from './FormulaCard'
+import { InkFormula } from './InkFormula'
 import { hitStroke, StrokeDefs, StrokeShape } from './strokes'
 import { uid, type Doc, type PenStyle, type Stroke, type Tool, type View } from './types'
 
@@ -18,7 +18,11 @@ interface Props {
   penOnly: boolean
   showGrid: boolean
   selectedCard: string | null
+  /** formula currently open in the composer — hidden on the sheet while it is being rewritten */
+  editingCard: string | null
   onSelectCard: (id: string | null) => void
+  /** tap with the type tool, or double-click anywhere on empty paper */
+  onPlace: (x: number, y: number) => void
   onAddStroke: (s: Stroke) => void
   onErase: (ids: string[]) => void
   onCardDragStart: (id: string) => void
@@ -31,7 +35,7 @@ interface Props {
   children?: React.ReactNode
 }
 
-type Mode = { kind: 'draw' } | { kind: 'erase' } | { kind: 'pan'; x: number; y: number } | { kind: 'pinch' }
+type Mode = { kind: 'draw' } | { kind: 'erase' } | { kind: 'pan'; x: number; y: number; x0: number; y0: number; place: boolean } | { kind: 'pinch' }
 
 export function Board(props: Props) {
   const { doc, view, setView, tool, pen, penOnly, showGrid } = props
@@ -94,11 +98,27 @@ export function Board(props: Props) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [setView])
 
+  // a lone dot waits a moment before it is inked, so the two clicks of a double-click leave no marks
+  const pendingDots = useRef<{ s: Stroke; t: ReturnType<typeof setTimeout> }[]>([])
+  const [dots, setDots] = useState<Stroke[]>([])
   const finishStroke = () => {
     const s = liveRef.current
     liveRef.current = null
     setLive(null)
-    if (s && s.pts.length >= 3) props.onAddStroke(s)
+    if (!s || s.pts.length < 3) return
+    if (s.pts.length > 3) return props.onAddStroke(s)
+    const t = setTimeout(() => {
+      pendingDots.current = pendingDots.current.filter((d) => d.s !== s)
+      setDots(pendingDots.current.map((d) => d.s))
+      props.onAddStroke(s)
+    }, 320)
+    pendingDots.current.push({ s, t })
+    setDots(pendingDots.current.map((d) => d.s))
+  }
+  const dropDots = () => {
+    pendingDots.current.forEach((d) => clearTimeout(d.t))
+    pendingDots.current = []
+    setDots([])
   }
 
   const finishErase = () => {
@@ -141,8 +161,9 @@ export function Board(props: Props) {
       return
     }
     const palm = e.pointerType === 'touch' && (penOnly || penSeen.current)
-    if (e.button === 1 || space || tool === 'hand' || palm) {
-      mode.current = { kind: 'pan', x: e.clientX, y: e.clientY }
+    if (e.button === 1 || space || tool === 'select' || tool === 'type' || palm) {
+      const place = tool === 'type' && e.button === 0 && !space && !palm
+      mode.current = { kind: 'pan', x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, place }
       return
     }
     if (e.button !== 0 && e.pointerType === 'mouse') return
@@ -224,13 +245,35 @@ export function Board(props: Props) {
       }
       return
     }
+    if (m?.kind === 'pan' && m.place && Math.hypot(e.clientX - m.x0, e.clientY - m.y0) < 6) {
+      const w = toWorld(e.clientX, e.clientY)
+      props.onPlace(w.x, w.y)
+    }
     if (m?.kind === 'draw') finishStroke()
     if (m?.kind === 'erase') finishErase()
     mode.current = null
   }
 
   const drawing = tool === 'pen' || tool === 'marker' || tool === 'eraser'
-  const cursor = space || tool === 'hand' ? 'grab' : tool === 'eraser' ? 'cell' : 'crosshair'
+  const fingerSelects = penOnly || penSeen.current
+  const passThrough = useCallback(
+    (e: React.PointerEvent) => (drawing || space) && !(e.pointerType === 'touch' && fingerSelects),
+    [drawing, space, fingerSelects],
+  )
+  const cursor = space || tool === 'select' ? 'grab' : tool === 'type' ? 'text' : tool === 'eraser' ? 'cell' : 'crosshair'
+
+  const onDoubleClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('[data-no-board]')) return
+    dropDots()
+    // pointer capture makes the board the click target even when the pointer is over a formula
+    const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-formula]')
+    if (hit) {
+      props.onEdit(hit.dataset.formula!)
+      return
+    }
+    const w = toWorld(e.clientX, e.clientY)
+    props.onPlace(w.x, w.y)
+  }
   const grid = 28 * view.scale
 
   return (
@@ -242,6 +285,7 @@ export function Board(props: Props) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onDoubleClick={onDoubleClick}
     >
       {showGrid && <div className="dot-grid pointer-events-none absolute inset-0" style={{ backgroundSize: `${grid}px ${grid}px`, backgroundPosition: `${view.x}px ${view.y}px` }} />}
       {props.children}
@@ -252,12 +296,14 @@ export function Board(props: Props) {
           </div>
         ))}
         {doc.cards.map((c) => (
-          <FormulaCard
+          <InkFormula
             key={c.id}
             card={c}
             scale={view.scale}
-            drawing={drawing && !space}
+            inkFirst={passThrough}
+            movable={!drawing && !space}
             selected={props.selectedCard === c.id}
+            hidden={props.editingCard === c.id}
             onSelect={props.onSelectCard}
             onDragStart={props.onCardDragStart}
             onDrag={props.onCardDrag}
@@ -273,6 +319,9 @@ export function Board(props: Props) {
             <g key={s.id} opacity={erasing.has(s.id) ? 0.15 : 1}>
               <StrokeShape s={s} />
             </g>
+          ))}
+          {dots.map((s) => (
+            <StrokeShape key={s.id} s={s} />
           ))}
           {live && <StrokeShape s={live} />}
         </svg>

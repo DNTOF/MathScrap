@@ -9,7 +9,9 @@
 import { readFileSync } from 'node:fs'
 import { initSync } from '../src/wasm/pkg/mathcore.js'
 import { analyze, type Analysis } from '../src/math/scene'
+import { pageGroups } from '../src/math/page'
 import { parseCard } from '../src/math/statements'
+import { SAMPLES } from '../src/board/samples'
 import { buildFigure2d, buildFigure3d, initialRanges, type Ranges } from '../src/plot/figure'
 import { cases } from './plot-cases'
 
@@ -144,5 +146,57 @@ for (const [title, text, ex] of cases) {
   problems.forEach((p) => console.log(`        ✗ ${p}`))
   if (verbose) for (const s of a.sections) console.log(`        # ${s.title}: ${s.facts.map((f) => `${f.label}=${f.value}`).join(' ; ')}`)
 }
-console.log(`\n${cases.length - failed}/${cases.length} passed`)
-process.exit(failed ? 1 : 0)
+// ---- one sheet, one coordinate system: formulas written separately share the axes ----
+interface PageCase {
+  title: string
+  blocks: string[]
+  expect: Partial<Record<2 | 3, { formulas: number; objects?: string[]; facts?: string[]; solve?: Record<string, number> }>>
+}
+const pages: PageCase[] = [
+  {
+    title: '四个平面式子叠在一起',
+    blocks: ['y = x^2 - 2', 'y = 0.5x + 1', 'x^2 + y^2 = 4', 'x^2 + 2x + 1 = 0'],
+    expect: { 2: { formulas: 4, objects: ['curve', 'curve', 'curve', 'implicit2', 'roots'], facts: ['P_{2}=\\left(2,\\2\\right)', 'P_{2}=\\left(0,\\-2\\right)'] } },
+  },
+  {
+    title: '平面 + 空间混写',
+    blocks: ['y = sin(x)', 'z = x^2 + y^2', 'A(0,0), B(4,0), C(1,t)', 'AC ⊥ BC', '𝐚 = (1, 2, 2); 𝐛 = (2, 1, k)', '𝐚 ⊥ 𝐛'],
+    expect: { 2: { formulas: 2, objects: ['curve'], solve: { t: Math.sqrt(3) } }, 3: { formulas: 2, objects: ['surface'], solve: { k: -2 } } },
+  },
+  ...SAMPLES.map((s) => ({ title: `示例 · ${s.title}`, blocks: s.blocks, expect: {} })),
+]
+let pageFailed = 0
+for (const pc of pages) {
+  const problems: string[] = []
+  const cards = pc.blocks.map((text, i) => ({ id: `c${i}`, text, x: 0, y: i * 60 }))
+  const g = pageGroups(cards)
+  for (const dim of [2, 3] as const) {
+    const ex = pc.expect[dim]
+    const entries = g.entries.filter((e) => e.dim === dim)
+    if (ex && g.count[dim] !== ex.formulas) problems.push(`${dim}D has ${g.count[dim]} formulas, expected ${ex.formulas}`)
+    if (!entries.length) {
+      if (ex) problems.push(`no ${dim}D formulas`)
+      continue
+    }
+    const a = analyze(entries.map((e) => ({ id: e.card.id, text: e.card.text })))
+    if (a.dim !== dim) problems.push(`${dim}D group analysed as ${a.dim}D`)
+    if (a.errors.length) problems.push(`errors ${JSON.stringify(a.errors)}`)
+    const types = a.objects.map((o) => o.type)
+    for (const t of ex?.objects ?? []) {
+      const need = ex!.objects!.filter((x) => x === t).length
+      if (types.filter((x) => x === t).length < need) problems.push(`${dim}D: expected ${need}× ${t}, got ${types}`)
+    }
+    const factText = a.sections.flatMap((s) => s.facts.map((f) => `${f.label}=${f.value}`))
+    for (const f of ex?.facts ?? []) if (!factText.some((t) => t.replace(/\s+/g, '').includes(f))) problems.push(`${dim}D: missing fact "${f}"`)
+    for (const [k, v] of Object.entries(ex?.solve ?? {})) {
+      const ok = a.solve?.solutions.some((sol) => near(Math.abs(sol[a.solve!.unknowns.indexOf(k)]), Math.abs(v), 1e-5))
+      if (!ok) problems.push(`${dim}D: ${k} ≠ ${v}`)
+    }
+    problems.push(...(dim === 2 ? check2d(a, initialRanges(a)) : check3d(a)).map((p) => `${dim}D: ${p}`))
+  }
+  if (problems.length) pageFailed++
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  [sheet] ${pc.title.padEnd(16)} 2D×${g.count[2]} 3D×${g.count[3]}`)
+  problems.forEach((p) => console.log(`        ✗ ${p}`))
+}
+console.log(`\n${cases.length - failed}/${cases.length} formula cases · ${pages.length - pageFailed}/${pages.length} shared-sheet cases passed`)
+process.exit(failed + pageFailed ? 1 : 0)

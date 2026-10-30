@@ -47,9 +47,9 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
       <DialogContent className="kraft-panel max-h-[92dvh] overflow-y-auto bg-transparent sm:max-w-lg" data-no-board>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-kraft-800">
-            <ScanText className="size-5" /> 手写 → 公式卡片
+            <ScanText className="size-5" /> 手写 → 公式
           </DialogTitle>
-          <DialogDescription className="text-kraft-600">演示版没有接入识别模型：下面的候选来自 {mockRecognizer.name}，请点选或直接修改，再贴到页面。</DialogDescription>
+          <DialogDescription className="text-kraft-600">演示版没有接入识别模型：下面的候选来自 {mockRecognizer.name}，请点选或直接修改，再写到纸上。</DialogDescription>
         </DialogHeader>
         {box && (
           <div className="kraft-page rounded-xl border border-kraft-600/25 p-2">
@@ -124,7 +124,7 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
               取消
             </button>
             <button onClick={() => onConfirm(text, keep)} disabled={!text.trim()} className="h-10 rounded-xl bg-kraft-700 px-4 text-[13px] font-medium text-kraft-50 hover:bg-kraft-800 disabled:opacity-40">
-              贴为公式卡片
+              写成公式
             </button>
           </div>
         </div>
