@@ -23,6 +23,8 @@ npm run dev        # http://localhost:47321
 | `npm run preview` | 预览生产构建（端口 47322） |
 | `npm run lint` | oxlint |
 | `npm run smoke` | 不开浏览器：加载真实 WASM，对 77 个单式用例和 19 张“整页联立”用例做推导，并检查每个图形在初始坐标窗口里确实有可见的数据（`-v` 打印全部推导） |
+| `npm run smoke:ai` | 不开浏览器：起一个本地 OpenAI 兼容接口，检查「测试连接」、工具调用和空配置立刻返回；再让 MCP 服务器列出并调用工具 |
+| `npm run mcp` | 启动 stdio MCP 服务器（给 Cursor / Claude 用；人直接跑它会停在 stdio 上，见下文） |
 | `npm run e2e` | 浏览器端到端：先 `npm run dev`，再用无头 Chrome 打开每个用例的坐标系，检查 SVG 线条和截图像素，确认 2D/3D 图都真的画出来了（`CHROME_PATH` 可指定浏览器路径） |
 | `npm run e2e:sheet` | 浏览器端到端，像真人一样操作：空白纸 → 双击 / `/` / Σ 工具在纸上写 5 个式子 → 点角落「坐标系」→ 断言它们画在同一套坐标轴上（桌面 + 手机），再验证分屏坐标系边写边画、缩放保持、式子逐条浮现与手写识别芯片 |
 | `npm run build:wasm` | 重新编译 Rust → WASM（需要 Rust + wasm-pack） |
@@ -255,18 +257,33 @@ npm run smoke
 
 ---
 
-## AI API 与 MCP（预留）
+## AI API
 
-这一版**不调用任何模型**。预留的部分如下：
+设置 → AI 接口可以填写服务类型、Base URL、模型名和 API Key。配置只写在这台浏览器的 localStorage（`mathscrap.ai.v1`）。密钥不会打进日志，也不会交给 MCP 进程。
 
-- **设置 → AI API**：可以填 provider、Base URL、模型和 Key。这些只保存在浏览器的 localStorage（`mathscrap.ai.v1`）里，不会发出去；「测试连接」目前只是提示。
-- **工具层（MCP 形状）**：`src/ai/tools.ts` 按 MCP tool 的格式定义了 `name`、`description` 和 `inputSchema`，处理函数已经在浏览器里接好。可以在控制台试：
+| 服务类型 | 怎么发 | Base URL 示例 |
+| --- | --- | --- |
+| OpenAI 兼容接口 | `POST {base}/chat/completions`，测试时先 `GET {base}/models` | `https://api.openai.com/v1` |
+| Anthropic | `POST {base}/v1/messages`（默认主机 `https://api.anthropic.com`） | `https://api.anthropic.com` |
+| 本地模型（Ollama 等） | 同样走 OpenAI 兼容路径。只写了主机时会自动补上 `/v1` | `http://127.0.0.1:11434/v1` |
+
+「测试连接」发一条很短的请求（模型列表，没有这个路径时再发 `max_tokens: 1` 的对话）。Base URL 和模型名还空着时按钮是禁用的，点了也会立刻提示，不会转圈。Anthropic 还需要 API Key；本地模型的 Key 可以留空。
+
+右上角 **…** 菜单里的「帮我推一步」是纸面旁边的对话条（不是写在牛皮纸上的字）。它把当前公式和你的一句请求发给已配置的模型，并优先用下面同一套工具：写到纸上用 `page_add_formula`，推导用 `solve_analyze`。模型若不会函数调用，只要返回 `{"add":["…"],"analyze":true,"note":"…"}` 也会照着写到纸上。向量会改写成粗体加等号（`**b** = (1, 2)`）。
+
+开发服务器（`npm run dev` / `npm run preview`）会把浏览器的模型请求经本机 `POST /__mathscrap/ai/forward` 转发出去，这样页面不会被浏览器的 CORS 拦住。静态打开 `dist/` 时没有这个转发，浏览器会直接请求你填的地址，对方必须允许跨域。
+
+## MCP
+
+工具定义在 `src/ai/specs.ts`，处理函数在页面里（`src/ai/tools.ts`），应用加载后挂到 `window.mathscrap.tools`。可以在控制台试：
 
 ```js
 mathscrap.tools.specs
 mathscrap.tools.call('page_read')
 mathscrap.tools.call('solve_analyze', { texts: ['△ABC: a=3, b=4, C=90°'] })
 mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' })
+mathscrap.tools.call('plot_set_view', { x: [-2, 4], y: [-2, 4] })
+mathscrap.tools.call('ink_read', {})
 ```
 
 | 工具 | 状态 | 说明 |
@@ -275,13 +292,40 @@ mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' })
 | `page_add_formula` / `page_update_formula` | 本地可用 | 在纸上写一个式子 / 改写某个式子 |
 | `solve_analyze` | 本地可用 | 对一组条件做推导，返回结构化结果（由 Rust 计算） |
 | `plot_open` | 本地可用 | 打开整张纸共享的坐标系（可传 id 决定先看平面还是空间） |
-| `plot_set_view` | 规划中 | 修改坐标范围、3D 相机、叠加对象，让 AI 能直接操作坐标系 |
-| `ink_read` | 规划中 | 把笔迹点序列交给识别模型或多模态 LLM |
+| `plot_set_view` | 本地可用 | 修改坐标范围、3D 相机、叠加或拿掉哪些式子 |
+| `ink_read` | 本地可用 | 读取手写笔迹的点序列（`pts` 为 x, y, pressure） |
 
-**后续计划**：
+外部 agent 用 stdio MCP 服务器 `mcp/server.ts`（`@modelcontextprotocol/sdk`）。它不计算数学：`tools/call` 经 HTTP 交给正在运行的 Vite 页，页面轮询 `GET /__mathscrap/bridge/wait` 后在本地执行。
 
-1. 写一个很薄的 MCP server（stdio 或 WebSocket），把上面这些工具桥接到页面，让外部 agent 能读懂页面、改公式、调整坐标系。
-2. 推导仍然交给 Rust，LLM 只负责“读题 → 写成本应用的语法”和“用自然语言解释推导步骤”。
+1. 终端里 `npm run dev`，浏览器打开 `http://127.0.0.1:47321` 并保持这个标签页。
+2. 把下面的片段放进 Cursor 的 `~/.cursor/mcp.json`（或项目里的 `.cursor/mcp.json`），Claude Desktop 则放进 `claude_desktop_config.json`。把路径换成这台机器上的仓库根目录。
+
+```json
+{
+  "mcpServers": {
+    "mathscrap": {
+      "command": "node",
+      "args": ["--import", "tsx", "mcp/server.ts"],
+      "cwd": "/ABSOLUTE/PATH/TO/mathscrap",
+      "env": {
+        "MATHSCRAP_BRIDGE": "http://127.0.0.1:47321"
+      }
+    }
+  }
+}
+```
+
+`MATHSCRAP_BRIDGE` 可以不写，默认就是 `http://127.0.0.1:47321`。不要用 `npm run mcp` 当作上面的 `command`：npm 会往 stdout 打一行脚本名，stdio 协议会坏。`npm run mcp` 只适合在终端里看进程是否能起来。
+
+页面加载大约一秒后才连上桥，这样不会占住浏览器的空闲网络。页面没开、或刚打开还没连上时，`tools/list` 仍然返回这 7 个工具；`tools/call` 会立刻返回「页面还没连上」，不会一直等。
+
+### 安全
+
+- API Key 只在浏览器 localStorage。测试连接和「帮我推一步」把它放进发往**你填写的 Base URL** 的请求头。代码路径里不打印密钥、Authorization 或 `x-api-key`。
+- MCP 进程看不到密钥。它只把工具名和参数发给 `127.0.0.1` 上的开发服务器。
+- 开发服务器上的转发只允许 GET/POST，路径必须以 `/models`、`/chat/completions` 或 `/messages` 结尾，并拒绝链路本地地址和云元数据主机。
+- 桥接没有单独的口令：谁能访问这个开发端口，谁就能让开着的页面改公式。`npm run dev` 只在本机或你信任的局域网使用，不要把它暴露到公网。
+- 推导仍由 Rust/WASM 完成。模型只负责把题写成本应用的语法，并用自然语言说明下一步。
 
 ---
 
@@ -317,7 +361,8 @@ src/
   math/                   语句解析与场景推导（调用 WASM）
   wasm/                   WASM 产物与类型化封装
   ocr/                    识别接口与演示桩
-  ai/                     MCP 形状的工具定义
+  ai/                     模型客户端、本机配置、MCP 形状的工具定义
+mcp/                    stdio MCP 服务器，以及 Vite 上的本机工具桥 / 请求转发
   components/             顶栏、工具栏、设置、KaTeX；ui/ 是 shadcn 组件
 crates/mathcore/          Rust 数学核心
 scripts/smoke.ts          Node 端到端冒烟测试（单式 + 整页联立）

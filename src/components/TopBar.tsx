@@ -1,4 +1,5 @@
-import { Maximize, Minus, MoreHorizontal, Plus, Redo2, Settings2, Trash2, Undo2 } from 'lucide-react'
+import { Bot, Maximize, Minus, MoreHorizontal, Plus, Redo2, Settings2, Trash2, Undo2 } from 'lucide-react'
+import { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SAMPLES } from '@/board/samples'
@@ -16,6 +17,7 @@ interface Props {
   onFit: () => void
   onClear: () => void
   onSettings: () => void
+  onAssist: () => void
   onSample: (blocks: string[]) => void
 }
 
@@ -36,6 +38,7 @@ function IconBtn({ label, onClick, disabled, children, compact }: { label: strin
 
 /** One small pill: undo, redo and a "…" menu. The paper itself carries no branding. */
 export function TopBar(p: Props) {
+  const [menu, setMenu] = useState(false)
   const zoom = `${Math.round(p.scale * 100)}%`
   const row = 'flex h-10 items-center gap-2 rounded-xl px-2.5 text-[13px] text-kraft-800 hover:bg-kraft-800/10'
   return (
@@ -47,11 +50,11 @@ export function TopBar(p: Props) {
         <IconBtn label={`重做 (${MOD} Shift Z)`} onClick={p.onRedo} disabled={!p.canRedo} compact={p.compact}>
           <Redo2 className="size-[18px]" />
         </IconBtn>
-        <Popover>
+        <Popover open={menu} onOpenChange={setMenu}>
           <PopoverTrigger className={cn('grid place-items-center rounded-full text-kraft-800 hover:bg-kraft-800/10', p.compact ? 'size-11' : 'size-9')} aria-label="更多">
             <MoreHorizontal className="size-5" />
           </PopoverTrigger>
-          <PopoverContent align="end" className="paper-chrome w-[min(330px,calc(100vw-24px))] gap-0 bg-transparent p-1.5">
+          <PopoverContent align="end" className="paper-chrome w-[min(330px,calc(100vw-24px))] gap-0 bg-transparent p-1.5" data-no-board>
             <div className="px-2.5 pt-1 pb-1.5 text-[12px] font-semibold tracking-tight text-kraft-800/70">MathScrap</div>
             <div className="flex items-center gap-1 pb-1.5">
               <button onClick={() => p.onZoom(1 / 1.2)} className="grid size-10 place-items-center rounded-xl hover:bg-kraft-800/10" aria-label="缩小">
@@ -75,7 +78,18 @@ export function TopBar(p: Props) {
                 ))}
               </div>
             </div>
-            <div className="mt-1.5 grid grid-cols-2 gap-1 border-t border-kraft-800/10 pt-1.5">
+            <div className="mt-1.5 border-t border-kraft-800/10 pt-1.5">
+              <button
+                onClick={() => {
+                  setMenu(false)
+                  p.onAssist()
+                }}
+                className={cn(row, 'w-full')}
+              >
+                <Bot className="size-4" /> 帮我推一步
+              </button>
+            </div>
+            <div className="mt-1 grid grid-cols-2 gap-1">
               <button onClick={p.onSettings} className={row}>
                 <Settings2 className="size-4" /> 设置
               </button>

@@ -1,7 +1,10 @@
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { startBrowserBridge } from '@/ai/browserBridge'
 import { createToolBridge } from '@/ai/tools'
+import { AssistSheet } from '@/components/AssistSheet'
+import { pushPlotView } from '@/plot/remoteView'
 import { Board, type PenSettings } from '@/board/Board'
 import { strokeBounds } from '@/board/strokes'
 import { uid, type Card, type Doc, type Stroke, type Tool, type View } from '@/board/types'
@@ -108,6 +111,7 @@ export default function App() {
   const [composer, setComposer] = useState<ComposerState>({ open: false, at: null, editingId: null })
   const [composerFocused, setComposerFocused] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [assistOpen, setAssistOpen] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [ocrStrokes, setOcrStrokes] = useState<Stroke[] | null>(null)
   const [inkChips, setInkChips] = useState<InkChipData[]>([])
@@ -145,6 +149,7 @@ export default function App() {
   }, [compact, docRef, sheet])
 
   const openPlot = useCallback((focusId: string | null = null) => setPlot({ open: true, full: false, focusId }), [])
+  const ensurePlot = useCallback(() => setPlot((p) => (p.open ? p : { ...p, open: true, full: false })), [])
   const closePlot = useCallback(() => setPlot((p) => ({ ...p, open: false, full: false })), [])
   const togglePlot = useCallback(() => setPlot((p) => (p.open ? { ...p, open: false, full: false } : { open: true, full: false, focusId: selected })), [selected])
 
@@ -376,11 +381,22 @@ export default function App() {
 
   // MCP-ready local tool bridge for experimentation from devtools
   const bridge = useMemo(
-    () => createToolBridge({ getDoc: () => docRef.current, addCard: (t, x, y) => addFormula(t, x, y), updateCard, openPlot: (id) => openPlot(id ?? null) }),
-    [docRef, addFormula, updateCard, openPlot],
+    () =>
+      createToolBridge({
+        getDoc: () => docRef.current,
+        addCard: (t, x, y) => addFormula(t, x, y),
+        updateCard,
+        openPlot: (id) => openPlot(id ?? null),
+        setPlotView: (input) => {
+          ensurePlot()
+          return pushPlotView(input)
+        },
+      }),
+    [docRef, addFormula, updateCard, openPlot, ensurePlot],
   )
   useEffect(() => {
-    ;(window as unknown as { mathscrap: unknown }).mathscrap = { tools: bridge }
+    ;(window as unknown as { mathscrap: { tools: typeof bridge } }).mathscrap = { tools: bridge }
+    return startBrowserBridge((name, args) => bridge.call(name, args))
   }, [bridge])
 
   const anchor = composer.at ? { left: composer.at.x * view.scale + view.x, top: composer.at.y * view.scale + view.y } : null
@@ -437,6 +453,7 @@ export default function App() {
           onFit={() => setView(fitView(docRef.current, compact, sheet.w, sheet.h))}
           onClear={() => setConfirmClear(true)}
           onSettings={() => setSettingsOpen(true)}
+          onAssist={() => setAssistOpen(true)}
           onSample={writeSample}
         />
 
@@ -472,6 +489,16 @@ export default function App() {
       <PlotPanel cards={doc.cards} open={modal} focusId={plot.focusId} onClose={closePlot} />
       <RecognizeDialog strokes={ocrStrokes} onClose={() => setOcrStrokes(null)} onConfirm={confirmRecognize} />
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} prefs={prefs} setPrefs={setPrefs} side={compact ? 'bottom' : 'right'} />
+      <AssistSheet
+        open={assistOpen}
+        onOpenChange={setAssistOpen}
+        side={compact ? 'bottom' : 'right'}
+        call={(name, args) => bridge.call(name, args)}
+        onOpenSettings={() => {
+          setAssistOpen(false)
+          setSettingsOpen(true)
+        }}
+      />
 
       <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
         <DialogContent className="kraft-panel bg-transparent" data-no-board>
