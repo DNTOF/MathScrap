@@ -30,6 +30,13 @@ export function circles_analyze(circles_json: string, points_json: string): stri
 export function conic_analyze(src: string, env: string, name: string): string;
 
 /**
+ * Midpoints / section points: [{"name":"M","a":"A","b":"B"}, {"name":"P","a":"A","b":"B",
+ * "m":1,"n":2} (AP:PB = 1:2)] plus named points → coordinates, distances, ratios and
+ * midsegments between two midpoints that share an endpoint.
+ */
+export function derived_points_analyze(defs_json: string, points_json: string): string;
+
+/**
  * Pairs [start, end, ...] of intervals in [a, b] where the expression is undefined.
  */
 export function domain_gaps(src: string, _var: string, env: string, a: number, b: number): Float64Array;
@@ -130,6 +137,7 @@ export interface InitOutput {
     readonly circle_solve: (a: number, b: number) => [number, number];
     readonly circles_analyze: (a: number, b: number, c: number, d: number) => [number, number];
     readonly conic_analyze: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly derived_points_analyze: (a: number, b: number, c: number, d: number) => [number, number];
     readonly domain_gaps: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly extrema: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly inspect: (a: number, b: number) => [number, number];

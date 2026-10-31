@@ -36,6 +36,10 @@ fn fact(group: &str, label: &str, value: String, num: Option<f64>, how: &str, wh
     Fact { group: group.into(), label: label.into(), value, num, how: how.into(), why: why.into(), shape: None }
 }
 
+fn seg_fact(group: &str, label: &str, v: f64, how: &str, why: &str) -> Fact {
+    fact(group, label, nice(v), Some(v), how, why)
+}
+
 impl Fact {
     pub(crate) fn with(mut self, s: Shape) -> Self {
         self.shape = Some(s);
@@ -167,6 +171,20 @@ pub struct TriangleKnown {
     pub angle_c: Option<f64>,
     #[serde(rename = "S")]
     pub area: Option<f64>,
+    /// medians to side a / b / c (中线)
+    #[serde(default)]
+    pub ma: Option<f64>,
+    #[serde(default)]
+    pub mb: Option<f64>,
+    #[serde(default)]
+    pub mc: Option<f64>,
+    /// heights onto side a / b / c (高)
+    #[serde(default)]
+    pub ha: Option<f64>,
+    #[serde(default)]
+    pub hb: Option<f64>,
+    #[serde(default)]
+    pub hc: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -187,8 +205,9 @@ const SIDE: [&str; 3] = ["a", "b", "c"];
 const ANG: [&str; 3] = ["A", "B", "C"];
 
 pub fn triangle_solve(k: &TriangleKnown) -> TriangleResult {
-    let s = [k.a, k.b, k.c];
+    let mut s = [k.a, k.b, k.c];
     let mut g = [k.angle_a, k.angle_b, k.angle_c];
+    let mut area = k.area;
     let err = |m: &str| TriangleResult { cases: vec![], error: Some(m.into()) };
     if s.iter().flatten().any(|v| *v <= 0.0) {
         return err("边长必须为正数");
@@ -196,8 +215,63 @@ pub fn triangle_solve(k: &TriangleKnown) -> TriangleResult {
     if g.iter().flatten().any(|v| *v <= 0.0 || *v >= PI) {
         return err("角必须在 0° 与 180° 之间");
     }
+    if area.is_some_and(|v| v <= 0.0) {
+        return err("面积必须为正数");
+    }
     let mut steps: Vec<Fact> = Vec::new();
     let ng = g.iter().filter(|v| v.is_some()).count();
+
+    // medians given (m_a = ½√(2b² + 2c² − a²)): turn them into sides
+    let med = [k.ma, k.mb, k.mc];
+    for i in 0..3 {
+        let Some(m) = med[i] else { continue };
+        if m <= 0.0 {
+            return err("中线长必须为正数");
+        }
+        let (u, w) = ((i + 1) % 3, (i + 2) % 3);
+        if s[u].is_some() && s[w].is_some() {
+            let v2 = 2.0 * s[u].unwrap().powi(2) + 2.0 * s[w].unwrap().powi(2) - 4.0 * m * m;
+            if v2 <= 0.0 {
+                return err(&format!("m_{} 与两邻边矛盾：中线长公式要求 4m² < 2b² + 2c²", SIDE[i]));
+            }
+            let v = v2.sqrt();
+            steps.push(fact("边长", SIDE[i], nice(v), Some(v), &format!("{s} = \\sqrt{{2{u}^2 + 2{w}^2 - 4m_{s}^2}}", s = SIDE[i], u = SIDE[u], w = SIDE[w]), "中线长公式反推"));
+            s[i] = Some(v);
+        } else if s[i].is_some() && (s[u].is_some() || s[w].is_some()) {
+            let (kn, other) = if s[u].is_some() { (u, w) } else { (w, u) };
+            let v2 = (4.0 * m * m - 2.0 * s[kn].unwrap().powi(2) + s[i].unwrap().powi(2)) / 2.0;
+            if v2 <= 0.0 {
+                return err(&format!("m_{} 与已知的边矛盾，构不成三角形", SIDE[i]));
+            }
+            let v = v2.sqrt();
+            steps.push(fact("边长", SIDE[other], nice(v), Some(v), &format!("{t}^2 = 4m_{s}^2 - 2{k}^2 + {s}^2", t = SIDE[other], s = SIDE[i], k = SIDE[kn]), "中线长公式反推"));
+            s[other] = Some(v);
+        }
+    }
+    // heights given (h_i): with side i they fix the area
+    let hts = [k.ha, k.hb, k.hc];
+    for i in 0..3 {
+        let Some(h) = hts[i] else { continue };
+        if h <= 0.0 {
+            return err("高必须为正数");
+        }
+        match s[i] {
+            Some(si) => {
+                let s2 = si * h / 2.0;
+                if let Some(given) = area {
+                    if (given - s2).abs() > 1e-6 * (1.0 + given.abs().max(s2)) {
+                        return err("已知的高与边长算出的面积不一致");
+                    }
+                }
+                if area.is_none() {
+                    steps.push(fact("面积与周长", "S", nice(s2), Some(s2), &format!("S = \\frac12 \\cdot {} \\cdot h_{{{}}}", SIDE[i], SIDE[i]), "由边和高算面积"));
+                }
+                area = Some(s2);
+            }
+            None => return err(&format!("给定 h_{} 需要先写出边 {} 的长度", SIDE[i], SIDE[i])),
+        }
+    }
+
     if ng >= 2 {
         let sum: f64 = g.iter().flatten().sum();
         if ng == 2 {
@@ -291,8 +365,8 @@ pub fn triangle_solve(k: &TriangleKnown) -> TriangleResult {
                 if cases.is_empty() {
                     return err("给定的边角组合构不成三角形");
                 }
-            } else if let Some(area) = k.area {
-                let sin_m = 2.0 * area / (si * sj);
+            } else if let Some(sa) = area {
+                let sin_m = 2.0 * sa / (si * sj);
                 if sin_m > 1.0 + 1e-12 {
                     return err("面积过大：两边所能围成的最大面积是 ½ab");
                 }
@@ -336,7 +410,7 @@ pub fn triangle_solve(k: &TriangleKnown) -> TriangleResult {
                 }
                 let ang = [g[0].unwrap(), g[1].unwrap(), g[2].unwrap()];
                 cases.push((sides, ang, st, "AAS / ASA：一边两角确定唯一三角形".into()));
-            } else if let (Some(area), true) = (k.area, ng == 1) {
+            } else if let (Some(sa), true) = (area, ng >= 1) {
                 // one side + one angle + area
                 let i = s.iter().position(|v| v.is_some()).unwrap();
                 let t = g.iter().position(|v| v.is_some()).unwrap();
@@ -345,7 +419,7 @@ pub fn triangle_solve(k: &TriangleKnown) -> TriangleResult {
                 }
                 // the remaining side adjacent to angle t (other than i)
                 let o = 3 - i - t;
-                let so = 2.0 * area / (s[i].unwrap() * g[t].unwrap().sin());
+                let so = 2.0 * sa / (s[i].unwrap() * g[t].unwrap().sin());
                 let mut sides = [0.0; 3];
                 sides[i] = s[i].unwrap();
                 sides[o] = so;
@@ -361,10 +435,53 @@ pub fn triangle_solve(k: &TriangleKnown) -> TriangleResult {
         }
         _ => {
             if g.iter().all(|v| v.is_some()) {
-                return err("只知道三个角：形状确定但大小不定（相似三角形），请再给一条边");
+                let Some(sa) = area else {
+                    return err("只知道三个角：形状确定但大小不定（相似三角形），请再给一条边或面积 S");
+                };
+                // S = 2R²·sinA·sinB·sinC → R fixes the size
+                let prod = g[0].unwrap().sin() * g[1].unwrap().sin() * g[2].unwrap().sin();
+                if prod <= 1e-12 || sa / (2.0 * prod) <= 0.0 {
+                    return err("这组角与面积构不成三角形");
+                }
+                let rr = (sa / (2.0 * prod)).sqrt();
+                let mut st = steps.clone();
+                st.push(fact("外接圆与内切圆", "R", nice(rr), Some(rr), "R = \\sqrt{\\frac{S}{2\\sin A\\sin B\\sin C}}", "由面积定大小"));
+                let mut sides = [0.0; 3];
+                for t in 0..3 {
+                    sides[t] = 2.0 * rr * g[t].unwrap().sin();
+                    st.push(fact("边长", SIDE[t], nice(sides[t]), Some(sides[t]), &format!("{t} = 2R\\sin {T}", t = SIDE[t], T = ANG[t]), "正弦定理"));
+                }
+                let ang = [g[0].unwrap(), g[1].unwrap(), g[2].unwrap()];
+                cases.push((sides, ang, st, "两角 + 面积：角定形状，面积通过外接圆半径 R 定出大小".into()));
+            } else if area.is_some() {
+                return err("面积 S 还需要两个角（或一条边 + 一个角）才能定出大小");
+            } else {
+                return err("请至少给出一条边，例如 △ABC: a=3, b=4, C=90°（或两个角 + 面积 S）");
             }
-            return err("请至少给出一条边，例如 △ABC: a=3, b=4, C=90°");
         }
+    }
+
+    // over-determined givens must agree with what was derived
+    let mut mismatch: Option<String> = None;
+    for (sides, ang, _, _) in &cases {
+        for i in 0..3 {
+            if let Some(gi) = g[i] {
+                if !near(gi, ang[i]) {
+                    mismatch = mismatch.or_else(|| {
+                        Some(format!("已知的 ∠{} 与推出的 {}° 不一致，条件互相矛盾", ANG[i], dec(ang[i] * 180.0 / PI)))
+                    });
+                }
+            }
+        }
+        if let Some(sa) = area {
+            let comp = 0.5 * sides[0] * sides[1] * ang[2].sin();
+            if (comp - sa).abs() > 1e-6 * (1.0 + sa.abs().max(comp)) {
+                mismatch = mismatch.or_else(|| Some(format!("已知的面积 S = {}，但按边角推出的是 {}，条件互相矛盾", dec(sa), dec(comp))));
+            }
+        }
+    }
+    if let Some(m) = mismatch {
+        return err(&m);
     }
 
     TriangleResult {
@@ -472,6 +589,19 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kinds.join("、")), None, "", "由三个角与三边比较"));
     if near(maxg, PI / 2.0) {
         out.push(fact("形状判断", "R", nice(rr), Some(rr), "R = \\frac{\\text{斜边}}{2}", "直角三角形外心在斜边中点"));
+        // altitude onto the hypotenuse and the two leg projections (射影定理).
+        // Right angle at vertex ri; the hypotenuse joins vertices u and w. Leg s[u]
+        // (= V_ri→V_w) projects onto the segment from V_w to the foot F, leg s[w]
+        // onto the segment from V_u to F.
+        let ri = g.iter().position(|x| near(*x, PI / 2.0)).unwrap();
+        let (u, w) = ((ri + 1) % 3, (ri + 2) % 3);
+        let (lu, lw, hyp) = (s[u], s[w], s[ri]);
+        let t = lw * lw / (hyp * hyp); // |V_u F| = s[w]²/hyp
+        let foot = [v[u][0] + t * (v[w][0] - v[u][0]), v[u][1] + t * (v[w][1] - v[u][1])];
+        let hc = lu * lw / hyp;
+        out.push(fact("高与中线", "\\text{斜边上的高}", nice(hc), Some(hc), &format!("\\frac{{{a}\\cdot {b}}}{{{c}}}", a = SIDE[u], b = SIDE[w], c = SIDE[ri]), "等面积：½·直角边₁·直角边₂ = ½·斜边·h").with(Shape::Segment { x1: v[ri][0], y1: v[ri][1], x2: foot[0], y2: foot[1], label: "斜边上的高".into() }));
+        out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[u]), nice(lu * lu / hyp), Some(lu * lu / hyp), &format!("\\frac{{{u}^2}}{{{c}}}", u = SIDE[u], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[w][0], y1: v[w][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[u]) }));
+        out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[w]), nice(lw * lw / hyp), Some(lw * lw / hyp), &format!("\\frac{{{w}^2}}{{{c}}}", w = SIDE[w], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[u][0], y1: v[u][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[w]) }));
     }
     out
 }
@@ -921,6 +1051,95 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
             out.push(fact("平行线的截线", &format!("\\text{{截线段}}_{{{}}}", tr.name), nice(cut), Some(cut), "|PQ| = \\sqrt{\\Delta x^2 + \\Delta y^2}", "沿截线夹在两平行线之间的线段").with(Shape::Segment { x1: pa[0], y1: pa[1], x2: pb[0], y2: pb[1], label: format!("{} 截 {}", tr.name, p.name) }));
         }
     }
+    // Intercept theorem: three (or more) parallels cut by two transversals give proportional
+    // segments (平行线分线段成比例); two parallels cut by two transversals give similar
+    // triangles at the point where the transversals meet.
+    let dist_key = |l: &NamedLine| {
+        let n = l.a.hypot(l.b);
+        if n < 1e-12 {
+            return 0.0;
+        }
+        let sign = if l.a.abs() > 1e-12 { l.a.signum() } else { l.b.signum() };
+        sign * l.c / n
+    };
+    let crosses = |s: usize, p: usize| line_isect(&ls[s], &ls[p]).is_some();
+    let s_name = |ix: usize| ls[ix].name.clone();
+    let mut triple_count = 0usize;
+    'triples: for i in 0..ls.len() {
+        for j in i + 1..ls.len() {
+            for k in j + 1..ls.len() {
+                if triple_count >= 2 {
+                    break 'triples;
+                }
+                let is_par = |x: usize, y: usize| par_pairs.contains(&(x.min(y), x.max(y)));
+                if !(is_par(i, j) && is_par(i, k)) {
+                    continue;
+                }
+                // order the three parallels along their common normal
+                let mut trio = [i, j, k];
+                trio.sort_by(|x, y| dist_key(&ls[*x]).partial_cmp(&dist_key(&ls[*y])).unwrap());
+                let (p, q, r) = (s_name(trio[0]), s_name(trio[1]), s_name(trio[2]));
+                let mut tcount = 0usize;
+                'ts: for s in 0..ls.len() {
+                    for t in s + 1..ls.len() {
+                        if tcount >= 2 {
+                            break 'ts;
+                        }
+                        if trio.contains(&s) || trio.contains(&t) || !crosses(s, trio[0]) || !crosses(s, trio[2]) || !crosses(t, trio[0]) || !crosses(t, trio[2]) {
+                            continue;
+                        }
+                        if line_isect(&ls[s], &ls[t]).is_none() {
+                            continue; // the two transversals must meet somewhere
+                        }
+                        let ps: Vec<[f64; 2]> = trio.iter().map(|&ix| line_isect(&ls[s], &ls[ix]).unwrap()).collect();
+                        let qt: Vec<[f64; 2]> = trio.iter().map(|&ix| line_isect(&ls[t], &ls[ix]).unwrap()).collect();
+                        let (l1, l2) = (dist2(ps[0], ps[1]), dist2(ps[1], ps[2]));
+                        let (m1, m2) = (dist2(qt[0], qt[1]), dist2(qt[1], qt[2]));
+                        if l1 * l2 * m1 * m2 < 1e-12 {
+                            continue;
+                        }
+                        tcount += 1;
+                        let sn = s_name(s);
+                        let tn = s_name(t);
+                        let seg = |x: &[f64; 2], y: &[f64; 2], nm: String| Shape::Segment { x1: x[0], y1: x[1], x2: y[0], y2: y[1], label: nm };
+                        out.push(seg_fact("平行线分线段", &format!("|{sn} \\cap {p},\\ {sn} \\cap {q}|"), l1, "\\sqrt{\\Delta x^2 + \\Delta y^2}", "第一条截线段").with(seg(&ps[0], &ps[1], format!("{sn} 上的截线段"))));
+                        out.push(seg_fact("平行线分线段", &format!("|{sn} \\cap {q},\\ {sn} \\cap {r}|"), l2, "\\sqrt{\\Delta x^2 + \\Delta y^2}", "第二条截线段").with(seg(&ps[1], &ps[2], format!("{sn} 上的截线段"))));
+                        out.push(seg_fact("平行线分线段", &format!("|{tn} \\cap {p},\\ {tn} \\cap {q}|"), m1, "\\sqrt{\\Delta x^2 + \\Delta y^2}", "对应的第一条截线段").with(seg(&qt[0], &qt[1], format!("{tn} 上的截线段"))));
+                        out.push(seg_fact("平行线分线段", &format!("|{tn} \\cap {q},\\ {tn} \\cap {r}|"), m2, "\\sqrt{\\Delta x^2 + \\Delta y^2}", "对应的第二条截线段").with(seg(&qt[1], &qt[2], format!("{tn} 上的截线段"))));
+                        out.push(fact("平行线分线段", "\\text{成比例}", nice(l1 / l2), Some(l1 / l2), &format!("\\frac{{|{sn} \\cap {p},\\ {sn} \\cap {q}|}}{{|{sn} \\cap {q},\\ {sn} \\cap {r}|}} = \\frac{{|{tn} \\cap {p},\\ {tn} \\cap {q}|}}{{|{tn} \\cap {q},\\ {tn} \\cap {r}|}} = {}", nice(m1 / m2)), "平行线分线段成比例定理：三条平行线在两条截线上截出的线段对应成比例"));
+                    }
+                }
+                triple_count += 1;
+            }
+        }
+    }
+    // similar triangles: two parallels + two transversals meeting at X
+    let mut sim_count = 0usize;
+    'sims: for &(i, j) in &par_pairs {
+        for s in 0..ls.len() {
+            for t in s + 1..ls.len() {
+                if sim_count >= 2 {
+                    break 'sims;
+                }
+                if s == i || s == j || t == i || t == j {
+                    continue;
+                }
+                let (Some(x), Some(a), Some(c)) = (line_isect(&ls[s], &ls[t]), line_isect(&ls[s], &ls[i]), line_isect(&ls[s], &ls[j])) else { continue };
+                let (Some(b), Some(d)) = (line_isect(&ls[t], &ls[i]), line_isect(&ls[t], &ls[j])) else { continue };
+                let (k1n, k1d) = (dist2(x, a), dist2(x, c));
+                let (k2n, k2d) = (dist2(x, b), dist2(x, d));
+                if k1d < 1e-9 || k2d < 1e-9 || k1n < 1e-9 || k2n < 1e-9 {
+                    continue; // transversals meet on one of the parallels
+                }
+                sim_count += 1;
+                let k1 = k1n / k1d;
+                let k2 = k2n / k2d;
+                let value = if near(k1, k2) { nice(k1) } else { format!("{} \\approx {}", nice(k1), nice(k2)) };
+                let (pn, qn, sn, tn) = (ls[i].name.clone(), ls[j].name.clone(), ls[s].name.clone(), ls[t].name.clone());
+                out.push(fact("相似三角形", &format!("\\text{{相似比}}_{{{}}}", pn), value, Some(k1), &format!("\\frac{{|X({sn} \\cap {pn})|}}{{|X({sn} \\cap {qn})|}} = \\frac{{|X({tn} \\cap {pn})|}}{{|X({tn} \\cap {qn})|}} = {}", nice(k1)), "平行于三角形一边的直线截其他两边，所得三角形与原三角形相似（X = 两截线的交点）"));
+            }
+        }
+    }
     out
 }
 
@@ -1131,6 +1350,104 @@ pub fn conic_analyze(c: [f64; 6], name: &str) -> Vec<Fact> {
     out
 }
 
+// ---------------------------------------------------------------------------
+// Derived points: midpoints (中点) and section points (定比分点)
+
+#[derive(Deserialize)]
+pub struct PointDef {
+    pub name: String,
+    pub a: String,
+    pub b: String,
+    /// AP : PB = m : n; both None → midpoint
+    #[serde(default)]
+    pub m: Option<f64>,
+    #[serde(default)]
+    pub n: Option<f64>,
+}
+
+fn distn(a: &[f64], b: &[f64]) -> f64 {
+    (0..a.len().max(b.len())).map(|t| (a.get(t).unwrap_or(&0.0) - b.get(t).unwrap_or(&0.0)).powi(2)).sum::<f64>().sqrt()
+}
+
+pub fn derived_points_analyze(defs: &[PointDef], points: &[NamedPoint]) -> Vec<Fact> {
+    let lookup = |nm: &str| points.iter().find(|p| p.name == nm).map(|p| p.p.clone());
+    let mut out = Vec::new();
+    for d in defs {
+        let (Some(pa), Some(pb)) = (lookup(&d.a), lookup(&d.b)) else { continue };
+        let (m, n) = match (d.m, d.n) {
+            (Some(m), Some(n)) => (m, n),
+            (Some(m), None) => (m, 1.0),
+            (None, Some(n)) => (1.0, n),
+            (None, None) => (1.0, 1.0),
+        };
+        if m + n == 0.0 {
+            continue;
+        }
+        let is_mid = near(m, n);
+        let p: Vec<f64> = (0..pa.len().max(pb.len()))
+            .map(|t| (n * pa.get(t).unwrap_or(&0.0) + m * pb.get(t).unwrap_or(&0.0)) / (m + n))
+            .collect();
+        let f3 = p.len() == 3;
+        let pval = if f3 { pt3([p[0], p[1], p[2]]) } else { pt(p[0], p[1]) };
+        let how = if is_mid {
+            if f3 { "\\left(\\frac{x_A+x_B}{2},\\ \\frac{y_A+y_B}{2},\\ \\frac{z_A+z_B}{2}\\right)".to_string() } else { "\\left(\\frac{x_A+x_B}{2},\\ \\frac{y_A+y_B}{2}\\right)".to_string() }
+        } else {
+            format!("P = \\frac{{{n}A + {m}B}}{{{m} + {n}}}")
+        };
+        out.push(fact("中点与分点", &d.name, pval, None, &how, if is_mid { "中点公式" } else { "定比分点公式" }).with(Shape::Point { x: p[0], y: *p.get(1).unwrap_or(&0.0), label: d.name.clone() }));
+        let (dap, dpb) = (distn(&pa, &p), distn(&p, &pb));
+        if dpb > 1e-12 {
+            let ms = nice_short(m);
+            let ns = nice_short(n);
+            out.push(fact("中点与分点", &format!("\\frac{{|{}{}|}}{{|{}{}|}}", d.a, d.name, d.name, d.b), nice(dap / dpb), Some(dap / dpb), &format!("AP : PB = {ms} : {ns}"), if is_mid { "中点到两端等距" } else { "定比分点：AP : PB = m : n" }));
+        }
+        out.push(seg_fact("中点与分点", &format!("|{}{}|", d.a, d.name), dap, "\\sqrt{\\Delta x^2 + \\Delta y^2}", "到起点的距离").with(Shape::Segment { x1: pa[0], y1: *pa.get(1).unwrap_or(&0.0), x2: p[0], y2: *p.get(1).unwrap_or(&0.0), label: format!("{}{}", d.a, d.name) }));
+        out.push(seg_fact("中点与分点", &format!("|{}{}|", d.name, d.b), dpb, "\\sqrt{\\Delta x^2 + \\Delta y^2}", "到终点的距离").with(Shape::Segment { x1: p[0], y1: *p.get(1).unwrap_or(&0.0), x2: pb[0], y2: *pb.get(1).unwrap_or(&0.0), label: format!("{}{}", d.name, d.b) }));
+    }
+    // two midpoints sharing an endpoint form a midsegment (中位线)
+    let mid_of = |a: &str, b: &str| -> Option<Vec<f64>> {
+        let (pa, pb) = (lookup(a)?, lookup(b)?);
+        Some((0..pa.len().max(pb.len())).map(|t| (pa.get(t).unwrap_or(&0.0) + pb.get(t).unwrap_or(&0.0)) / 2.0).collect())
+    };
+    let is_mid_def = |d: &PointDef| match (d.m, d.n) {
+        (None, None) => true,
+        (Some(m), Some(n)) => near(m, n),
+        _ => false,
+    };
+    for i in 0..defs.len() {
+        for j in i + 1..defs.len() {
+            let (d1, d2) = (&defs[i], &defs[j]);
+            if !is_mid_def(d1) || !is_mid_def(d2) {
+                continue;
+            }
+            let (vertex, u, v) = if d1.a == d2.a {
+                (d1.a.clone(), d1.b.clone(), d2.b.clone())
+            } else if d1.a == d2.b {
+                (d1.a.clone(), d1.b.clone(), d2.a.clone())
+            } else if d1.b == d2.a {
+                (d1.b.clone(), d1.a.clone(), d2.b.clone())
+            } else if d1.b == d2.b {
+                (d1.b.clone(), d1.a.clone(), d2.a.clone())
+            } else {
+                continue;
+            };
+            if u == v {
+                continue;
+            }
+            let (Some(pu), Some(pv)) = (lookup(&u), lookup(&v)) else { continue };
+            let (Some(pm), Some(pn2)) = (mid_of(&vertex, &u), mid_of(&vertex, &v)) else { continue };
+            let len = distn(&pm, &pn2);
+            let base = distn(&pu, &pv);
+            if base < 1e-12 {
+                continue;
+            }
+            out.push(seg_fact("中点与分点", &format!("\\text{{中位线}}_{{{}{}}}", d1.name, d2.name), len, &format!("\\frac{{1}}{{2}}|{u}{v}|"), "中位线定理：连接两个中点的线段平行于第三边，且等于第三边的一半").with(Shape::Segment { x1: pm[0], y1: *pm.get(1).unwrap_or(&0.0), x2: pn2[0], y2: *pn2.get(1).unwrap_or(&0.0), label: format!("中位线{}{}", d1.name, d2.name) }));
+            out.push(fact("中点与分点", &format!("{}{} \\parallel {}{}", d1.name, d2.name, u, v), "\\checkmark".into(), None, "\\vec{MN} = \\frac12\\vec{UV}", "中位线平行于第三边"));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1180,7 +1497,7 @@ mod tests {
         assert!((t_c.num.unwrap() - 24.0 * (PI / 4.0).cos() / 7.0).abs() < 1e-9);
         // the drawn bisector starts at C and divides AB as AC : BC = 4 : 3
         let seg = t_c.shape.as_ref().unwrap();
-        if let Shape::Segment { x1, y1, x2, y2, .. } = seg {
+        if let Shape::Segment { x1, y1, x2, y2: _, .. } = seg {
             let (va, vb, vc) = (r.cases[0].vertices[0], r.cases[0].vertices[1], r.cases[0].vertices[2]);
             assert!((*x1 - vc[0]).abs() < 1e-9 && (*y1 - vc[1]).abs() < 1e-9);
             let fx = (3.0 * va[0] + 4.0 * vb[0]) / 7.0;
@@ -1203,6 +1520,117 @@ mod tests {
         let f = conic_analyze([1.0, 0.0, 1.0, -4.0, 2.0, -4.0], "C");
         let r = f.iter().find(|f| f.label == "r").unwrap();
         assert!((r.num.unwrap() - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn hl_hypotenuse_leg() {
+        // HL written as SSA with the right angle: a = 3, c = 5, C = 90° → b = 4, one case
+        let k = TriangleKnown { a: Some(3.0), c: Some(5.0), angle_c: Some(PI / 2.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        assert_eq!(r.cases.len(), 1);
+        let f = |label: &str| r.cases[0].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f("b") - 4.0).abs() < 1e-9);
+        assert!((f("\\angle A") - 3f64.atan2(4.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn median_as_input() {
+        // b = 4, c = 3, m_a = 2.5 → a = 5 (the 3-4-5 triangle)
+        let k = TriangleKnown { b: Some(4.0), c: Some(3.0), ma: Some(2.5), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let f = |label: &str| r.cases[0].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f("a") - 5.0).abs() < 1e-9);
+        // the other direction: a and b with the median give c
+        let k = TriangleKnown { a: Some(5.0), b: Some(4.0), ma: Some(2.5), ..Default::default() };
+        let r = triangle_solve(&k);
+        let f = |label: &str| r.cases[0].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f("c") - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn height_as_input() {
+        // a = 3, c = 5, h_c = 2.4 → S = 6 → sin B = 0.8: B = 53.13° or 126.87°
+        let k = TriangleKnown { a: Some(3.0), c: Some(5.0), hc: Some(2.4), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        assert_eq!(r.cases.len(), 2);
+        let f = |i: usize, label: &str| r.cases[i].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f(0, "b") - 4.0).abs() < 1e-9);
+        assert!((f(0, "S") - 6.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn angles_plus_area() {
+        // A = B = 60°, S = 3√3/4 → equilateral with side √3
+        let s = 3.0 * 3f64.sqrt() / 4.0;
+        let k = TriangleKnown { angle_a: Some(PI / 3.0), angle_b: Some(PI / 3.0), area: Some(s), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let f = |label: &str| r.cases[0].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f("a") - 3f64.sqrt()).abs() < 1e-9);
+        assert!((f("R") - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn right_triangle_projection_theorem() {
+        // 3-4-5: altitude to hypotenuse 12/5, projections 9/5 and 16/5
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap();
+        assert!((get("\\text{斜边上的高}").num.unwrap() - 12.0 / 5.0).abs() < 1e-9);
+        assert!((get("\\text{射影}_{a}").num.unwrap() - 9.0 / 5.0).abs() < 1e-9);
+        assert!((get("\\text{射影}_{b}").num.unwrap() - 16.0 / 5.0).abs() < 1e-9);
+        // the projection segments lie on the hypotenuse and share the altitude foot
+        if let (Shape::Segment { x2: x2a, y2: y2a, .. }, Shape::Segment { x2: x2b, y2: y2b, .. }) = (get("\\text{射影}_{a}").shape.as_ref().unwrap(), get("\\text{射影}_{b}").shape.as_ref().unwrap()) {
+            assert!((x2a - x2b).abs() < 1e-9 && (y2a - y2b).abs() < 1e-9, "both projections end at the altitude foot");
+        } else {
+            panic!("projection facts should carry segments");
+        }
+    }
+
+    #[test]
+    fn inconsistent_givens_rejected() {
+        // SSS plus a wrong area
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), area: Some(10.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_some());
+        // SAS plus a wrong extra angle
+        let k = TriangleKnown { a: Some(5.0), b: Some(7.0), angle_c: Some(PI / 3.0), angle_a: Some(1.2), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_some());
+        // consistent extra angle passes
+        let aa = (5.0f64 * (PI / 3.0).sin() / 39f64.sqrt()).asin(); // sin A = a sinC / c
+        let k = TriangleKnown { a: Some(5.0), b: Some(7.0), angle_c: Some(PI / 3.0), angle_a: Some(aa), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let f = |label: &str| r.cases[0].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f("\\angle B") - (PI - PI / 3.0 - aa)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn derived_midpoints_and_sections() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![1.0, 3.0] },
+        ];
+        let defs = vec![
+            PointDef { name: "M".into(), a: "A".into(), b: "B".into(), m: None, n: None },
+            PointDef { name: "N".into(), a: "A".into(), b: "C".into(), m: None, n: None },
+        ];
+        let out = derived_points_analyze(&defs, &pts);
+        let get = |label: &str| out.iter().find(|f| f.label == label).unwrap();
+        assert!((get("\\text{中位线}_{MN}").num.unwrap() - 18f64.sqrt() / 2.0).abs() < 1e-9);
+        assert!(out.iter().any(|f| f.label == "MN \\parallel BC"));
+        // section point P = 分点(A, B, 1:2): AP:PB = 1:2 → P = (4/3·1...) = (4/3? no: (2A + 1B)/3 = (4/3, 0))
+        let defs = vec![PointDef { name: "P".into(), a: "A".into(), b: "B".into(), m: Some(1.0), n: Some(2.0) }];
+        let out = derived_points_analyze(&defs, &pts);
+        let get = |label: &str| out.iter().find(|f| f.label == label).unwrap();
+        assert!((get("|AP|").num.unwrap() - 4.0 / 3.0).abs() < 1e-9);
+        assert!((get("\\frac{|AP|}{|PB|}").num.unwrap() - 0.5).abs() < 1e-9);
     }
 
     #[test]
@@ -1237,5 +1665,36 @@ mod tests {
         // cut segment between the parallels along t: from (0,0) to (3,3) → 3√2
         let cut = out.iter().find(|f| f.label == "\\text{截线段}_{t}").unwrap();
         assert!((cut.num.unwrap() - 3.0 * 2.0f64.sqrt()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn intercept_theorem_ratios() {
+        // three parallels y = 0, 1, 3 cut by x = 0 and y = x → ratios 1:2 on both
+        let ls = vec![
+            NamedLine { name: "l".into(), a: 0.0, b: 1.0, c: 0.0 },
+            NamedLine { name: "m".into(), a: 0.0, b: 1.0, c: 1.0 },
+            NamedLine { name: "n".into(), a: 0.0, b: 1.0, c: 3.0 },
+            NamedLine { name: "s".into(), a: 1.0, b: 0.0, c: 0.0 },
+            NamedLine { name: "t".into(), a: 1.0, b: -1.0, c: 0.0 },
+        ];
+        let out = lines_analyze(&ls, &[]);
+        let ratio = out.iter().find(|f| f.label == "\\text{成比例}").unwrap();
+        assert!((ratio.num.unwrap() - 0.5).abs() < 1e-9);
+        let seg = out.iter().find(|f| f.label == "|s \\cap l,\\ s \\cap m|").unwrap();
+        assert!((seg.num.unwrap() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn similar_triangles_from_parallels() {
+        // parallels y = 2, y = 0... use y=0 and y=2 with transversals y=x and y=-x+1 meeting at (0.5,0.5)
+        let ls = vec![
+            NamedLine { name: "p".into(), a: 0.0, b: 1.0, c: 0.0 },
+            NamedLine { name: "q".into(), a: 0.0, b: 1.0, c: 2.0 },
+            NamedLine { name: "s".into(), a: 1.0, b: -1.0, c: 0.0 },
+            NamedLine { name: "t".into(), a: 1.0, b: 1.0, c: 1.0 },
+        ];
+        let out = lines_analyze(&ls, &[]);
+        let sim = out.iter().find(|f| f.label.starts_with("\\text{相似比}")).unwrap();
+        assert!((sim.num.unwrap() - 1.0 / 3.0).abs() < 1e-9, "k = {}", sim.value);
     }
 }

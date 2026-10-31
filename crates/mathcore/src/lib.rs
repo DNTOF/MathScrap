@@ -232,6 +232,16 @@ pub fn circles_analyze(circles_json: &str, points_json: &str) -> String {
     json(&circle::circles_analyze(&cs, &pts))
 }
 
+/// Midpoints / section points: [{"name":"M","a":"A","b":"B"}, {"name":"P","a":"A","b":"B",
+/// "m":1,"n":2} (AP:PB = 1:2)] plus named points → coordinates, distances, ratios and
+/// midsegments between two midpoints that share an endpoint.
+#[wasm_bindgen]
+pub fn derived_points_analyze(defs_json: &str, points_json: &str) -> String {
+    let defs: Vec<geometry::PointDef> = serde_json::from_str(defs_json).unwrap_or_default();
+    let pts: Vec<geometry::NamedPoint> = serde_json::from_str(points_json).unwrap_or_default();
+    json(&geometry::derived_points_analyze(&defs, &pts))
+}
+
 /// `{"cx":..,"cy":..,"r":..}` when the implicit curve F(x, y) = 0 is a real circle, else "null".
 #[wasm_bindgen]
 pub fn circle_of(src: &str, env: &str) -> String {

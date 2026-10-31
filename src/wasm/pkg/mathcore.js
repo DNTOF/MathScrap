@@ -140,6 +140,38 @@ export function conic_analyze(src, env, name) {
 }
 
 /**
+ * Midpoints / section points: [{"name":"M","a":"A","b":"B"}, {"name":"P","a":"A","b":"B",
+ * "m":1,"n":2} (AP:PB = 1:2)] plus named points → coordinates, distances, ratios and
+ * midsegments between two midpoints that share an endpoint.
+ * @param {string} defs_json
+ * @param {string} points_json
+ * @returns {string}
+ */
+export function derived_points_analyze(defs_json, points_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(defs_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(points_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.derived_points_analyze(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Pairs [start, end, ...] of intervals in [a, b] where the expression is undefined.
  * @param {string} src
  * @param {string} _var

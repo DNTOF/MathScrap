@@ -6,6 +6,7 @@ export const circle_of: (a: number, b: number, c: number, d: number) => [number,
 export const circle_solve: (a: number, b: number) => [number, number];
 export const circles_analyze: (a: number, b: number, c: number, d: number) => [number, number];
 export const conic_analyze: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const derived_points_analyze: (a: number, b: number, c: number, d: number) => [number, number];
 export const domain_gaps: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
 export const extrema: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
 export const inspect: (a: number, b: number) => [number, number];
