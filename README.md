@@ -1,4 +1,4 @@
-# MathScrap（演示版）
+# MathScrap
 
 A math-learning scrapbook on one continuous sheet of kraft paper, in the spirit of Apple Freeform. There are no cards or widgets: you draw with the pen, and formulas are written straight onto the paper like ink. The **坐标系 (coordinate system)** button in the corner draws **every formula on the sheet on the same axes**. The panel finds intersections between them, solves shared unknowns, and **derives as many quantities as possible**: remaining sides and angles, unknown parameters, area, domain, and more.
 
@@ -326,3 +326,9 @@ scripts/e2e-sheet.ts      浏览器：在纸上写多个式子 → 同一个坐�
 ```
 
 纸面内容自动保存在 localStorage（`mathscrap.doc.v2`）里，第一次打开是空白纸。旧版本（`v1`）的卡片页不会自动迁移，原数据仍留在浏览器里。「清空这页」可以撤销。
+
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE).

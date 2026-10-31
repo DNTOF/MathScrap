@@ -28,3 +28,9 @@ crates/mathcore/target
 
 # Rust
 crates/mathcore/target
+
+# local agent / screenshots
+ASTER_BG_TASK.md
+edge-mathscrap.png
+screen-check.png
+
