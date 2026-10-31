@@ -31,6 +31,8 @@ export function InkChip({ chip, view, onAccept, onDismiss, onCycle }: { chip: In
       style={{ left, top, maxWidth: 'min(92%, 420px)' }}
       data-no-board
       data-ink-chip=""
+      data-ink-ready={waiting ? undefined : ''}
+      data-ink-text={cand?.text}
       data-ink-unknown={waiting || cand ? undefined : ''}
       role="group"
       aria-label="手写识别候选"

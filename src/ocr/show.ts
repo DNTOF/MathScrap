@@ -4,8 +4,12 @@ import { summarizeCard } from '@/math/scene'
 export function candidateLatex(text: string): string {
   const raw = text.trim()
   if (/^\\vec\{[a-z]\}$/.test(raw)) return raw
-  const line = summarizeCard(raw).lines[0]
-  if (!line) return raw
-  if (line.error && raw.includes('\\vec')) return raw
-  return line.latex || raw
+  try {
+    const line = summarizeCard(raw).lines[0]
+    if (!line) return raw
+    if (line.error && raw.includes('\\vec')) return raw
+    return line.latex || raw
+  } catch {
+    return raw
+  }
 }

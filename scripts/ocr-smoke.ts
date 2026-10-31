@@ -1,11 +1,21 @@
 /**
- * Handwriting geometry: a large `y = x` must not become the vector triple the old
- * aspect-ratio stub always offered at 62%.
+ * Handwriting checks.
+ *
+ * Geometry (`inkShape`) stays as a regression for the old reader: a large `y = x`
+ * must not become the vector triple the aspect-ratio stub offered at 62%.
+ * The chip does not call that reader. The CoMER path is the mock session below:
+ * preprocess shape, token cleanup, and a scripted encoder/decoder. The real ONNX
+ * files are exercised with `npm run ocr:live`.
  *
  *   npm run smoke:ocr
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import type { Stroke } from '../src/board/types.ts'
+import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
+import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
+import { isInkMeaningful, preprocessStrokes, resamplePoints } from '../src/ocr/comer/preprocess.ts'
+import { tokensToSource, vocabFromJson } from '../src/ocr/comer/source.ts'
 import { filterAbsurd, hasParenGeometry, recognizeInk } from '../src/ocr/inkShape.ts'
 
 function aspectOf(strokes: Stroke[]) {
@@ -280,4 +290,107 @@ const scribble = recognizeInk(e2eScribble())
 assert.ok(!scribble.some((c) => c.text.replace(/\s/g, '') === 'y=x'), `junk must not default to y = x (${JSON.stringify(scribble)})`)
 assert.equal(scribble.length, 0, JSON.stringify(scribble))
 
-console.log('ocr smoke ok', { aspect: aspect.toFixed(2), yx: yxRead[0], y2: y2[0], ab: ab[0], vec: vec[0], powered: powered[0], scribble })
+console.log('ocr geometry ok', { aspect: aspect.toFixed(2), yx: yxRead[0], y2: y2[0], ab: ab[0], vec: vec[0], powered: powered[0], scribble })
+
+const vocab = vocabFromJson(JSON.parse(readFileSync('public/models/comer/vocab.json', 'utf8')))
+const eos = vocab.special_tokens.eos
+assert.equal(vocab.special_tokens.sos, 1)
+assert.equal(eos, 2)
+const id = (word: string) => {
+  const n = vocab.word2idx[word]
+  assert.equal(typeof n, 'number', word)
+  return n
+}
+
+assert.equal(tokensToSource(['y', '=', '2']), 'y = 2')
+assert.equal(tokensToSource(['a', '^', '{', '2', '}', '=', 'b']), 'a^2 = b')
+assert.equal(tokensToSource(['\\frac', '{', 'a', '}', '{', 'b', '}']), '(a)/(b)')
+assert.equal(tokensToSource(['\\sqrt', '{', 'x', '}']), 'sqrt(x)')
+assert.equal(tokensToSource(['\\vec', '{', 'a', '}']), '\\vec{a}')
+assert.equal(tokensToSource(['\\overrightarrow', '{', 'b', '}']), '\\vec{b}')
+assert.equal(tokensToSource(['=']), '')
+assert.equal(tokensToSource(['\\frac']), '')
+
+const line = resamplePoints(
+  [
+    { x: 0, y: 0 },
+    { x: 30, y: 0 },
+  ],
+  10,
+)
+assert.equal(line[0]?.x, 0)
+assert.equal(line[line.length - 1]?.x, 30)
+assert.ok(line.length >= 4)
+
+const glyph = [
+  {
+    points: [
+      { x: 0, y: 0 },
+      { x: 12, y: 40 },
+      { x: 30, y: 8 },
+      { x: 28, y: 70 },
+      { x: 70, y: 30 },
+      { x: 96, y: 64 },
+    ],
+    lineWidth: 3,
+  },
+]
+const image = preprocessStrokes(glyph)
+assert.equal(image.height, 256)
+assert.equal(image.width % 64, 0)
+assert.ok(image.width >= 128 && image.width <= 1024)
+assert.equal(image.tensor.length, image.height * image.width)
+assert.equal(image.mask.length, image.tensor.length)
+assert.ok(image.tensor.some((v) => v > 0.5), 'white ink')
+assert.ok(image.mask.includes(0) && image.mask.includes(1))
+assert.equal(isInkMeaningful([{ points: [{ x: 0, y: 0 }, { x: 2, y: 1 }], lineWidth: 3 }]), false)
+
+function scripted(tokens: number[]): ComerSession {
+  return {
+    async run(feeds): Promise<Record<string, ComerTensor>> {
+      if (feeds.pixel_values) {
+        return {
+          encoder_features: { type: 'float32', data: new Float32Array(4), dims: [1, 1, 4] },
+          encoder_mask: { type: 'bool', data: new Uint8Array([0]), dims: [1, 1, 1] },
+        }
+      }
+      const ids = feeds.input_ids?.data
+      if (!(ids instanceof BigInt64Array)) throw new Error('missing input_ids')
+      const want = tokens[ids.length - 1] ?? eos
+      const logits = new Float32Array(ids.length * vocab.vocab_size)
+      logits[(ids.length - 1) * vocab.vocab_size + want] = 6
+      return { logits: { type: 'float32', data: logits, dims: [1, ids.length, vocab.vocab_size] } }
+    },
+  }
+}
+
+const boom: ComerSession = {
+  async run() {
+    throw new Error('a speck must not reach the model')
+  },
+}
+assert.deepEqual(await recognizeStrokes([{ points: [{ x: 0, y: 0 }, { x: 1, y: 0 }], lineWidth: 2 }], boom, boom, vocab), [])
+
+const y2session = scripted([id('y'), id('='), id('2')])
+const y2model = await recognizeStrokes(glyph, y2session, y2session, vocab, 1)
+assert.equal(y2model[0]?.text, 'y = 2')
+assert.ok(!y2model.some((c) => c.text.replace(/\s/g, '') === 'y=x'))
+assert.ok((y2model[0]?.confidence ?? 0) > 0.5)
+
+const poweredSession = scripted([id('a'), id('^'), id('{'), id('2'), id('}'), id('='), id('b')])
+const poweredModel = await recognizeStrokes(glyph, poweredSession, poweredSession, vocab, 1)
+assert.equal(poweredModel[0]?.text, 'a^2 = b')
+
+const fracSession = scripted([id('\\frac'), id('{'), id('1'), id('}'), id('{'), id('2'), id('}')])
+const fracModel = await recognizeStrokes(glyph, fracSession, fracSession, vocab, 1)
+assert.equal(fracModel[0]?.text, '(1)/(2)')
+
+const emptySession = scripted([])
+const emptyModel = await recognizeStrokes(glyph, emptySession, emptySession, vocab, 1)
+assert.deepEqual(emptyModel, [])
+
+const yxSession = scripted([id('y'), id('='), id('x')])
+const onlyIfScripted = await recognizeStrokes(glyph, yxSession, yxSession, vocab, 1)
+assert.equal(onlyIfScripted[0]?.text, 'y = x')
+
+console.log('ocr model path ok', { y2: y2model[0], powered: poweredModel[0], frac: fracModel[0], tensor: `${image.height}x${image.width}` })

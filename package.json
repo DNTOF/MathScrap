@@ -13,6 +13,7 @@
     "smoke": "tsx scripts/smoke.ts",
     "smoke:ai": "tsx scripts/ai-mcp-smoke.ts",
     "smoke:ocr": "tsx scripts/ocr-smoke.ts",
+    "ocr:live": "tsx scripts/ocr-live.ts",
     "mcp": "tsx mcp/server.ts",
     "e2e": "tsx scripts/e2e-plots.ts",
     "e2e:sheet": "tsx scripts/e2e-sheet.ts"
@@ -27,6 +28,7 @@
     "cn": "^0.5.1",
     "katex": "^0.19.1",
     "lucide-react": "^1.65.0",
+    "onnxruntime-web": "^1.22.0",
     "perfect-freehand": "^1.2.3",
     "plotly.js-dist-min": "^4.2.0",
     "react": "^19.3.1",

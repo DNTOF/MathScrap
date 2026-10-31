@@ -50,7 +50,7 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
           <DialogTitle className="flex items-center gap-2 text-kraft-800">
             <ScanText className="size-5" /> 手写 → 公式
           </DialogTitle>
-          <DialogDescription className="text-kraft-600">还没有接入识别模型。候选来自{mockRecognizer.name}：等号、简单字母，字母上的箭头写成向量。没画出括号就不会猜成分量。请点选或直接修改，再写到纸上。</DialogDescription>
+          <DialogDescription className="text-kraft-600">候选来自本机的 {mockRecognizer.name}，笔画不会离开这台设备。认不出就直接改，再写到纸上。</DialogDescription>
         </DialogHeader>
         {box && (
           <div className="kraft-page rounded-xl border border-kraft-600/25 p-2">
@@ -68,7 +68,7 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
           </div>
           {!cands ? (
             <div className="flex items-center gap-2 text-[13px] text-kraft-600">
-              <Loader2 className="size-4 animate-spin" /> 正在“识别”…
+              <Loader2 className="size-4 animate-spin" /> 正在识别…
             </div>
           ) : cands.length === 0 ? (
             <div className="text-[13px] text-kraft-700">没认出来。可以直接在下面改，或取消。</div>

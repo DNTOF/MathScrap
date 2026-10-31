@@ -8,6 +8,8 @@
  */
 import { mkdirSync } from 'node:fs'
 import { chromium, type Page } from 'playwright-core'
+import { inkFixtures, shiftInk } from '../src/ocr/comer/samples.ts'
+import type { InkStroke } from '../src/ocr/comer/preprocess.ts'
 
 const RAW = process.env.APP_URL ?? 'http://127.0.0.1:47321/'
 /** ?static=1 skips the progressive reveal so trace assertions see the finished figure. */
@@ -271,16 +273,48 @@ async function dockAndLive() {
   await page2.mouse.down()
   await page2.mouse.move(540, 355, { steps: 8 })
   await page2.mouse.up()
-  await page2.waitForSelector('[data-ink-chip][data-ink-unknown]', { timeout: 9000 })
+  await page2.waitForSelector('[data-ink-chip][data-ink-ready]', { timeout: 25000 })
   check(true, 'ocr: settled ink raises a recognition chip automatically (default on)')
-  const chipText = await page2.locator('[data-ink-chip]').innerText()
-  check(!/y\s*=\s*x/.test(chipText), `ocr: unrecognized ink is not offered as y = x (${chipText.replace(/\s+/g, ' ')})`)
-  check(await page2.locator('[data-ink-chip] [aria-label="写成公式"]').isDisabled(), 'ocr: unknown ink has no accept suggestion')
-  check((await page2.locator('[data-formula]').count()) === 1, 'ocr: unknown ink is not written onto the sheet')
+  const chipText = (await page2.locator('[data-ink-chip]').innerText()).replace(/\s+/g, ' ')
+  check(!/1\s*,\s*2\s*,\s*2/.test(chipText) && !chipText.includes('𝐚'), `ocr: chip does not invent a vector triple (${chipText})`)
+  check(!/y\s*=\s*x\s*24%/.test(chipText), `ocr: chip does not use the y = x 24% fallback (${chipText})`)
+  check((await page2.locator('[data-formula]').count()) === 1, 'ocr: the chip does not write onto the sheet by itself')
   await page2.screenshot({ path: `${SHOTS}/dock-ocr-chip.png` })
+
+  // 6. the on-device CoMER model reads fixture strokes (same points as npm run ocr:live)
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page3 = await ctx.newPage()
+  page3.on('pageerror', (e) => errors.push(e.message))
+  const fixtures = inkFixtures(3).filter((f) => f.name !== 'frac')
+  const doc = boardDoc(fixtures.map((f, i) => shiftInk(f.strokes, 120, 160 + i * 460)))
+  await page3.addInitScript((saved) => localStorage.setItem('mathscrap.doc.v2', saved), JSON.stringify(doc))
+  await page3.goto(RAW, { waitUntil: 'networkidle' })
+  await page3.waitForFunction(() => document.querySelectorAll('[data-ink-chip][data-ink-ready]').length >= 3, null, { timeout: 40000 })
+  const read = await page3.locator('[data-ink-chip][data-ink-ready]').evaluateAll((els) => els.map((el) => el.getAttribute('data-ink-text') ?? ''))
+  check(read.length === 3 && fixtures.every((f) => read.some((t) => f.expect.test(t))), `ocr: model reads y = 2, y = x, a^2 = b (${read.join(' | ')})`)
+  check(!read.some((t) => /1,\s*2,\s*2/.test(t)), 'ocr: model does not invent a component triple')
+  check((await page3.locator('[data-formula]').count()) === 0, 'ocr: model candidates stay on the chip until accepted')
+  await page3.screenshot({ path: `${SHOTS}/ocr-model-chips.png` })
+  await ctx.close()
 
   check(!errors.length, `dock/ocr: no page errors ${errors.slice(0, 2).join(' | ')}`)
   await browser.close()
+}
+
+function boardDoc(groups: InkStroke[][]) {
+  let n = 0
+  return {
+    cards: [],
+    stickers: [],
+    strokes: groups.flat().map((s) => ({
+      id: `fix${n++}`,
+      pts: s.points.flatMap((p) => [p.x, p.y, 0.5]),
+      color: '#2b2118',
+      width: s.lineWidth,
+      style: 'ink',
+      createdAt: n,
+    })),
+  }
 }
 
 if (!process.env.SKIP_BASE) {

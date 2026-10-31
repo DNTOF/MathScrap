@@ -24,7 +24,8 @@ npm run dev        # http://localhost:47321
 | `npm run lint` | oxlint |
 | `npm run smoke` | 不开浏览器：加载真实 WASM，对 77 个单式用例和 19 张“整页联立”用例做推导，并检查每个图形在初始坐标窗口里确实有可见的数据（`-v` 打印全部推导） |
 | `npm run smoke:ai` | 不开浏览器：起一个本地 OpenAI 兼容接口，检查「测试连接」、工具调用和空配置立刻返回；再让 MCP 服务器列出并调用工具 |
-| `npm run smoke:ocr` | 不开浏览器：用手写形状的笔迹检查 `y = x` 不会被认成向量三元组 |
+| `npm run smoke:ocr` | 不开浏览器：几何回归，以及 CoMER 预处理 + 假的编码器/解码器（不会自己编 `y = x`） |
+| `npm run ocr:live` | 本机用 ONNX Runtime Web WASM 跑仓库里的 CoMER INT8，检查 `y = 2`、`y = x`、`a^2 = b`、`1/2` |
 | `npm run mcp` | 启动 stdio MCP 服务器（给 Cursor / Claude 用；人直接跑它会停在 stdio 上，见下文） |
 | `npm run e2e` | 浏览器端到端：先 `npm run dev`，再用无头 Chrome 打开每个用例的坐标系，检查 SVG 线条和截图像素，确认 2D/3D 图都真的画出来了（`CHROME_PATH` 可指定浏览器路径） |
 | `npm run e2e:sheet` | 浏览器端到端，像真人一样操作：空白纸 → 双击 / `/` / Σ 工具在纸上写 5 个式子 → 点角落「坐标系」→ 断言它们画在同一套坐标轴上（桌面 + 手机），再验证分屏坐标系边写边画、缩放保持、式子逐条浮现与手写识别芯片 |
@@ -127,7 +128,7 @@ AC ⊥ BC
 
 ## 三种写字方式（PC 端也不只是键盘）
 
-1. **手写**：鼠标、触控、手写笔都能直接在牛皮纸上写。写完点底部工具栏的「手写转公式」（快捷键 `R`），会弹出识别候选（目前是演示桩，见下文），确认或修改后就在原处写成公式；原来的笔迹可以选择保留。
+1. **手写**：鼠标、触控、手写笔都能直接在牛皮纸上写。写完点底部工具栏的「手写转公式」（快捷键 `R`），会弹出本机模型给出的候选（见下文），确认或修改后就在原处写成公式；原来的笔迹可以选择保留。
 2. **键盘 + 纸上快捷键提示**：双击纸面或按 `/` 开始写，快捷键表会以铅笔字的样子淡淡浮现在纸上。
 
    | 快捷键 | 插入 | 快捷键 | 插入 |
@@ -332,22 +333,50 @@ mathscrap.tools.call('ink_read', {})
 
 ## 手写识别（默认开启）
 
-写完一笔稍停（约 1 秒），笔迹会自动聚成「一条式子」，纸上浮出一枚**识别候选芯片**：显示最佳候选（LaTeX）与置信度，点 ✓ 写到纸上（并立刻进入旁边的坐标系），⟳ 换候选，✕ 忽略。设置里可以关掉这个自动识别（`手写自动识别`，默认开）；按 `R` 仍可随时对最近的笔迹手动打开识别对话框。
+写完一笔稍停（约 1 秒），笔迹会自动聚成「一条式子」，纸上浮出一枚**识别候选芯片**：显示最佳候选与置信度，点 ✓ 写到纸上（并立刻进入旁边的坐标系），⟳ 换候选，✕ 忽略。设置里可以关掉这个自动识别（`手写自动识别`，默认开）；按 `R` 仍可随时对最近的笔迹手动打开识别对话框。认不出时芯片写「没认出来」，不会拿 `y = x` 充数，也不会把没画出来的括号猜成 `a = (1, 2, 2)`。
 
-`src/ocr/recognizer.ts` 定义了识别管线接口：
+候选来自 **CoMER**（ECCV 2022）的 INT8 ONNX。权重由 [ink-on](https://github.com/kimseungdae/ink-on) 以 Apache-2.0 分发（Copyright 2025 kimseungdae）。路径是：笔迹点 → 纯 TypeScript 预处理 → 编码器 / 解码器 → LaTeX。核心在 `src/ocr/comer/`，不引用 React 或 DOM。
 
 ```ts
-interface Recognizer {
-  id: string
-  name: string
-  recognize(strokes: Stroke[]): Promise<{ text: string; confidence: number }[]>
-}
-
-// 自动管线的笔迹分组：相邻笔迹聚成一条式子，逐簇给候选
-clusterStrokes(strokes: Stroke[]): Stroke[][]
+recognizeStrokes(strokes, encoder, decoder, vocab) → { text, latex, confidence }[]
 ```
 
-当前的 `mockRecognizer` 按笔画外形读简单式子：等号、`y` / `x` / `a` / `b`、数字 `2`、字母右上角的上标（`a^2`），以及画在字母正上方、盖住字母的箭头（记成 `\vec{a}`）。普通字母没有箭头就不是向量；没画出括号，就不会猜成 `a = (1, 2, 2)` 这种分量。外形对不上时确认条只说「没认出来」，不会拿 `y = x` 充数。这还不是识别模型。以后接入端侧模型、MyScript、Mathpix 或多模态 LLM 时，只需要实现 `recognize`。
+`text` 是这张纸已经能解析的写法（`a^2 = b`、`(1)/(2)`、`sqrt(x)`）。模型若给出 `\vec{…}` 或 `\overrightarrow{…}`，会收成 `\vec{…}`。Web 演示把 `onnxruntime-web` 的 WASM 接在这个函数外面；确认条调用的就是它。
+
+### 模型文件
+
+已经放在仓库里，开发服务器按静态资源提供，浏览器按普通缓存保存：
+
+| 文件 | 大小 |
+| --- | --- |
+| `public/models/comer/encoder_int8.onnx` | 3.4 MB |
+| `public/models/comer/decoder_int8.onnx` | 4.0 MB |
+| `public/models/comer/vocab.json` | 词表，113 个 token |
+
+出处和 Apache-2.0 说明在 `public/models/comer/NOTICE.md` 与同目录的 `LICENSE`。预处理和 ink-on 一致：大约每 3px 重采样，黑底白字，内容缩放到大约 128px 高，放在高 256、宽为 64 的倍数（128–1024）的左上角。
+
+WASM 运行时不进 git。`npm install` 之后，开发服务器和 `vite preview` 从 `node_modules/onnxruntime-web/dist` 提供 `/ort/ort-wasm-simd-threaded.wasm`（约 12 MB）和对应的 `.mjs`。线程数设为 1，所以不需要跨域隔离。
+
+### 以后接到原生 ONNX Runtime
+
+桌面或手机不走浏览器。加载同一对 `encoder_int8.onnx` / `decoder_int8.onnx` 和 `vocab.json`，用 ONNX Runtime（或把同一计算图转成 Core ML）建两个 session，再调用 `recognizeStrokes`：
+
+1. `preprocessStrokes` 得到 `float32` 图像 `[1,1,256,W]`（`pixel_values`）和 `uint8` 掩码 `[1,256,W]`（`pixel_mask`，0 是内容，1 是补边）。
+2. 编码器输出 `encoder_features`、`encoder_mask`。
+3. 解码器每步吃这两个张量加上 `input_ids`（int64，从 `<sos>` 开始），读最后一步的 `logits`。
+4. 波束宽度 2。`<eos>` 或连续重复 3 次就停。
+
+`src/ocr/comer/decode.ts` 里的循环不绑定某一种 Runtime，session 只要实现 `run(feeds)`。
+
+### 怎么验证
+
+```bash
+npm run smoke:ocr   # 预处理尺寸、词表整理、脚本化的假模型；不加载 ONNX
+npm run ocr:live    # 本机 WASM 跑真正的 INT8，样例笔迹应读成 y = 2、y = x、a^2 = b、(1)/(2)
+npm run dev         # http://127.0.0.1:47321 ，同一局域网用 http://<本机IP>:47321
+```
+
+在纸上写 `y = 2`、`y = x` 或 `a^2 = b`，确认条应给出对应的式子。模型文件缺失或 WASM 加载失败时，确认条是「没认出来」，不会退回以前的几何规则。`src/ocr/inkShape.ts` 只留作回归测试。
 
 ---
 
@@ -361,7 +390,7 @@ src/
   plot/                   共享坐标系面板与角落按钮、Plotly 图形构建、推导结果列表
   math/                   语句解析与场景推导（调用 WASM）
   wasm/                   WASM 产物与类型化封装
-  ocr/                    识别接口与演示桩
+  ocr/                    笔迹分组、确认条，以及 CoMER 预处理 / 解码（不依赖 DOM）
   ai/                     模型客户端、本机配置、MCP 形状的工具定义
 mcp/                    stdio MCP 服务器，以及 Vite 上的本机工具桥 / 请求转发
   components/             顶栏、工具栏、设置、KaTeX；ui/ 是 shadcn 组件

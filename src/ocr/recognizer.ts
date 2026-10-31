@@ -1,6 +1,5 @@
 import type { Stroke } from '@/board/types'
 import { strokeBounds } from '@/board/strokes'
-import { recognizeInk } from './inkShape'
 
 export interface Candidate {
   text: string
@@ -56,16 +55,19 @@ export function clusterStrokes(strokes: Stroke[]): Stroke[][] {
 }
 
 /**
- * Geometry reader for the on-paper chip. Not a trained model: it knows equals signs,
- * a few letter shapes, digits, and an arrow sitting on a letter. Component tuples are
- * refused unless parenthesis strokes are actually there.
+ * Confirm-chip reader. The CoMER ONNX model is primary. A miss returns no formula
+ * rather than a stand-in equation.
  */
 export const mockRecognizer: Recognizer = {
-  id: 'stroke-geometry',
-  name: '笔画外形（演示，未接识别模型）',
+  id: 'comer',
+  name: 'CoMER 手写模型（本地 ONNX）',
   async recognize(strokes) {
-    const cands = recognizeInk(strokes)
-    await new Promise((r) => setTimeout(r, 280))
-    return cands
+    try {
+      const { recognizeMath } = await import('./comer/web')
+      return await recognizeMath(strokes)
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : '手写模型没有跑起来')
+      return []
+    }
   },
 }
