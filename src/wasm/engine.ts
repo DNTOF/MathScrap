@@ -24,6 +24,33 @@ export interface TriangleCase {
   note: string
 }
 
+export interface CircleDrawSeg {
+  a: [number, number]
+  b: [number, number]
+  names: [string, string]
+}
+
+export interface CircleCase {
+  facts: RustFact[]
+  note: string
+  center: [number, number]
+  p: [number, number]
+  lines: CircleDrawSeg[]
+}
+
+export interface ChordCrossInput {
+  p: string
+  chords: string[][]
+  lengths: Record<string, number>
+  pos: 'in' | 'out' | 'tan' | null
+}
+
+export interface CircleInfo {
+  cx: number
+  cy: number
+  r: number
+}
+
 export interface SolveResult {
   unknowns: string[]
   solutions: number[][]
@@ -102,6 +129,11 @@ export const engine = {
   conic: (src: string, env: Env | undefined, name: string) => timed(() => parseJson<RustFact[]>(core.conic_analyze(src, envStr(env), name), [])),
   triangle: (known: Record<string, number>) =>
     timed(() => parseJson<{ cases: TriangleCase[]; error: string | null }>(core.triangle_solve(JSON.stringify(known)), { cases: [], error: '求解失败' })),
+  circle: (known: { r: number; cross: ChordCrossInput }) =>
+    timed(() => parseJson<{ cases: CircleCase[]; error: string | null }>(core.circle_solve(JSON.stringify(known)), { cases: [], error: '求解失败' })),
+  circles: (cs: { name: string; cx: number; cy: number; r: number }[], pts: { name: string; p: number[] }[]) =>
+    timed(() => parseJson<RustFact[]>(core.circles_analyze(JSON.stringify(cs), JSON.stringify(pts)), [])),
+  circleOf: (src: string, env?: Env) => timed(() => parseJson<CircleInfo | null>(core.circle_of(src, envStr(env)), null)),
   points: (pts: { name: string; p: number[] }[]) => timed(() => parseJson<RustFact[]>(core.points_analyze(JSON.stringify(pts)), [])),
   vectors: (vs: { name: string; v: number[] }[]) => timed(() => parseJson<RustFact[]>(core.vectors_analyze(JSON.stringify(vs)), [])),
   lines: (ls: { name: string; a: number; b: number; c: number }[], pts: { name: string; p: number[] }[]) =>

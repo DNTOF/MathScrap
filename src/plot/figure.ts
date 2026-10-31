@@ -70,6 +70,17 @@ function collectBounds(a: Analysis, shapes: RustShape[]) {
       add(o.v[0], o.v[1])
     }
     if (o.type === 'marks') o.pts.forEach((p) => add(p.p[0], p.p[1]))
+    if (o.type === 'circle') {
+      add(o.cx - o.r, o.cy - o.r)
+      add(o.cx + o.r, o.cy + o.r)
+    }
+    if (o.type === 'circleCase') {
+      add(o.p[0], o.p[1])
+      for (const L of o.lines) {
+        add(L.a[0], L.a[1])
+        add(L.b[0], L.b[1])
+      }
+    }
   }
   for (const s of a.sections.flatMap((s) => s.facts)) {
     const sh = s.shape
@@ -297,6 +308,22 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[]): { da
       case 'marks':
         data.push({ type: 'scatter', mode: 'markers', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.label), marker: { size: 12, symbol: 'circle-open', color: '#9b3b2a', line: { width: 2.6 } }, name: '交点', hovertemplate: '%{text}<br>(%{x:.4f}, %{y:.4f})<extra></extra>' })
         break
+      case 'circle': {
+        const t = linspace(0, 2 * Math.PI, 200)
+        data.push({ type: 'scatter', mode: 'lines', x: t.map((u) => o.cx + o.r * Math.cos(u)), y: t.map((u) => o.cy + o.r * Math.sin(u)), line: { color: o.color, width: 2.6 }, name: `⊙${o.name}`, hovertemplate: `⊙${o.name}<br>(%{x:.3f}, %{y:.3f})<extra></extra>` })
+        break
+      }
+      case 'circleCase': {
+        for (const L of o.lines)
+          data.push({ type: 'scatter', mode: 'lines', x: [L.a[0], L.b[0]], y: [L.a[1], L.b[1]], line: { color: o.color, width: 2.4, dash: o.dashed ? 'dash' : 'solid' }, name: `${L.names[0]}${L.names[1]}`, showlegend: false, hovertemplate: `${L.names[0]}${L.names[1]}<extra></extra>` })
+        const seen = new Map<string, [number, number]>([[o.pName, o.p]])
+        for (const L of o.lines) {
+          if (!seen.has(L.names[0])) seen.set(L.names[0], L.a)
+          if (!seen.has(L.names[1])) seen.set(L.names[1], L.b)
+        }
+        data.push({ type: 'scatter', mode: 'markers+text', x: [...seen.values()].map((p) => p[0]), y: [...seen.values()].map((p) => p[1]), text: [...seen.keys()], textposition: 'top right', textfont: { size: 15, color: INK }, marker: { size: 8, color: o.color }, showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
+        break
+      }
       default:
         break
     }

@@ -22,6 +22,8 @@ export type PlotObj =
   | { type: 'vector'; name: string; v: number[]; color: string }
   | { type: 'param'; name: string; comps: string[]; color: string }
   | { type: 'marks'; pts: { p: number[]; label: string }[] }
+  | { type: 'circle'; name: string; cx: number; cy: number; r: number; color: string }
+  | { type: 'circleCase'; center: [number, number]; pName: string; p: [number, number]; lines: { a: [number, number]; b: [number, number]; names: [string, string] }[]; color: string; dashed: boolean }
 
 export interface FactSection {
   id: string
@@ -358,9 +360,93 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     objects.push({ type: 'points', pts: group, polygon: group.length >= 3, color: '#3b2a1a' })
   }
 
+  // ---- explicit circles (⊙O: r = 5) and their chord problems ---------------------------
+  const sheetCircles = new Map<Item, { name: string; cx: number; cy: number; r: number }>()
+  for (const i of good) {
+    if (i.st.kind !== 'circle') continue
+    const st = i.st
+    const ctr = st.center ? points.get(st.center) : null
+    const cx = ctr ? num(ctr[0] ?? '0') : 0
+    const cy = ctr ? num(ctr[1] ?? '0') : 0
+    let r = st.radius ? num(st.radius) : NaN
+    if (!Number.isFinite(r)) {
+      for (const th of st.through) {
+        const q = th.coords ? th.coords.map(num) : th.point ? (points.get(th.point) ?? []).map(num) : null
+        if (q?.length && q.every(Number.isFinite)) {
+          r = Math.hypot(q[0] - cx, (q[1] ?? 0) - cy)
+          break
+        }
+      }
+    }
+    if (Number.isFinite(r) && r > 0) {
+      sheetCircles.set(i, { name: st.name, cx, cy, r })
+      equalAspect = true
+      objects.push({ type: 'circle', name: st.name, cx, cy, r, color: nextColor() })
+    } else {
+      errors.push({ src: st.src, message: '这个圆缺少半径：写 ⊙O: r = 5，或 ⊙O: 过(3, 4)' })
+    }
+  }
+  const chordName = (st: Extract<Statement, { kind: 'chords' }>) =>
+    st.chords[0].length === 1 ? `切线 ${st.p}${st.chords[0][0]}、割线 ${st.p}${st.chords[1].join('')}` : `弦 ${st.chords[0].join('')}、${st.chords[1].join('')}`
+  good.forEach((item, pos) => {
+    if (item.st.kind !== 'chords') return
+    const st = item.st
+    let target: Item | undefined
+    for (let k = pos - 1; k >= 0; k--) {
+      if (good[k].cardId === item.cardId && good[k].st.kind === 'circle') {
+        target = good[k]
+        break
+      }
+    }
+    target ??= [...good.slice(0, pos)].reverse().find((g) => g.st.kind === 'circle')
+    const cir = target ? sheetCircles.get(target) : undefined
+    if (!cir) {
+      errors.push({ src: st.src, message: '先写一个圆（例如 ⊙O: r = 5），弦的条件才有依托' })
+      return
+    }
+    const lengths: Record<string, number> = {}
+    for (const [k, v] of Object.entries(st.lengths)) lengths[k] = num(v)
+    if (!Object.values(lengths).every(Number.isFinite)) {
+      errors.push({ src: st.src, message: '线段长度无法求值' })
+      return
+    }
+    const res = engine.circle({ r: cir.r, cross: { p: st.p, chords: st.chords, lengths, pos: st.pos } })
+    const givenFacts: RustFact[] = [
+      { group: '已知', label: `r_{${cir.name}}`, value: engine.nice(cir.r), num: cir.r, how: '', why: `⊙${cir.name} 的半径`, shape: null },
+      ...Object.entries(st.lengths).map(([k, v]) => ({ group: '已知', label: engine.latex(k), value: engine.latex(v), num: lengths[k], how: '', why: '题目给出', shape: null })),
+    ]
+    if (res.error) {
+      sections.push({ id: `chords-${item.idx}`, title: `⊙${cir.name} · ${chordName(st)}`, subtitle: '圆中的弦', tone: 'warn', facts: [...givenFacts, { group: '无法求解', label: '\\text{提示}', value: `\\text{${res.error}}`, num: null, how: '', why: '', shape: null }] })
+      return
+    }
+    equalAspect = true
+    res.cases.forEach((cs, k) => {
+      sections.push({
+        id: `chords-${item.idx}-${k}`,
+        title: `⊙${cir.name} · ${chordName(st)}${res.cases.length > 1 ? ` · 第 ${k + 1} 解` : ''}`,
+        subtitle: cs.note,
+        tone: 'geo',
+        facts: [...(k === 0 ? givenFacts : []), ...cs.facts],
+      })
+      // the canonical picture centres on (0,0); slide it onto this circle
+      const dx = cir.cx - cs.center[0]
+      const dy = cir.cy - cs.center[1]
+      objects.push({
+        type: 'circleCase',
+        center: [cir.cx, cir.cy],
+        pName: st.p,
+        p: [cs.p[0] + dx, cs.p[1] + dy],
+        lines: cs.lines.map((L) => ({ a: [L.a[0] + dx, L.a[1] + dy] as [number, number], b: [L.b[0] + dx, L.b[1] + dy] as [number, number], names: L.names })),
+        color: nextColor(),
+        dashed: k > 0,
+      })
+    })
+  })
+
   // ---- curves: classify lines / conics / general functions -----------------------------
   type Curve = { item: Item; name: string; kind: 'curve' | 'implicit2'; src: string; line?: { a: number; b: number; c: number }; equation?: boolean }
   const curves: Curve[] = []
+  const detectedCircles: { name: string; cx: number; cy: number; r: number }[] = []
   for (const i of good) {
     if (i.st.kind === 'equation1') {
       curves.push({ item: i, name: names.get(i)!, kind: 'curve', src: i.st.F, equation: true })
@@ -406,6 +492,8 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
         equalAspect = true
         sections.push({ id: `conic-${c.name}`, title: `曲线 ${c.name}`, subtitle: '圆锥曲线识别（配方 / 特征值）', tone: 'func', facts })
       }
+      const cc = engine.circleOf(c.src, env)
+      if (cc) detectedCircles.push({ name: c.name, ...cc })
       continue
     }
     const facts: RustFact[] = []
@@ -476,6 +564,13 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     }
   }
   if (inter.length) sections.push({ id: 'inter', title: '交点', subtitle: '两两联立 · Rust 求根', tone: 'inter', facts: inter })
+
+  // ---- circles × named points: powers, chords, central / inscribed angles --------------
+  const allCircles = [...sheetCircles.values(), ...detectedCircles]
+  if (allCircles.length && pts2.length) {
+    const facts = engine.circles(allCircles, pts2)
+    if (facts.length) sections.push({ id: 'circle-points', title: `圆与点 ${allCircles.map((c) => `⊙${c.name}`).join(' ')}`, subtitle: '点的幂 · 弦 · 圆周角', tone: 'geo', facts })
+  }
 
   // ---- vectors ----------------------------------------------------------------------------
   const numVecs: { name: string; v: number[] }[] = []
@@ -731,6 +826,7 @@ export function summarizeCard(text: string): CardSummary {
   const kinds = new Set(ok.map((s) => s.kind))
   let headline = '公式'
   if (kinds.has('triangle')) headline = '解三角形'
+  else if (kinds.has('circle') || kinds.has('chords')) headline = '圆与弦'
   else if (kinds.has('point') && ok.filter((s) => s.kind === 'point').length >= 2) headline = '坐标几何'
   else if (a?.solve) headline = '待定系数 / 求未知量'
   else if (kinds.has('vector')) headline = '向量'

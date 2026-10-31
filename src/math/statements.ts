@@ -22,6 +22,8 @@ export type Statement =
   | { kind: 'vector'; name: string; comps: string[]; src: string }
   | { kind: 'param'; name: string; comps: string[]; src: string }
   | { kind: 'triangle'; names: string; known: Record<string, string>; src: string }
+  | { kind: 'circle'; name: string; center: string | null; radius: string | null; through: { coords: string[] | null; point: string | null }[]; src: string }
+  | { kind: 'chords'; p: string; chords: string[][]; lengths: Record<string, string>; pos: 'in' | 'out' | 'tan' | null; src: string }
   | { kind: 'constraint'; c: Constraint; src: string }
   | { kind: 'error'; message: string; src: string }
 
@@ -263,6 +265,92 @@ function parseTriangle(line: string): Statement | null {
   return { kind: 'triangle', names, known, src: line }
 }
 
+// ---------------------------------------------------------------------------
+// Circles and chord problems (line level, because the body carries commas)
+
+const CIRCLE_RE = /^(?:⊙|◯|○|⭕|圆|circle)\s*([A-Z])?\s*[:：]?\s*(.*)$/i
+/** 弦 AB、CD 交于 P / 割线 AB、CD 交于 P / AB ∩ CD = P */
+const CHORDS_RE = /^(弦|割线)?\s*([A-Z])([A-Z])\s*(?:[、,]|和|与|and)?\s*(弦|割线)?\s*([A-Z])([A-Z])\s*(?:交于点|交于|相交于|∩)\s*=?\s*([A-Z])\s*[:：]?\s*(.*)$/
+/** 切线 PT、割线 PAB */
+const TANGENT_RE = /^切线\s*([A-Z])([A-Z])\s*(?:[、,]|和|与)?\s*(?:割线\s*)?([A-Z])([A-Z])([A-Z])\s*[:：]?\s*(.*)$/
+
+function parseChordLine(line: string): Statement {
+  const tan = line.match(TANGENT_RE)
+  if (tan) {
+    const p = tan[1]
+    if (tan[3] !== p) return { kind: 'error', message: `切线 ${tan[1]}${tan[2]} 和割线 ${tan[3]}… 要从同一点出发，例如 切线 PT、割线 PAB`, src: line }
+    const lengths: Record<string, string> = {}
+    for (const item of splitTop(tan[6], [','])) {
+      const kv = item.match(/^\|?\s*([A-Z])\s*([A-Z])\s*\|?\s*=\s*(.+)$/)
+      if (kv) lengths[`${kv[1]}${kv[2]}`] = kv[3].trim()
+    }
+    return { kind: 'chords', p, chords: [[tan[2]], [tan[4], tan[5]]], lengths, pos: 'tan', src: line }
+  }
+  const m = line.match(CHORDS_RE)
+  if (!m) {
+    return { kind: 'error', message: '弦的写法：弦 AB、CD 交于 P, PA = 2, PB = 6, PC = 4（或 切线 PT、割线 PAB）', src: line }
+  }
+  const pos0 = m[1] ?? m[4]
+  let pos: 'in' | 'out' | null = pos0 === '割线' ? 'out' : pos0 === '弦' ? 'in' : null
+  const p = m[7]
+  if (p === m[2] || p === m[3] || p === m[5] || p === m[6])
+    return { kind: 'error', message: `交点 ${p} 不能同时是弦的端点`, src: line }
+  const lengths: Record<string, string> = {}
+  let marker: 'in' | 'out' | null = null
+  for (const item of splitTop(m[8], [','])) {
+    const t = item.trim()
+    const kv = t.match(/^\|?\s*([A-Z])\s*([A-Z])\s*\|?\s*=\s*(.+)$/)
+    if (kv) {
+      lengths[`${kv[1]}${kv[2]}`] = kv[3].trim()
+      continue
+    }
+    const where = t.match(/^(?:([A-Z])\s*)?在?\s*圆\s*(内|外)$/)
+    if (where) marker = where[2] === '内' ? 'in' : 'out'
+  }
+  if (marker) pos = marker
+  return { kind: 'chords', p, chords: [[m[2], m[3]], [m[5], m[6]]], lengths, pos, src: line }
+}
+
+function parseCircleLine(line: string): Statement | null {
+  const m = line.match(CIRCLE_RE)
+  if (!m) return null
+  const name = m[1] ?? 'O'
+  const body = m[2].trim()
+  if (!body) return { kind: 'error', message: '圆的写法：⊙O: r = 5', src: line }
+  let radius: string | null = null
+  const through: { coords: string[] | null; point: string | null }[] = []
+  for (const item of splitTop(body, [','])) {
+    const t = item.trim()
+    if (!t) continue
+    const rr = t.match(/^(?:r|R|半径|radius)\s*=\s*(.+)$/)
+    if (rr) {
+      radius = rr[1].trim()
+      continue
+    }
+    const th = t.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.+)$/i)
+    if (th) {
+      const tp = tupleParts(th[1])
+      if (tp) through.push({ coords: tp, point: null })
+      else if (/^[A-Z]$/.test(th[1].trim())) through.push({ coords: null, point: th[1].trim() })
+      else return { kind: 'error', message: '“过”后面写点坐标，例如 ⊙O: 过(3, 4)', src: line }
+      continue
+    }
+    return { kind: 'error', message: `看不懂圆里的「${t}」：写 r = 5 或 过(3, 4)，点请单独一行写 A(3, 4)`, src: line }
+  }
+  if (!radius && !through.length) return { kind: 'error', message: '圆的写法：⊙O: r = 5 或 ⊙O: 过(3, 4)', src: line }
+  return { kind: 'circle', name, center: m[1] ?? null, radius, through, src: line }
+}
+
+/** Try the line-level geometric forms (triangle / circle / chords) before comma splitting. */
+function parseLine(line: string): Statement | null {
+  const tri = parseTriangle(line)
+  if (tri) return tri
+  if (TANGENT_RE.test(line)) return parseChordLine(line)
+  if (CHORDS_RE.test(line) && !CIRCLE_RE.test(line)) return parseChordLine(line)
+  if (/^(?:⊙|◯|○|⭕|圆|circle)/i.test(line)) return parseCircleLine(line)
+  return null
+}
+
 /** Parse a card's text into statements (one per line / `;` / top-level comma). */
 export function parseCard(text: string): Statement[] {
   const out: Statement[] = []
@@ -270,9 +358,9 @@ export function parseCard(text: string): Statement[] {
     .split(/\n/)
     .flatMap((l) => splitTop(l, [';']))
   for (const line of lines) {
-    const tri = parseTriangle(line)
-    if (tri) {
-      out.push(tri)
+    const geo = parseLine(line)
+    if (geo) {
+      out.push(geo)
       continue
     }
     for (const part of splitTop(line, [','])) out.push(...classifyPart(part))
@@ -310,6 +398,20 @@ export function statementLatex(s: Statement): string {
       return `${/^[A-Z]{2}$/.test(s.name) ? `\\overrightarrow{${s.name}}` : `\\mathbf{${s.name}}`} = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
     case 'param':
       return `\\vec{${s.name}}(t) = \\left(${s.comps.map(exprLatex).join(',\\ ')}\\right)`
+    case 'circle': {
+      const parts: string[] = []
+      if (s.radius) parts.push(`r = ${exprLatex(s.radius)}`)
+      for (const th of s.through) parts.push(`\\text{过 } ${th.point ?? `\\left(${(th.coords ?? []).map(exprLatex).join(',\\ ')}\\right)`}`)
+      return `\\odot ${s.name}:\\ ${parts.join(',\\ ')}`
+    }
+    case 'chords': {
+      const lens = Object.entries(s.lengths).map(([k, v]) => `${k} = ${exprLatex(v)}`)
+      const head =
+        s.chords[0].length === 1
+          ? `${s.p}${s.chords[0][0]} \\text{ 为切线},\\ ${s.p}${s.chords[1][0]}${s.chords[1][1]} \\text{ 为割线}`
+          : `${s.chords[0][0]}${s.chords[0][1]} \\cap ${s.chords[1][0]}${s.chords[1][1]} = ${s.p}`
+      return `${head}${lens.length ? `:\\ ${lens.join(',\\ ')}` : ''}`
+    }
     case 'constraint': {
       const c = s.c
       switch (c.type) {
@@ -363,6 +465,10 @@ export function kindLabel(s: Statement): string {
       return '参数曲线'
     case 'triangle':
       return '解三角形'
+    case 'circle':
+      return '圆'
+    case 'chords':
+      return '圆中的弦'
     case 'constraint':
       return '条件'
     case 'error':
