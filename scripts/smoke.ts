@@ -65,6 +65,14 @@ function check2d(a: Analysis, r: Ranges): string[] {
     } else if (o.type === 'marks') {
       const hidden = o.pts.filter((p) => !inR(r, p.p[0], p.p[1]))
       if (hidden.length === o.pts.length) out.push('all intersection marks outside window')
+    } else if (o.type === 'circle') {
+      const t = data.find((d) => d.name === `⊙${o.name}`)
+      const n = t ? visiblePts(t) : 0
+      if (n < 40) out.push(`circle ⊙${o.name} has only ${n} visible samples`)
+    } else if (o.type === 'circleCase') {
+      const pts = [o.p, ...o.lines.flatMap((L) => [L.a, L.b])]
+      const hidden = pts.filter(([x, y]) => !inR(r, x, y))
+      if (hidden.length === pts.length) out.push('circleCase: every point outside window')
     } else if (o.type === 'param') {
       const t = data.find((d) => d.name === `${o.name}(t)`)
       if (!t || visiblePts(t) < 20) out.push(`param curve ${o.name} not visible`)

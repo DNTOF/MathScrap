@@ -9,6 +9,7 @@ export const SAMPLES: { title: string; blocks: string[]; note: string }[] = [
   { title: '解三角形（SAS）', blocks: ['△ABC: a = 5, b = 7, C = 60°'], note: '余弦定理 → 第三边、两角、面积、外接圆…' },
   { title: '坐标几何 + 垂直条件', blocks: ['A(0,0), B(4,0), C(1,t)', 'AC ⊥ BC'], note: '解出 t = ±√3，再推出整个三角形' },
   { title: '圆与直线', blocks: ['x^2 + y^2 - 4x + 2y = 4', 'y = x - 1'], note: '圆心半径 + 交点' },
+  { title: '相交弦定理', blocks: ['⊙O: r = 5', '弦 AB、CD 交于 P, PA = 2, PB = 6, PC = 4'], note: 'PA·PB = PC·PD → PD，弦长、弦心距、圆心角' },
   { title: '待定系数', blocks: ['f(x) = ax^2 + bx + c', 'f(0) = 1; f(1) = 0; f(3) = 4'], note: '三个条件 → a, b, c' },
   { title: '直线过两点', blocks: ['y = kx + m, 过(1, 3), 过(2, 5)'], note: 'k = 2, m = 1' },
   { title: '平行四边形判定', blocks: ['A(0,0), B(4,0), C(5,3), D(1,3)'], note: '对边平行 → 平行四边形' },

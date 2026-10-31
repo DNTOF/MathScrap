@@ -58,6 +58,15 @@ export const cases: [string, string, Expect][] = [
   ['\\vec 写法', '\\vec{u} = (1, 0, 0); \\mathbf{v} = (0, 1, 0)', { dim: 3, kinds: ['vector', 'vector'] }],
   ['线段向量 AB', 'AB = (3, 4)', { dim: 2, kinds: ['vector'] }],
   ['向量模长条件', '𝐚 = (3, t)\n|𝐚| = 5', { solve: { t: 4 } }],
+  // ---- circles: intersecting chords, secants, tangent, circle × points ----
+  ['相交弦定理', '⊙O: r = 5\n弦 AB、CD 交于 P, PA = 2, PB = 6, PC = 4', { dim: 2, facts: ['PD', 'd(O, AB)', '圆周角'], minFacts: 12 }],
+  ['割线定理', '⊙O: r = 5\n割线 AB、CD 交于 P, PA = 2, PB = 6, PC = 4', { dim: 2, facts: ['PD', '|AB|'], minFacts: 10 }],
+  ['切割线定理', '⊙O: r = 5\n切线 PT、割线 PAB, PA = 2, PB = 6', { dim: 2, facts: ['PT'], minFacts: 8 }],
+  ['圆与点（幂 · 弦 · 圆周角）', 'x^2 + y^2 = 25\nA(3, 4), B(0, 5), C(-4, 3), D(7, 0)', { dim: 2, facts: ['|AB|', '\\text{切线长}_{D}', '\\angle ACB'], inView: [[3, 4], [-4, 3]] }],
+  // ---- parallel lines: transversal angles ----
+  ['平行线的截线', 'y = 0\ny = 3\nx - y = 0', { dim: 2, facts: ['同位角', '内错角', '同旁内角', '截线段'] }],
+  // ---- vector projections ----
+  ['向量投影向量', '𝐚 = (2, 3); 𝐛 = (1, 0)', { dim: 2, kinds: ['vector', 'vector'], facts: ['\\text{proj}'] }],
   // ---- notation rules ----
   ['小写不能当向量定义', 'b = (1, 2)', { error: /粗体/ }],
   ['小写不能当点', 'b(1, 2)', { error: /大写字母/ }],
