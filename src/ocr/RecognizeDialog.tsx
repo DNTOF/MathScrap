@@ -70,6 +70,8 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
             <div className="flex items-center gap-2 text-[13px] text-kraft-600">
               <Loader2 className="size-4 animate-spin" /> 正在“识别”…
             </div>
+          ) : cands.length === 0 ? (
+            <div className="text-[13px] text-kraft-700">没认出来。可以直接在下面改，或取消。</div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {cands.map((c) => (

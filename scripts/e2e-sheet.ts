@@ -260,7 +260,7 @@ async function dockAndLive() {
   }
   check(seen.length >= 3 && seen[seen.length - 1] >= 3, `reveal: statements emerge one by one (${seen.join(' → ')})`)
 
-  // 5. automatic handwriting chip: settled ink → candidate → tap to write
+  // 5. automatic handwriting chip: settled ink that isn't a formula raises an unknown chip, not a fake equation
   await page2.keyboard.press('p')
   await page2.mouse.move(320, 320)
   await page2.mouse.down()
@@ -271,11 +271,12 @@ async function dockAndLive() {
   await page2.mouse.down()
   await page2.mouse.move(540, 355, { steps: 8 })
   await page2.mouse.up()
-  await page2.waitForSelector('[data-ink-chip]', { timeout: 9000 })
+  await page2.waitForSelector('[data-ink-chip][data-ink-unknown]', { timeout: 9000 })
   check(true, 'ocr: settled ink raises a recognition chip automatically (default on)')
-  await page2.locator('[data-ink-chip] [aria-label="写成公式"]:not([disabled])').click()
-  await page2.waitForTimeout(600)
-  check((await page2.locator('[data-formula]').count()) === 2, 'ocr: accepting the chip writes the formula on the sheet')
+  const chipText = await page2.locator('[data-ink-chip]').innerText()
+  check(!/y\s*=\s*x/.test(chipText), `ocr: unrecognized ink is not offered as y = x (${chipText.replace(/\s+/g, ' ')})`)
+  check(await page2.locator('[data-ink-chip] [aria-label="写成公式"]').isDisabled(), 'ocr: unknown ink has no accept suggestion')
+  check((await page2.locator('[data-formula]').count()) === 1, 'ocr: unknown ink is not written onto the sheet')
   await page2.screenshot({ path: `${SHOTS}/dock-ocr-chip.png` })
 
   check(!errors.length, `dock/ocr: no page errors ${errors.slice(0, 2).join(' | ')}`)

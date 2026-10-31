@@ -149,6 +149,34 @@ function arrowedA(): Stroke[] {
 }
 
 /** The two wide strokes the sheet e2e draws. Must not come back as a vector triple. */
+/** Letter a, a small 2 on its top-right shoulder (x-overlap so they merge), equals, b. */
+function aPower2EqualsB(): Stroke[] {
+  return ink([
+    circle(36, 64, 22),
+    [
+      [46, 16],
+      [70, 14],
+      [74, 26],
+      [54, 38],
+      [46, 46],
+      [72, 48],
+    ],
+    [
+      [100, 52],
+      [138, 54],
+    ],
+    [
+      [100, 70],
+      [138, 68],
+    ],
+    [
+      [156, 18],
+      [158, 96],
+    ],
+    circle(176, 74, 18),
+  ])
+}
+
 function e2eScribble(): Stroke[] {
   return ink([
     [
@@ -189,7 +217,8 @@ const twoStrokeY = recognizeInk(
     ],
     [
       [40, 12],
-      [42, 50],
+      [42, 40],
+      [43, 68],
       [44, 96],
     ],
     [
@@ -242,9 +271,13 @@ assert.equal(hasParenGeometry(paren), true)
 const kept = filterAbsurd(paren, [{ text: 'a = (1, 2)', confidence: 0.7 }])
 assert.equal(kept[0]?.text, 'a = (1, 2)')
 
-const scribble = recognizeInk(e2eScribble())
-assert.ok(scribble.length > 0, 'e2e ink still yields a candidate')
-assertNoTuple(scribble, 'e2e scribble')
-assert.ok((scribble[0]?.confidence ?? 1) < 0.45, 'unrelated ink must not look sure')
+const powered = recognizeInk(aPower2EqualsB())
+assert.equal(powered[0]?.text, 'a^2 = b', JSON.stringify(powered))
+assert.ok((powered[0]?.confidence ?? 0) >= 0.6, `a^2 confidence ${powered[0]?.confidence}`)
+assertNoTuple(powered, 'a^2 = b')
 
-console.log('ocr smoke ok', { aspect: aspect.toFixed(2), yx: yxRead[0], y2: y2[0], ab: ab[0], vec: vec[0], scribble: scribble[0] })
+const scribble = recognizeInk(e2eScribble())
+assert.ok(!scribble.some((c) => c.text.replace(/\s/g, '') === 'y=x'), `junk must not default to y = x (${JSON.stringify(scribble)})`)
+assert.equal(scribble.length, 0, JSON.stringify(scribble))
+
+console.log('ocr smoke ok', { aspect: aspect.toFixed(2), yx: yxRead[0], y2: y2[0], ab: ab[0], vec: vec[0], powered: powered[0], scribble })

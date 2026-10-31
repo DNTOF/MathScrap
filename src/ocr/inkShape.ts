@@ -16,11 +16,9 @@ export interface InkCandidate {
  */
 export function recognizeInk(strokes: Stroke[]): InkCandidate[] {
   if (!strokes.length) return []
-  const read = filterAbsurd(strokes, readInk(strokes))
-  const ranked = dedupe(read).sort((a, b) => b.confidence - a.confidence || a.text.localeCompare(b.text))
-  if (ranked.length) return ranked.slice(0, 4)
-  // Keep the confirm chip usable, but never invent a vector and never at the old 62%.
-  return [{ text: 'y = x', confidence: 0.24 }]
+  const ranked = dedupe(filterAbsurd(strokes, readInk(strokes))).sort((a, b) => b.confidence - a.confidence || a.text.localeCompare(b.text))
+  // Nothing close enough: return no formula. Callers show an unknown state instead of inventing y = x.
+  return ranked.filter((c) => c.confidence >= 0.5).slice(0, 4)
 }
 
 /** Drop readings the strokes cannot support, and cap confident nonsense. */
@@ -47,6 +45,7 @@ interface Box {
   y1: number
   w: number
   h: number
+  cx: number
   cy: number
 }
 interface Mark {
@@ -61,10 +60,25 @@ interface Token {
 function readInk(strokes: Stroke[]): InkCandidate[] {
   const marks = toMarks(strokes)
   if (!marks.length) return []
-  const tokens = groupMarks(marks).map(classify)
+  const groups = groupMarks(marks)
+  const tokens: Token[] = []
+  for (let i = 0; i < groups.length; i++) {
+    const tok = classify(groups[i])
+    const next = groups[i + 1]
+    // A small 2 sitting above the previous letter is a power, even when it didn't overlap enough to merge.
+    if (next && /^[a-z]$/.test(tok.text) && isSuperBox(bounds(next), bounds(groups[i]))) {
+      const ntok = classify(next)
+      if (ntok.text === '2') {
+        tokens.push({ text: `${tok.text}^2`, conf: Math.min(tok.conf, ntok.conf) })
+        i++
+        continue
+      }
+    }
+    tokens.push(tok)
+  }
   const joined = joinTokens(tokens)
-  if (!joined) return []
-  return [joined.confidence >= 0.5 ? joined : { text: joined.text, confidence: Math.min(joined.confidence, 0.38) }]
+  if (!joined || joined.confidence < 0.55) return []
+  return [joined]
 }
 
 function toMarks(strokes: Stroke[]): Mark[] {
@@ -84,7 +98,7 @@ function groupMarks(marks: Mark[]): Mark[][] {
     let host = -1
     let best = 0.42
     for (let i = 0; i < groups.length; i++) {
-      const ratio = Math.max(...groups[i].map((g) => xOverlap(g.b, mark.b)))
+      const ratio = Math.max(...groups[i].map((g) => touch(g.b, mark.b)))
       if (ratio > best) {
         best = ratio
         host = i
@@ -97,6 +111,12 @@ function groupMarks(marks: Mark[]): Mark[][] {
 }
 
 function classify(g: Mark[]): Token {
+  const power = splitPower(g)
+  if (power) {
+    const base = classify(power.base)
+    const digit = powerDigit(power.sup)
+    if (/^[a-z]$/.test(base.text) && digit) return { text: `${base.text}^${digit.text}`, conf: Math.min(base.conf, digit.conf) }
+  }
   const arrow = splitArrow(g)
   if (arrow) {
     const body = classify(arrow.body)
@@ -106,17 +126,53 @@ function classify(g: Mark[]): Token {
   if (eq) return { text: '=', conf: eq }
   const x = scoreX(g)
   if (x) return { text: 'x', conf: x }
+  // A loop is a letter, not a y. y is two arms and a tail, and the pen does not close on itself.
+  const loop = loopScore(g.flatMap((m) => m.pts))
   const y = scoreY(g)
-  if (y) return { text: 'y', conf: y }
+  if (y && loop < 0.65) return { text: 'y', conf: y }
   const two = scoreTwo(g)
   if (two) return { text: '2', conf: two }
   const bee = scoreB(g)
   if (bee) return { text: 'b', conf: bee }
-  const ay = scoreA(g)
-  if (ay) return { text: 'a', conf: ay }
+  if (loop >= 0.65) return { text: 'a', conf: 0.78 }
   const paren = scoreParen(g)
   if (paren) return paren
   return { text: '', conf: 0 }
+}
+
+/** A small mark in the top-right of a larger base is a superscript, not part of the letter and not an over-arrow. */
+function splitPower(g: Mark[]): { base: Mark[]; sup: Mark[] } | null {
+  if (g.length < 2) return null
+  const all = bounds(g)
+  const sup = g.filter((m) => {
+    const small = m.b.h < all.h * 0.72 && m.b.w < all.w * 0.72
+    const high = m.b.cy < all.y0 + all.h * 0.5
+    const right = m.b.cx > all.x0 + all.w * 0.4
+    const arrowLike = m.b.h < m.b.w * 0.42 && m.b.w > all.w * 0.55
+    return small && high && right && !arrowLike
+  })
+  if (!sup.length || sup.length === g.length) return null
+  const base = g.filter((m) => !sup.includes(m))
+  const baseB = bounds(base)
+  const supB = bounds(sup)
+  if (supB.h > baseB.h * 0.85 || supB.cx < baseB.cx - baseB.w * 0.05) return null
+  return { base, sup }
+}
+
+function powerDigit(g: Mark[]): Token | null {
+  const two = scoreTwo(g)
+  if (two) return { text: '2', conf: two }
+  if (g.length !== 1) return null
+  const b = g[0].b
+  const pts = g[0].pts
+  // Superscript 2s are small and curved; a straight tick is a prime, not a power.
+  if (b.w < 4 || b.h < 4 || b.h / b.w < 0.45 || b.w / b.h < 0.35) return null
+  if (pts.length < 4 || straightness(pts) > 0.86 || isHoriz(pts)) return null
+  return { text: '2', conf: 0.66 }
+}
+
+function isSuperBox(sup: Box, base: Box): boolean {
+  return sup.h < base.h * 0.75 && sup.w < base.w * 0.95 && sup.cy < base.y0 + base.h * 0.45 && sup.cx > base.cx - base.w * 0.08
 }
 
 function splitArrow(g: Mark[]): { body: Mark[] } | null {
@@ -187,7 +243,7 @@ function scoreTwo(g: Mark[]): number {
   if (g.length !== 1) return 0
   const pts = g[0].pts
   const b = g[0].b
-  if (pts.length < 5 || b.w < 8 || b.h < 8) return 0
+  if (pts.length < 5 || b.w < 6 || b.h < 6) return 0
   if (b.h / b.w < 0.5 || b.w / b.h < 0.4) return 0
   if (pts[0].y > b.y0 + b.h * 0.4 || pts[pts.length - 1].y < b.y0 + b.h * 0.6) return 0
   const cum = arc(pts)
@@ -224,13 +280,6 @@ function scoreB(g: Mark[]): number {
   return 0.8
 }
 
-function scoreA(g: Mark[]): number {
-  const pts = g.flatMap((m) => m.pts)
-  const b = boxOf(pts)
-  if (b.w < 8 || b.h < 8 || b.h > b.w * 1.55 || scoreY(g) || scoreB(g)) return 0
-  return loopScore(pts) >= 0.65 ? 0.78 : 0
-}
-
 function scoreParen(g: Mark[]): Token | null {
   if (g.length !== 1 || scoreY(g) || scoreX(g) || scoreTwo(g)) return null
   const pts = g[0].pts
@@ -248,7 +297,19 @@ function loopScore(pts: Pt[]): number {
   const b = boxOf(pts)
   const scale = Math.max(b.w, b.h, 1)
   const ends = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y)
-  return ends < scale * 0.35 ? 0.8 : 0
+  if (ends < scale * 0.38) return 0.84
+  const cum = arc(pts)
+  const total = cum[cum.length - 1]
+  if (total < 8) return 0
+  let best = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const along = (cum[j] - cum[i]) / total
+      if (along < 0.45 || along > 0.95) continue
+      best = Math.min(best, Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y))
+    }
+  }
+  return best < scale * 0.32 ? 0.78 : 0
 }
 
 function joinTokens(tokens: Token[]): InkCandidate | null {
@@ -272,7 +333,8 @@ function isComponentTuple(text: string): boolean {
 }
 
 function demoteHeavy(strokes: Stroke[], c: InkCandidate): InkCandidate {
-  const heavy = /[\^△]|sin|cos|sqrt|mathbf|𝐚/.test(c.text)
+  // `^` is a real superscript reading (`a^2`). Only drop the old long templates.
+  const heavy = /[△]|sin|cos|sqrt|mathbf|𝐚/.test(c.text) || c.text.length > 16
   if (heavy && strokes.length < 8) return { ...c, confidence: Math.min(c.confidence, 0.3) }
   return c
 }
@@ -299,8 +361,8 @@ function boxOf(pts: Pt[]): Box {
     x1 = Math.max(x1, p.x)
     y1 = Math.max(y1, p.y)
   }
-  if (!Number.isFinite(x0)) return { x0: 0, y0: 0, x1: 0, y1: 0, w: 0, h: 0, cy: 0 }
-  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cy: (y0 + y1) / 2 }
+  if (!Number.isFinite(x0)) return { x0: 0, y0: 0, x1: 0, y1: 0, w: 0, h: 0, cx: 0, cy: 0 }
+  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }
 }
 
 function xOverlap(a: Box, b: Box): number {
@@ -309,8 +371,23 @@ function xOverlap(a: Box, b: Box): number {
   return overlap / Math.max(1, Math.min(a.w, b.w))
 }
 
+/** Strokes that only touch at an endpoint (a y's tail under its valley) still belong together. */
+function touch(a: Box, b: Box): number {
+  const overlap = xOverlap(a, b)
+  if (overlap > 0) return overlap
+  const gap = Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1)
+  if (gap > 6) return 0
+  const vGap = Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1)
+  if (vGap > 8) return 0
+  return 0.5
+}
+
 function minX(g: Mark[]): number {
   return Math.min(...g.map((m) => m.b.x0))
+}
+
+function bounds(g: Mark[]): Box {
+  return boxOf(g.flatMap((m) => m.pts))
 }
 
 function isHoriz(pts: Pt[]): boolean {
