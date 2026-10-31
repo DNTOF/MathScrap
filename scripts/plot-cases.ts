@@ -67,6 +67,18 @@ export const cases: [string, string, Expect][] = [
   ['平行线的截线', 'y = 0\ny = 3\nx - y = 0', { dim: 2, facts: ['同位角', '内错角', '同旁内角', '截线段'] }],
   // ---- vector projections ----
   ['向量投影向量', '𝐚 = (2, 3); 𝐛 = (1, 0)', { dim: 2, kinds: ['vector', 'vector'], facts: ['\\text{proj}'] }],
+  // ---- triangle: HL, median / height inputs, angles + area, projection theorem ----
+  ['HL 斜边直角边', '△ABC: a = 3, c = 5, C = 90°', { dim: 2, facts: ['b=4'], minFacts: 10 }],
+  ['中线还原三角形', '△ABC: b = 4, c = 3, m_a = 2.5', { dim: 2, facts: ['a=5', '\\angle A=90'], minFacts: 10 }],
+  ['高与面积', '△ABC: a = 3, c = 5, h_c = 2.4', { dim: 2, facts: ['S=6'] }],
+  ['两角 + 面积', '△ABC: A = 60°, B = 60°, S = 3sqrt(3)/4', { dim: 2, facts: ['\\sqrt{3}', 'R'], minFacts: 10 }],
+  ['直角三角形射影定理', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['\\text{斜边上的高}', '\\text{射影}_{a}'], minFacts: 14 }],
+  // ---- midpoints / section points / derived vectors ----
+  ['中点与中位线', 'A(0,0), B(4,0), C(1,3)\nM = 中点(A, B), N = 中点(A, C)', { dim: 2, facts: ['\\text{中位线}_{MN}', 'M=\\left(2'], inView: [[0, 0], [4, 0]] }],
+  ['定比分点', 'A(0,0), B(6,0)\nP = 分点(A, B, 1:2)', { dim: 2, facts: ['|AP|=2', '|PB|=4'], inView: [[2, 0]] }],
+  ['向量的和与投影', '𝐚 = (1, 2); 𝐛 = (3, 0)\n𝐜 = 𝐚 + 𝐛\n𝐩 = 投影(𝐚, 𝐛)', { dim: 2, facts: ['\\mathbf{c}', '\\parallel'], inView: [[4, 2], [1, 0]] }],
+  // ---- parallel lines: intercept theorem + similar triangles ----
+  ['平行线分线段成比例', 'y = 0\ny = 1\ny = 3\nx = 0\nx - y = 0', { dim: 2, facts: ['成比例', '相似比'] }],
   // ---- notation rules ----
   ['小写不能当向量定义', 'b = (1, 2)', { error: /粗体/ }],
   ['小写不能当点', 'b(1, 2)', { error: /大写字母/ }],
