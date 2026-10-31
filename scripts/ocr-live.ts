@@ -15,7 +15,8 @@ import { PNG } from 'pngjs'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
 import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { preprocessStrokes } from '../src/ocr/comer/preprocess.ts'
-import { inkFixtures } from '../src/ocr/comer/samples.ts'
+import { classifyInk } from '../src/ocr/gate.ts'
+import { arrowLetter, inkFixtures, pointPair, proseNote } from '../src/ocr/comer/samples.ts'
 import { vocabFromJson } from '../src/ocr/comer/source.ts'
 
 const ort = await import('onnxruntime-web/wasm')
@@ -48,6 +49,14 @@ for (const width of [3, 5]) {
     else assert.match(top, loose(sample.name), `${tag} top candidate`)
   }
 }
+
+assert.equal(classifyInk(proseNote()), 'text')
+const arrowHits = await recognizeStrokes(arrowLetter(), encoder, decoder, vocab, 2)
+console.log('arrow', arrowHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
+if (arrowHits[0]) assert.match(arrowHits[0].text, /^\\vec\{[a-z]\} = \(/, arrowHits[0].text)
+const pointHits = await recognizeStrokes(pointPair(), encoder, decoder, vocab, 2)
+console.log('point', pointHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
+assert.match(pointHits[0]?.text ?? '', /^A\(2, 2\)$/)
 
 console.log('ocr live ok')
 

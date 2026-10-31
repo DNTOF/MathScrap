@@ -19,6 +19,7 @@ import { Composer, insertSnippet } from '@/input/Composer'
 import { MathPalette } from '@/input/MathPalette'
 import { ShortcutHints } from '@/input/ShortcutHints'
 import { pageGroups } from '@/math/page'
+import { parseCard } from '@/math/statements'
 import { clusterStrokes, mockRecognizer, OCR_ACCEPT } from '@/ocr/recognizer'
 import { PlotButton } from '@/plot/PlotButton'
 import { PlotPanel } from '@/plot/PlotPanel'
@@ -73,6 +74,16 @@ function fitView(doc: Doc, compact: boolean, vw = window.innerWidth, vh = window
 function isTyping(e: KeyboardEvent) {
   const t = e.target as HTMLElement | null
   return !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)
+}
+
+/** A formula is written only when the sheet can parse it. Error text stays ink. */
+function canWriteFormula(text: string): boolean {
+  try {
+    const sts = parseCard(text)
+    return sts.length > 0 && sts.some((s) => s.kind !== 'error')
+  } catch {
+    return false
+  }
 }
 
 /** First free writing line at or below (x, y) that doesn't run into ink already on the sheet. */
@@ -257,7 +268,7 @@ export default function App() {
     (text: string, strokes: Stroke[]) => {
       const ids = new Set(strokes.map((s) => s.id))
       const still = docRef.current.strokes.filter((s) => ids.has(s.id) && !s.recognized)
-      if (still.length !== strokes.length) return null
+      if (still.length !== strokes.length || !canWriteFormula(text)) return null
       return commitRecognized(text, still, true)
     },
     [commitRecognized, docRef],

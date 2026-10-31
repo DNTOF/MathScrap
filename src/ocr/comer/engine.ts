@@ -1,3 +1,4 @@
+import { bindInk } from './bind.ts'
 import { decodeComer, type ComerSession, type ComerTensor } from './decode.ts'
 import { isInkMeaningful, preprocessStrokes, type InkStroke } from './preprocess.ts'
 import { decodeTokens, tokensToSource, type Vocab } from './source.ts'
@@ -30,7 +31,7 @@ export async function recognizeStrokes(strokes: InkStroke[], encoder: ComerSessi
   const seen = new Set<string>()
   for (const hit of hits) {
     const latex = decodeTokens(hit.ids, vocab).join(' ')
-    const text = tokensToSource(decodeTokens(hit.ids, vocab))
+    const text = bindInk(strokes, tokensToSource(decodeTokens(hit.ids, vocab)))
     if (!text || seen.has(text)) continue
     seen.add(text)
     const n = Math.max(1, hit.ids.length)

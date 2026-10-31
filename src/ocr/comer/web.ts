@@ -1,4 +1,5 @@
 import type { Stroke } from '../../board/types.ts'
+import { classifyInk } from '../gate.ts'
 import { recognizeStrokes, type OcrCandidate } from './engine.ts'
 import type { ComerSession, ComerTensor } from './decode.ts'
 import { vocabFromJson, type Vocab } from './source.ts'
@@ -11,9 +12,14 @@ const VOCAB_URL = '/models/comer/vocab.json'
 let pending: Promise<{ encoder: ComerSession; decoder: ComerSession; vocab: Vocab }> | null = null
 let chain: Promise<unknown> = Promise.resolve()
 
-/** Browser session. The model files are fetched from this origin; weights stay on device. */
+/**
+ * Browser session. A layout gate runs first: ordinary writing never reaches CoMER.
+ * Formula-like ink is fetched into the on-device model. Weights stay on this device.
+ */
 export function recognizeMath(strokes: Stroke[]): Promise<OcrCandidate[]> {
-  const job = chain.then(() => load().then((ready) => recognizeStrokes(toInk(strokes), ready.encoder, ready.decoder, ready.vocab, 2)))
+  const ink = toInk(strokes)
+  if (!ink.length || classifyInk(ink) === 'text') return Promise.resolve([])
+  const job = chain.then(() => load().then((ready) => recognizeStrokes(ink, ready.encoder, ready.decoder, ready.vocab, 2)))
   chain = job.then(
     () => undefined,
     () => undefined,

@@ -123,6 +123,106 @@ export function inkFixtures(width = 3): { name: string; expect: RegExp; strokes:
   ]
 }
 
+/** Five letter-sized marks on one baseline: a note, not a formula. */
+export function proseNote(width = 3): InkStroke[] {
+  const out: InkStroke[] = []
+  for (let i = 0; i < 5; i++) {
+    const x = i * 42
+    out.push(
+      line(
+        [
+          [x + 2, 36],
+          [x + 10, 8],
+          [x + 18, 34],
+          [x + 26, 12],
+          [x + 34, 36],
+        ],
+        width,
+      ),
+    )
+  }
+  return out
+}
+
+/**
+ * Capital A and two digits the model already reads as 2, with parentheses.
+ * Live check: `A(2, 2)`.
+ */
+export function pointPair(width = 3): InkStroke[] {
+  const two = (dx: number) =>
+    line(
+      [
+        [230, 52],
+        [248, 28],
+        [276, 26],
+        [290, 44],
+        [272, 66],
+        [230, 100],
+        [218, 122],
+        [294, 124],
+      ].map(([x, y]) => [dx + (x - 230) * 0.85, 4 + (y - 20) * 0.85]),
+      width,
+    )
+  const arc = (cx: number, a0: number, a1: number) => {
+    const pts: number[][] = []
+    for (let i = 0; i <= 16; i++) {
+      const t = a0 + ((a1 - a0) * i) / 16
+      pts.push([cx + 16 * Math.cos(t), 58 + 34 * Math.sin(t)])
+    }
+    return line(pts, width)
+  }
+  return [
+    line(
+      [
+        [8, 90],
+        [36, 18],
+        [64, 90],
+      ],
+      width,
+    ),
+    line(
+      [
+        [20, 58],
+        [50, 58],
+      ],
+      width,
+    ),
+    arc(100, Math.PI * 0.5, Math.PI * 1.55),
+    two(150),
+    line(
+      [
+        [250, 62],
+        [258, 78],
+        [248, 92],
+      ],
+      width,
+    ),
+    two(290),
+    arc(400, -Math.PI * 0.55, Math.PI * 0.55),
+  ]
+}
+
+/** The same bowl the model already reads as `a`, with a bar across the top. */
+export function arrowLetter(width = 3): InkStroke[] {
+  return [
+    circle(40, 86, 24, width),
+    line(
+      [
+        [62, 64],
+        [64, 112],
+      ],
+      width,
+    ),
+    line(
+      [
+        [8, 28],
+        [92, 26],
+      ],
+      width,
+    ),
+  ]
+}
+
 export function shiftInk(strokes: InkStroke[], dx: number, dy: number): InkStroke[] {
   return strokes.map((s) => ({ points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })), lineWidth: s.lineWidth }))
 }

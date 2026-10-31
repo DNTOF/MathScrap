@@ -13,8 +13,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import type { Stroke } from '../src/board/types.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
+import { bindInk, findOverArrow } from '../src/ocr/comer/bind.ts'
+import { classifyInk } from '../src/ocr/gate.ts'
 import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
-import { isInkMeaningful, preprocessStrokes, resamplePoints } from '../src/ocr/comer/preprocess.ts'
+import { isInkMeaningful, preprocessStrokes, resamplePoints, type InkStroke } from '../src/ocr/comer/preprocess.ts'
+import { arrowLetter, inkFixtures, proseNote } from '../src/ocr/comer/samples.ts'
 import { tokensToSource, vocabFromJson } from '../src/ocr/comer/source.ts'
 import { filterAbsurd, hasParenGeometry, recognizeInk } from '../src/ocr/inkShape.ts'
 
@@ -394,3 +397,41 @@ const onlyIfScripted = await recognizeStrokes(glyph, yxSession, yxSession, vocab
 assert.equal(onlyIfScripted[0]?.text, 'y = x')
 
 console.log('ocr model path ok', { y2: y2model[0], powered: poweredModel[0], frac: fracModel[0], tensor: `${image.height}x${image.width}` })
+
+function poly(pts: number[][], lineWidth = 3): InkStroke {
+  return { points: pts.map(([x, y]) => ({ x, y })), lineWidth }
+}
+
+const y2strokes = inkFixtures(3).find((s) => s.name === 'y-eq-2')!.strokes
+assert.equal(findOverArrow(y2strokes), null)
+assert.equal(bindInk(y2strokes, 'y = 2'), 'y = 2')
+assert.equal(bindInk(y2strokes, 'a'), '')
+assert.equal(bindInk(y2strokes, 'a = (1, 2, 2)'), '')
+assert.equal(bindInk(y2strokes, 'A(1,2)'), 'A(1, 2)')
+assert.equal(bindInk(y2strokes, 'a = (2, 3)'), 'A(2, 3)')
+
+const arrowed = [
+  poly([
+    [16, 24],
+    [84, 22],
+  ]),
+  poly(
+    Array.from({ length: 16 }, (_, i) => {
+      const t = (i / 15) * Math.PI * 2
+      return [48 + 18 * Math.cos(t), 78 + 18 * Math.sin(t)]
+    }),
+  ),
+]
+const dir = findOverArrow(arrowed)
+assert.ok(dir && dir.x > 0.9 && Math.abs(dir.y) < 0.2, JSON.stringify(dir))
+const boundVec = bindInk(arrowed, 'a')
+assert.match(boundVec, /^\\vec\{a\} = \([0-9.\-]+, [0-9.\-]+\)$/)
+assert.equal(bindInk(arrowed, 'a = (1, 2, 2)'), boundVec)
+assert.doesNotMatch(boundVec, /1,\s*2,\s*2/)
+console.log('ocr bind ok', { point: bindInk(y2strokes, 'A(1,2)'), vec: boundVec })
+
+assert.equal(classifyInk(y2strokes), 'formula')
+assert.equal(classifyInk(arrowLetter()), 'formula')
+assert.equal(classifyInk(proseNote()), 'text', 'a line of letters is not a formula')
+assert.equal(classifyInk(inkFixtures(3).find((s) => s.name === 'frac')!.strokes), 'formula')
+console.log('ocr gate ok', { prose: classifyInk(proseNote()), formula: classifyInk(y2strokes) })

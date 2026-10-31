@@ -8,7 +8,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { initSync } from '../src/wasm/pkg/mathcore.js'
-import { analyze, type Analysis } from '../src/math/scene'
+import { analyze, summarizeCard, type Analysis } from '../src/math/scene'
 import { pageGroups } from '../src/math/page'
 import { parseCard } from '../src/math/statements'
 import { SAMPLES } from '../src/board/samples'
@@ -206,5 +206,29 @@ for (const pc of pages) {
   console.log(`${problems.length ? 'FAIL' : 'ok  '}  [sheet] ${pc.title.padEnd(16)} 2D×${g.count[2]} 3D×${g.count[3]}`)
   problems.forEach((p) => console.log(`        ✗ ${p}`))
 }
+const pointCard = analyze([{ id: 'p', text: 'A(2, 3)' }])
+const pointObj = pointCard.objects.find((o) => o.type === 'points')
+if (!pointObj || pointObj.type !== 'points' || pointObj.pts[0]?.name !== 'A' || !near(pointObj.pts[0].p[0], 2) || !near(pointObj.pts[0].p[1], 3)) {
+  failed++
+  console.log('FAIL  point A(2, 3) did not land on the axes', JSON.stringify(pointCard.objects))
+} else console.log('ok    point A(2, 3) is a geometry point')
+
+const vecCard = analyze([{ id: 'v', text: '\\vec{a} = (1, 0)' }])
+const vecObj = vecCard.objects.find((o) => o.type === 'vector')
+if (!vecObj || vecObj.type !== 'vector' || vecObj.name !== 'a' || !near(vecObj.v[0], 1) || !near(vecObj.v[1], 0)) {
+  failed++
+  console.log('FAIL  \\vec{a} did not become a vector', JSON.stringify(vecCard.objects))
+} else console.log('ok    \\\\vec{a} = (1, 0) is a vector')
+const shown = summarizeCard('\\vec{a} = (1, 0)')
+if (shown.lines[0]?.latex !== '\\vec{a}' || !shown.plottable) {
+  failed++
+  console.log('FAIL  over-arrow displays as a tuple or will not plot', shown.lines[0])
+} else console.log('ok    over-arrow displays as \\\\vec{a}')
+const bare = parseCard('a')
+if (bare.some((s) => s.kind === 'vector' || s.kind === 'point')) {
+  failed++
+  console.log('FAIL  bare letter classified as a point or vector', bare)
+} else console.log('ok    bare letter is not a point or vector')
+
 console.log(`\n${cases.length - failed}/${cases.length} formula cases · ${pages.length - pageFailed}/${pages.length} shared-sheet cases passed`)
 process.exit(failed + pageFailed ? 1 : 0)
