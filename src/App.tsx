@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createToolBridge } from '@/ai/tools'
 import { Board, type PenSettings } from '@/board/Board'
-import { SAMPLES } from '@/board/samples'
 import { strokeBounds } from '@/board/strokes'
 import { uid, type Card, type Doc, type Stroke, type Tool, type View } from '@/board/types'
 import { blankDoc, useDocument } from '@/board/useDocument'
@@ -297,7 +296,6 @@ export default function App() {
 
   const anchor = composer.at ? { left: composer.at.x * view.scale + view.x, top: composer.at.y * view.scale + view.y } : null
   const showHints = prefs.showHints && composer.open && composerFocused && (!compact || !composerText)
-  const empty = doc.cards.length === 0 && doc.strokes.length === 0
 
   return (
     <div className="fixed inset-0 overflow-hidden">
@@ -330,21 +328,6 @@ export default function App() {
         onPenDetected={() => toast.success('检测到手写笔：笔负责书写，手指负责选择、平移和缩放')}
       >
         <ShortcutHints visible={showHints} compact={compact} placement={anchor && anchor.top < window.innerHeight / 2 ? 'bottom' : 'top'} />
-        {empty && !composer.open && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center p-8 text-center select-none">
-            <div className="max-w-md text-kraft-800/60">
-              <div className="hand text-[38px] leading-tight font-bold">一张空白的牛皮纸</div>
-              <p className="mt-2 text-[14px] leading-relaxed">
-                用笔随手画；{compact ? '点 Σ 再点纸面' : '双击纸面或按 /'}，在那里写公式。
-                <br />
-                写下的所有式子，都会叠进右下角的同一个坐标系。
-              </p>
-              <button className="pointer-events-auto mt-3 rounded-full px-3 py-1.5 text-[13px] text-kraft-800 underline decoration-kraft-800/30 underline-offset-4 hover:bg-kraft-800/8" onClick={() => writeSample(SAMPLES[0].blocks)} data-no-board>
-                先写两个例子试试
-              </button>
-            </div>
-          </div>
-        )}
       </Board>
 
       <TopBar
@@ -431,7 +414,7 @@ export function Loading() {
   return (
     <div className="kraft-page grid h-full place-items-center text-kraft-800">
       <div className="flex flex-col items-center gap-3">
-        <div className="hand text-[40px] font-bold">数手账</div>
+        <div className="text-[30px] font-semibold tracking-tight">MathScrap</div>
         <div className="flex items-center gap-2 text-[13px] text-kraft-700">
           <Loader2 className="size-4 animate-spin" /> 正在加载 Rust 数学引擎…
         </div>

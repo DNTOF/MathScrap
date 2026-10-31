@@ -63,7 +63,24 @@ async function desktop() {
   await page.waitForFunction(() => !!(window as any).mathscrap)
 
   check((await page.locator('[data-formula]').count()) === 0, 'desktop: opens on a blank sheet (no formulas)')
-  check(await page.getByText('一张空白的牛皮纸').isVisible(), 'desktop: blank-paper hint shown')
+  await page.waitForTimeout(600)
+  const paperText = await page.evaluate(() => {
+    const chrome = '[data-no-board], [aria-hidden], .js-plotly-plot, [data-sonner-toaster]'
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    const out: string[] = []
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const el = n.parentElement!
+      const t = n.textContent!.trim()
+      if (!t || el.closest(chrome) || el.closest('script,style')) continue
+      const cs = getComputedStyle(el)
+      if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue
+      out.push(t)
+    }
+    return out
+  })
+  check(!paperText.length, `desktop: blank sheet shows no words on the paper (${paperText.join(' | ')})`)
+  const body = await page.evaluate(() => document.body.innerText + document.title)
+  check(!/数手账|手账/.test(body) && (await page.title()) === 'MathScrap', `desktop: only the MathScrap name (title "${await page.title()}")`)
   check((await page.locator('.kraft-card, .washi').count()) === 0, 'desktop: no card tiles or washi tape anywhere')
   await page.screenshot({ path: `${SHOTS}/sheet-desktop-blank.png` })
 

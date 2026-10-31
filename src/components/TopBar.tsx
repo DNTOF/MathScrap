@@ -34,17 +34,12 @@ function IconBtn({ label, onClick, disabled, children, compact }: { label: strin
   )
 }
 
-/** Brand written faintly on the paper, plus one small pill: undo, redo and a "…" menu. */
+/** One small pill: undo, redo and a "…" menu. The paper itself carries no branding. */
 export function TopBar(p: Props) {
   const zoom = `${Math.round(p.scale * 100)}%`
   const row = 'flex h-10 items-center gap-2 rounded-xl px-2.5 text-[13px] text-kraft-800 hover:bg-kraft-800/10'
   return (
     <>
-      <div className="pointer-events-none fixed top-3.5 left-5 z-40 select-none" data-no-board>
-        <span className="hand text-[26px] leading-none font-bold text-kraft-800/70">数手账</span>
-        <span className="ml-2 text-[10px] tracking-[0.2em] text-kraft-800/40">MATHSCRAP</span>
-      </div>
-
       <div className="paper-chrome fixed top-3 right-3 z-40 flex items-center gap-0.5 rounded-full p-1" data-no-board>
         <IconBtn label={`撤销 (${MOD} Z)`} onClick={p.onUndo} disabled={!p.canUndo} compact={p.compact}>
           <Undo2 className="size-[18px]" />
@@ -57,6 +52,7 @@ export function TopBar(p: Props) {
             <MoreHorizontal className="size-5" />
           </PopoverTrigger>
           <PopoverContent align="end" className="paper-chrome w-[min(330px,calc(100vw-24px))] gap-0 bg-transparent p-1.5">
+            <div className="px-2.5 pt-1 pb-1.5 text-[12px] font-semibold tracking-tight text-kraft-800/70">MathScrap</div>
             <div className="flex items-center gap-1 pb-1.5">
               <button onClick={() => p.onZoom(1 / 1.2)} className="grid size-10 place-items-center rounded-xl hover:bg-kraft-800/10" aria-label="缩小">
                 <Minus className="size-4" />

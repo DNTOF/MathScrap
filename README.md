@@ -1,4 +1,4 @@
-# 数手账 · MathScrap（演示版）
+# MathScrap（演示版）
 
 A math-learning scrapbook on one continuous sheet of kraft paper, in the spirit of Apple Freeform. There are no cards or widgets: you draw with the pen, and formulas are written straight onto the paper like ink. The **坐标系 (coordinate system)** button in the corner draws **every formula on the sheet on the same axes**. The panel finds intersections between them, solves shared unknowns, and **derives as many quantities as possible**: remaining sides and angles, unknown parameters, area, domain, and more.
 
@@ -32,7 +32,7 @@ npm run dev        # http://localhost:47321
 
 ## 一张纸，一个坐标系
 
-打开就是一张空白的牛皮纸，没有卡片，也没有胶带标题。
+打开就是一张真正空白的牛皮纸：没有卡片、没有胶带标题，纸面上也没有任何文字、水印或品牌字样。应用名只有 MathScrap（浏览器标题和「…」菜单顶部）。
 
 - **画**：用笔、荧光笔、橡皮直接在纸上画。
 - **写公式**：双击纸面、按 `/`，或选底部的 Σ 工具再点纸面。在点的位置会出现一个光标，下面实时预览墨迹效果；按 Enter（或点别处）就写上纸了。
