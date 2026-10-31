@@ -331,4 +331,4 @@ scripts/e2e-sheet.ts      浏览器：在纸上写多个式子 → 同一个坐�
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+Apache-2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).

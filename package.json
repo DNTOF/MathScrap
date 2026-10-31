@@ -47,6 +47,6 @@
     "typescript": "~7.0.2",
     "vite": "^8.3.5"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "description": "Kraft-paper math scrapbook: Freeform-like sheet, shared plot, geometry inference (Rust/WASM)."
 }
