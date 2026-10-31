@@ -13,7 +13,7 @@ import { chromium, type Page } from 'playwright-core'
 import { PNG } from 'pngjs'
 import { cases } from './plot-cases'
 
-const URL = process.env.APP_URL ?? 'http://127.0.0.1:47321/'
+const URL = (process.env.APP_URL ?? 'http://127.0.0.1:47321/').includes('?') ? process.env.APP_URL! : `${process.env.APP_URL ?? 'http://127.0.0.1:47321/'}?static=1`
 const CHROME = process.env.CHROME_PATH ?? '/usr/local/bin/google-chrome'
 const SHOTS = process.env.SHOTS ?? '/tmp/mathscrap-e2e'
 mkdirSync(SHOTS, { recursive: true })

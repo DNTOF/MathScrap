@@ -9,7 +9,9 @@
 import { mkdirSync } from 'node:fs'
 import { chromium, type Page } from 'playwright-core'
 
-const URL = process.env.APP_URL ?? 'http://127.0.0.1:47321/'
+const RAW = process.env.APP_URL ?? 'http://127.0.0.1:47321/'
+/** ?static=1 skips the progressive reveal so trace assertions see the finished figure. */
+const URL = RAW.includes('?') ? RAW : `${RAW}?static=1`
 const CHROME = process.env.CHROME_PATH ?? '/usr/local/bin/google-chrome'
 const SHOTS = process.env.SHOTS ?? '/tmp/mathscrap-e2e'
 mkdirSync(SHOTS, { recursive: true })
@@ -179,7 +181,111 @@ async function phone() {
   await browser.close()
 }
 
-await desktop()
-await phone()
+/**
+ * Round-3 UX: the docked side-by-side pane, live refresh on writing, zoom persistence,
+ * the progressive reveal of statements, and the automatic handwriting chip.
+ */
+async function dockAndLive() {
+  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.addInitScript(() => localStorage.removeItem('mathscrap.doc.v2'))
+  await page.goto(URL, { waitUntil: 'networkidle' })
+  await page.waitForFunction(() => !!(window as any).mathscrap)
+  await page.evaluate(() => (window as any).mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' }))
+
+  // 1. the corner button docks the coordinate system beside the paper (not a modal)
+  await page.getByRole('button', { name: '打开坐标系' }).click()
+  await page.waitForFunction(() => !!document.querySelector('[data-plot-dock] .js-plotly-plot'), null, { timeout: 15000 })
+  check(await page.locator('[data-plot-dock]').isVisible(), 'dock: coordinate system docks beside the paper')
+  const sheetBox = await page.locator('[data-no-board].kraft-page, .kraft-page').first().boundingBox()
+  check(!!sheetBox && sheetBox.width < 1440, `dock: the paper shrinks to make room (width ${Math.round(sheetBox?.width ?? 0)})`)
+
+  // 2. writing on the sheet while docked live-updates the plot
+  await page.keyboard.press('/')
+  await write(page, 'y = 0.5x + 1')
+  let live = false
+  for (let i = 0; i < 20 && !live; i++) {
+    await page.waitForTimeout(800)
+    live = await page.evaluate(() =>
+      ((document.querySelector('[data-plot-dock] .js-plotly-plot') as any)?.data?.filter((t: any) => /^[fg]\(x\)$/.test(t.name)).length ?? 0) >= 2,
+    )
+  }
+  if (!live) {
+    const dump = await page.evaluate(() => ({
+      formulas: document.querySelectorAll('[data-formula]').length,
+      dock: !!document.querySelector('[data-plot-dock]'),
+      data: ((document.querySelector('[data-plot-dock] .js-plotly-plot') as any)?.data ?? []).map((t: any) => t.name),
+      texts: [...document.querySelectorAll('[data-formula]')].map((e) => e.textContent?.slice(0, 40)),
+    }))
+    console.log('        state:', JSON.stringify(dump))
+    await page.screenshot({ path: `${SHOTS}/dock-live-fail.png` })
+  }
+  check(live, 'dock: writing while docked live-updates the shared axes')
+
+  // 3. wheel zoom inside the pane persists across further writes
+  const rangeOf = () => page.evaluate(() => (document.querySelector('[data-plot-dock] .js-plotly-plot') as any)?._fullLayout.xaxis.range ?? [])
+  const before = await rangeOf()
+  const pane = (await page.locator('[data-plot-dock] .js-plotly-plot').boundingBox())!
+  await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2)
+  await page.keyboard.down('Control')
+  for (let i = 0; i < 4; i++) await page.mouse.wheel(0, 260)
+  await page.keyboard.up('Control')
+  await page.waitForTimeout(900)
+  const zoomed = await rangeOf()
+  check(Math.abs(zoomed[1] - zoomed[0]) > Math.abs(before[1] - before[0]), 'dock: wheel zoom out widens the visible range')
+  await page.evaluate(() => (window as any).mathscrap.tools.call('page_add_formula', { text: 'x^2 + y^2 = 4' }))
+  await page.waitForTimeout(1600)
+  const after = await rangeOf()
+  const n = await page.evaluate(() => (document.querySelector('[data-plot-dock] .js-plotly-plot') as any)?.data?.length ?? 0)
+  const snapBack = Math.abs(after[1] - after[0] - (before[1] - before[0])) < 1e-6
+  check(!snapBack, 'dock: the user zoom survives writing another formula')
+  check(n >= 4, `dock: the new formula joins the same axes (${n} traces)`)
+
+  // 4. progressive reveal: without ?static the figure emerges statement by statement
+  const page2 = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'no-preference' })
+  page2.on('pageerror', (e) => errors.push(e.message))
+  await page2.addInitScript(() => localStorage.removeItem('mathscrap.doc.v2'))
+  await page2.goto(RAW, { waitUntil: 'networkidle' })
+  await page2.waitForFunction(() => !!(window as any).mathscrap)
+  await page2.evaluate(() => (window as any).mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2\ny = 0.5x + 1\nx^2 + y^2 = 4' }))
+  await page2.getByRole('button', { name: '打开坐标系' }).click()
+  await page2.waitForFunction(() => !!document.querySelector('[data-plot-dock] .js-plotly-plot'), null, { timeout: 15000 })
+  const seen: number[] = []
+  for (let i = 0; i < 16; i++) {
+    const k = await page2.evaluate(() => (document.querySelector('[data-plot-dock] .js-plotly-plot') as any)?.data?.length ?? -1)
+    if (seen[seen.length - 1] !== k) seen.push(k)
+    await page2.waitForTimeout(170)
+  }
+  check(seen.length >= 3 && seen[seen.length - 1] >= 3, `reveal: statements emerge one by one (${seen.join(' → ')})`)
+
+  // 5. automatic handwriting chip: settled ink → candidate → tap to write
+  await page2.keyboard.press('p')
+  await page2.mouse.move(320, 320)
+  await page2.mouse.down()
+  await page2.mouse.move(430, 300, { steps: 6 })
+  await page2.mouse.move(540, 330, { steps: 6 })
+  await page2.mouse.up()
+  await page2.mouse.move(330, 370)
+  await page2.mouse.down()
+  await page2.mouse.move(540, 355, { steps: 8 })
+  await page2.mouse.up()
+  await page2.waitForSelector('[data-ink-chip]', { timeout: 9000 })
+  check(true, 'ocr: settled ink raises a recognition chip automatically (default on)')
+  await page2.locator('[data-ink-chip] [aria-label="写成公式"]:not([disabled])').click()
+  await page2.waitForTimeout(600)
+  check((await page2.locator('[data-formula]').count()) === 2, 'ocr: accepting the chip writes the formula on the sheet')
+  await page2.screenshot({ path: `${SHOTS}/dock-ocr-chip.png` })
+
+  check(!errors.length, `dock/ocr: no page errors ${errors.slice(0, 2).join(' | ')}`)
+  await browser.close()
+}
+
+if (!process.env.SKIP_BASE) {
+  await desktop()
+  await phone()
+}
+await dockAndLive()
 console.log(problems.length ? `\n${problems.length} problem(s)` : `\nall sheet checks passed · screenshots in ${SHOTS}`)
 process.exit(problems.length ? 1 : 0)
