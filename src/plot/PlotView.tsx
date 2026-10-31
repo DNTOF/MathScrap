@@ -11,17 +11,22 @@ interface Props {
   /** called with the visible x / y range after the user pans or zooms (2D only) */
   onRange?: (x: [number, number], y: [number, number]) => void
   resetKey: string
+  /** fired once after the first successful draw — the progressive reveal waits for it */
+  onReady?: () => void
 }
 
 type PlotDiv = HTMLDivElement & { on?: (ev: string, cb: (e: Record<string, unknown>) => void) => void; layout?: { xaxis?: { range?: number[] }; yaxis?: { range?: number[] } } }
 
-export function PlotView({ data, layout, onRange, resetKey }: Props) {
+export function PlotView({ data, layout, onRange, resetKey, onReady }: Props) {
   const ref = useRef<PlotDiv>(null)
   const [lib, setLib] = useState<PlotlyLib | null>(null)
   const [error, setError] = useState<string | null>(null)
   const onRangeRef = useRef(onRange)
   onRangeRef.current = onRange
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
   const bound = useRef(false)
+  const fired = useRef(false)
 
   useEffect(() => {
     loadPlotly().then(setLib, (e) => setError(String(e)))
@@ -37,6 +42,10 @@ export function PlotView({ data, layout, onRange, resetKey }: Props) {
       modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian', 'resetCameraLastSave3d'],
     }
     lib.react(el, data as never, layout as never, config as never)
+    if (!fired.current) {
+      fired.current = true
+      onReadyRef.current?.()
+    }
     if (!bound.current && el.on) {
       bound.current = true
       let t: ReturnType<typeof setTimeout> | undefined
