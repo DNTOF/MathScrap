@@ -7,6 +7,24 @@
 export function _eval(src: string, env: string): number;
 
 /**
+ * `{"cx":..,"cy":..,"r":..}` when the implicit curve F(x, y) = 0 is a real circle, else "null".
+ */
+export function circle_of(src: string, env: string): string;
+
+/**
+ * Solve a circle chord problem around one point P:
+ * `{"r":5,"cross":{"p":"P","chords":[["A","B"],["C","D"]],"lengths":{"PA":2,"PB":6,"PC":4},"pos":"in"}}`
+ * → cases with the derived segment, chord lengths, centre distances, central angles.
+ */
+export function circle_solve(known_json: string): string;
+
+/**
+ * [{"name":"O","cx":0,"cy":0,"r":5}] plus named points → facts about powers, chords,
+ * central / inscribed angles, chord crossings.
+ */
+export function circles_analyze(circles_json: string, points_json: string): string;
+
+/**
  * Classify a quadratic implicit curve F(x, y) = 0 (circle / ellipse / hyperbola / parabola).
  */
 export function conic_analyze(src: string, env: string, name: string): string;
@@ -108,6 +126,9 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly _eval: (a: number, b: number, c: number, d: number) => number;
+    readonly circle_of: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly circle_solve: (a: number, b: number) => [number, number];
+    readonly circles_analyze: (a: number, b: number, c: number, d: number) => [number, number];
     readonly conic_analyze: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly domain_gaps: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];
     readonly extrema: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number];

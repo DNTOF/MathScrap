@@ -37,7 +37,7 @@ fn fact(group: &str, label: &str, value: String, num: Option<f64>, how: &str, wh
 }
 
 impl Fact {
-    fn with(mut self, s: Shape) -> Self {
+    pub(crate) fn with(mut self, s: Shape) -> Self {
         self.shape = Some(s);
         self
     }
@@ -137,17 +137,17 @@ pub fn deg(rad: f64) -> String {
     s
 }
 
-fn pt(x: f64, y: f64) -> String {
+pub(crate) fn pt(x: f64, y: f64) -> String {
     format!("\\left({},\\ {}\\right)", nice_short(x), nice_short(y))
 }
-fn pt3(p: [f64; 3]) -> String {
+pub(crate) fn pt3(p: [f64; 3]) -> String {
     format!("\\left({},\\ {},\\ {}\\right)", nice_short(p[0]), nice_short(p[1]), nice_short(p[2]))
 }
-fn nice_short(v: f64) -> String {
+pub(crate) fn nice_short(v: f64) -> String {
     exact_form(v).unwrap_or_else(|| dec(v))
 }
 
-fn near(a: f64, b: f64) -> bool {
+pub(crate) fn near(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-7 * (1.0 + a.abs().max(b.abs()))
 }
 
@@ -431,6 +431,23 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         let mid = [(v[(i + 1) % 3][0] + v[(i + 2) % 3][0]) / 2.0, (v[(i + 1) % 3][1] + v[(i + 2) % 3][1]) / 2.0];
         out.push(fact("高与中线", &format!("m_{}", SIDE[i]), nice(m), Some(m), &format!("m_{s} = \\frac12\\sqrt{{2{u}^2 + 2{w}^2 - {s}^2}}", s = SIDE[i], u = SIDE[(i + 1) % 3], w = SIDE[(i + 2) % 3]), "中线长公式").with(Shape::Segment { x1: p[0], y1: p[1], x2: mid[0], y2: mid[1], label: format!("m_{}", SIDE[i]) }));
     }
+    // midsegments: join the midpoints of the two sides through vertex i, parallel to side i
+    for i in 0..3 {
+        let m1 = [(v[i][0] + v[(i + 1) % 3][0]) / 2.0, (v[i][1] + v[(i + 1) % 3][1]) / 2.0];
+        let m2 = [(v[i][0] + v[(i + 2) % 3][0]) / 2.0, (v[i][1] + v[(i + 2) % 3][1]) / 2.0];
+        let len = dist2(m1, m2);
+        out.push(fact("高与中线", &format!("\\text{{中位线}}_{}", SIDE[i]), nice(len), Some(len), &format!("\\frac{{{}}}{{2}}", SIDE[i]), "平行于第三边，等于第三边的一半").with(Shape::Segment { x1: m1[0], y1: m1[1], x2: m2[0], y2: m2[1], label: format!("中位线{}", SIDE[i]) }));
+    }
+    // angle bisector lengths: t_i = 2·(adjacent sides)·cos(g_i/2) / (sum of adjacent sides)
+    for i in 0..3 {
+        let (y, z) = (s[(i + 1) % 3], s[(i + 2) % 3]);
+        let t = 2.0 * y * z * (g[i] / 2.0).cos() / (y + z);
+        let foot = [
+            (y * v[(i + 1) % 3][0] + z * v[(i + 2) % 3][0]) / (y + z),
+            (y * v[(i + 1) % 3][1] + z * v[(i + 2) % 3][1]) / (y + z),
+        ];
+        out.push(fact("角平分线", &format!("t_{}", SIDE[i]), nice(t), Some(t), &format!("t_{s} = \\frac{{2{u}{w}\\cos\\frac{{{T}}}{{2}}}}{{{u} + {w}}}", s = SIDE[i], u = SIDE[(i + 1) % 3], w = SIDE[(i + 2) % 3], T = ANG[i]), "角平分线长公式").with(Shape::Segment { x1: v[i][0], y1: v[i][1], x2: foot[0], y2: foot[1], label: format!("t_{}", SIDE[i]) }));
+    }
 
     out.push(fact("特殊点", "G", pt(centroid[0], centroid[1]), None, "G = \\frac{A + B + C}{3}", "重心（中线交点）").with(Shape::Point { x: centroid[0], y: centroid[1], label: "G 重心".into() }));
     out.push(fact("特殊点", "O", pt(circ[0], circ[1]), None, "|OA| = |OB| = |OC|", "外心（中垂线交点）").with(Shape::Point { x: circ[0], y: circ[1], label: "O 外心".into() }));
@@ -468,7 +485,7 @@ pub struct NamedPoint {
     pub p: Vec<f64>,
 }
 
-fn dist2(a: [f64; 2], b: [f64; 2]) -> f64 {
+pub(crate) fn dist2(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
 
@@ -750,12 +767,20 @@ pub fn vectors_analyze(vs: &[NamedVec]) -> Vec<Fact> {
             let (na, nb) = (vlabel(&vs[i].name), vlabel(&vs[j].name));
             let d = dot3(a, b);
             let (la, lb) = (len3(a), len3(b));
+            let fmt = |v: &[f64]| if is3 { pt3([v[0], v[1], v[2]]) } else { pt(v[0], v[1]) };
             out.push(fact("两向量关系", &format!("{} \\cdot {}", na, nb), nice(d), Some(d), "x_1x_2 + y_1y_2 + z_1z_2", "数量积"));
             if la > 1e-12 && lb > 1e-12 {
                 let ang = (d / (la * lb)).clamp(-1.0, 1.0).acos();
                 out.push(fact("两向量关系", &format!("\\langle {}, {} \\rangle", na, nb), deg(ang), Some(ang), "\\cos\\theta = \\frac{\\vec a\\cdot\\vec b}{|\\vec a||\\vec b|}", "夹角"));
                 let proj = d / lb;
                 out.push(fact("两向量关系", &format!("\\text{{{} 在 {} 上的投影}}", vs[i].name, vs[j].name), nice(proj), Some(proj), "\\frac{\\vec a\\cdot\\vec b}{|\\vec b|}", "投影（数量）"));
+                // projection vector of a onto b, and the perpendicular rest: a = proj + perp
+                let pb2 = dot3(b, b);
+                let k = d / pb2;
+                let projv: Vec<f64> = (0..3).map(|t| k * b[t]).collect();
+                let perp: Vec<f64> = (0..3).map(|t| a[t] - k * b[t]).collect();
+                out.push(fact("两向量关系", &format!("\\text{{proj}}_{{{}}}\\ {}", nb, na), fmt(&projv), None, "\\frac{{\\vec a\\cdot\\vec b}}{{|\\vec b|^2}}\\,\\vec b", "投影向量").with(if is3 { Shape::Arrow3 { x: projv[0], y: projv[1], z: projv[2], label: format!("proj{}_{}", vs[i].name, vs[j].name) } } else { Shape::Segment { x1: 0.0, y1: 0.0, x2: projv[0], y2: projv[1], label: format!("proj{}_{}", vs[i].name, vs[j].name) } }));
+                out.push(fact("两向量关系", &format!("{} - \\text{{proj}}_{{{}}}\\ {}", na, nb, na), fmt(&perp), None, "\\vec a - \\text{proj}_{\\vec b}\\,\\vec a", "垂直分量：a = 投影 + 垂直").with(if is3 { Shape::Arrow3 { x: perp[0], y: perp[1], z: perp[2], label: format!("perp{}_{}", vs[i].name, vs[j].name) } } else { Shape::Segment { x1: projv[0], y1: projv[1], x2: a[0], y2: a[1], label: format!("perp{}_{}", vs[i].name, vs[j].name) } }));
                 let cr = cross3(a, b);
                 let lc = len3(cr);
                 if lc < 1e-9 * la * lb {
@@ -773,7 +798,6 @@ pub fn vectors_analyze(vs: &[NamedVec]) -> Vec<Fact> {
             }
             let sum: Vec<f64> = (0..3).map(|k| a[k] + b[k]).collect();
             let dif: Vec<f64> = (0..3).map(|k| a[k] - b[k]).collect();
-            let fmt = |v: &[f64]| if is3 { pt3([v[0], v[1], v[2]]) } else { pt(v[0], v[1]) };
             out.push(fact("两向量关系", &format!("{} + {}", na, nb), fmt(&sum), None, "", "坐标相加"));
             out.push(fact("两向量关系", &format!("{} - {}", na, nb), fmt(&dif), None, "", "坐标相减"));
         }
@@ -800,6 +824,15 @@ pub struct NamedLine {
     pub a: f64,
     pub b: f64,
     pub c: f64,
+}
+
+/// Intersection point of two lines a x + b y = c, when they are not (near-)parallel.
+fn line_isect(p: &NamedLine, q: &NamedLine) -> Option<[f64; 2]> {
+    let det = p.a * q.b - p.b * q.a;
+    if det.abs() < 1e-12 * (p.a.hypot(p.b) * q.a.hypot(q.b)) {
+        return None;
+    }
+    Some([(p.c * q.b - p.b * q.c) / det, (p.a * q.c - p.c * q.a) / det])
 }
 
 pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
@@ -834,6 +867,7 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
             }
         }
     }
+    let mut par_pairs: Vec<(usize, usize)> = Vec::new();
     for i in 0..ls.len() {
         for j in i + 1..ls.len() {
             let (p, q) = (&ls[i], &ls[j]);
@@ -851,6 +885,7 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
                     let d = (p.c / np - cq).abs();
                     out.push(fact("两直线", &format!("{} \\parallel {}", p.name, q.name), "\\checkmark".into(), None, "\\frac{A_1}{A_2} = \\frac{B_1}{B_2} \\ne \\frac{C_1}{C_2}", "斜率相等"));
                     out.push(fact("两直线", &format!("d({}, {})", p.name, q.name), nice(d), Some(d), "\\frac{|C_1 - C_2|}{\\sqrt{A^2+B^2}}", "平行线间距离"));
+                    par_pairs.push((i, j));
                 }
                 continue;
             }
@@ -864,6 +899,26 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
                 let ang = (det.abs()).atan2(dt.abs());
                 out.push(fact("两直线", &format!("\\theta({}, {})", p.name, q.name), deg(ang), Some(ang), "\\tan\\theta = \\left|\\frac{k_1 - k_2}{1 + k_1k_2}\\right|", "两直线夹角"));
             }
+        }
+    }
+    // transversals: a third line cutting a parallel pair — equal corresponding / alternate
+    // interior angles, supplementary co-interior angles, and the segment cut off between
+    // the two parallels along the transversal.
+    for &(i, j) in &par_pairs {
+        for t in 0..ls.len() {
+            if t == i || t == j {
+                continue;
+            }
+            let (Some(pa), Some(pb)) = (line_isect(&ls[i], &ls[t]), line_isect(&ls[j], &ls[t])) else { continue };
+            let (p, q, tr) = (&ls[i], &ls[j], &ls[t]);
+            let det = p.a * tr.b - p.b * tr.a;
+            let dt = p.a * tr.a + p.b * tr.b;
+            let theta = det.abs().atan2(dt.abs());
+            out.push(fact("平行线的截线", &format!("\\text{{同位角}} \\; \\angle({}, {}) = \\angle({}, {})", tr.name, p.name, tr.name, q.name), deg(theta), Some(theta), "两直线平行，同位角相等", "同位角"));
+            out.push(fact("平行线的截线", &format!("\\text{{内错角}}({} \\mid {} \\parallel {})", tr.name, p.name, q.name), deg(theta), Some(theta), "两直线平行，内错角相等", "内错角"));
+            out.push(fact("平行线的截线", &format!("\\text{{同旁内角}}({} \\mid {} \\parallel {})", tr.name, p.name, q.name), deg(PI - theta), Some(PI - theta), "两直线平行，同旁内角互补", "同旁内角"));
+            let cut = dist2(pa, pb);
+            out.push(fact("平行线的截线", &format!("\\text{{截线段}}_{{{}}}", tr.name), nice(cut), Some(cut), "|PQ| = \\sqrt{\\Delta x^2 + \\Delta y^2}", "沿截线夹在两平行线之间的线段").with(Shape::Segment { x1: pa[0], y1: pa[1], x2: pb[0], y2: pb[1], label: format!("{} 截 {}", tr.name, p.name) }));
         }
     }
     out
@@ -1099,6 +1154,43 @@ mod tests {
     }
 
     #[test]
+    fn asa_two_angles() {
+        // a = 5, B = 50°, C = 60° → A = 70°, b = 5·sin50°/sin70°, c = 5·sin60°/sin70°
+        let k = TriangleKnown { a: Some(5.0), angle_b: Some(50.0f64.to_radians()), angle_c: Some(60.0f64.to_radians()), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let f = |label: &str| r.cases[0].facts.iter().find(|x| x.label == label).unwrap().num.unwrap();
+        assert!((f("\\angle A") - 70.0f64.to_radians()).abs() < 1e-9);
+        assert!((f("b") - 5.0 * 50f64.to_radians().sin() / 70f64.to_radians().sin()).abs() < 1e-9);
+        assert!((f("c") - 5.0 * 60f64.to_radians().sin() / 70f64.to_radians().sin()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn midsegment_and_bisector() {
+        // 3-4-5 triangle: midsegment parallel to a(=3) is 1.5; the bisector from A… check t_c
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), angle_c: Some(PI / 2.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        let fs = &r.cases[0].facts;
+        let mid = fs.iter().find(|f| f.label == "\\text{中位线}_a").unwrap();
+        assert!((mid.num.unwrap() - 1.5).abs() < 1e-9);
+        let mid_c = fs.iter().find(|f| f.label == "\\text{中位线}_c").unwrap();
+        assert!((mid_c.num.unwrap() - 2.5).abs() < 1e-9);
+        // angle bisector from C: t_c = 2ab·cos(C/2)/(a+b) = 2·3·4·cos45°/7
+        let t_c = fs.iter().find(|f| f.label == "t_c").unwrap();
+        assert!((t_c.num.unwrap() - 24.0 * (PI / 4.0).cos() / 7.0).abs() < 1e-9);
+        // the drawn bisector starts at C and divides AB as AC : BC = 4 : 3
+        let seg = t_c.shape.as_ref().unwrap();
+        if let Shape::Segment { x1, y1, x2, y2, .. } = seg {
+            let (va, vb, vc) = (r.cases[0].vertices[0], r.cases[0].vertices[1], r.cases[0].vertices[2]);
+            assert!((*x1 - vc[0]).abs() < 1e-9 && (*y1 - vc[1]).abs() < 1e-9);
+            let fx = (3.0 * va[0] + 4.0 * vb[0]) / 7.0;
+            assert!((*x2 - fx).abs() < 1e-9);
+        } else {
+            panic!("bisector fact should carry a segment");
+        }
+    }
+
+    #[test]
     fn nice_forms() {
         assert_eq!(nice(2f64.sqrt() * 3.0), "3\\sqrt{2} \\approx 4.2426");
         assert_eq!(nice(0.5), "\\frac{1}{2} = 0.5");
@@ -1111,5 +1203,39 @@ mod tests {
         let f = conic_analyze([1.0, 0.0, 1.0, -4.0, 2.0, -4.0], "C");
         let r = f.iter().find(|f| f.label == "r").unwrap();
         assert!((r.num.unwrap() - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn vector_projection_vector() {
+        let vs = vec![NamedVec { name: "a".into(), v: vec![3.0, 4.0] }, NamedVec { name: "b".into(), v: vec![1.0, 0.0] }];
+        let out = vectors_analyze(&vs);
+        let get = |label: &str| out.iter().find(|f| f.label == label).unwrap();
+        let proj = get("\\text{proj}_{\\mathbf{b}}\\ \\mathbf{a}").value.clone();
+        assert!(proj.contains("3") && proj.contains("0"), "proj = {proj}");
+        let perp = get("\\mathbf{a} - \\text{proj}_{\\mathbf{b}}\\ \\mathbf{a}").value.clone();
+        assert!(perp.contains("4"), "perp = {perp}");
+        // scalar projection still there
+        assert!((get("\\text{a 在 b 上的投影}").num.unwrap() - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parallel_transversal_angles() {
+        // y = 0, y = 3 parallel; x - y = 0 a 45° transversal
+        let ls = vec![
+            NamedLine { name: "l".into(), a: 0.0, b: 1.0, c: 0.0 },
+            NamedLine { name: "m".into(), a: 0.0, b: 1.0, c: 3.0 },
+            NamedLine { name: "t".into(), a: 1.0, b: -1.0, c: 0.0 },
+        ];
+        let out = lines_analyze(&ls, &[]);
+        let get = |label: &str| out.iter().find(|f| f.label == label).unwrap();
+        // corresponding angles ∠(t, l) = ∠(t, m) = 45°
+        let cor = get("\\text{同位角} \\; \\angle(t, l) = \\angle(t, m)").num.unwrap();
+        assert!((cor - PI / 4.0).abs() < 1e-9);
+        // co-interior supplementary: 135°
+        let co = get("\\text{同旁内角}(t \\mid l \\parallel m)").num.unwrap();
+        assert!((co - 3.0 * PI / 4.0).abs() < 1e-9);
+        // cut segment between the parallels along t: from (0,0) to (3,3) → 3√2
+        let cut = out.iter().find(|f| f.label == "\\text{截线段}_{t}").unwrap();
+        assert!((cut.num.unwrap() - 3.0 * 2.0f64.sqrt()).abs() < 1e-9);
     }
 }

@@ -23,6 +23,89 @@ export function _eval(src, env) {
 }
 
 /**
+ * `{"cx":..,"cy":..,"r":..}` when the implicit curve F(x, y) = 0 is a real circle, else "null".
+ * @param {string} src
+ * @param {string} env
+ * @returns {string}
+ */
+export function circle_of(src, env) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(env, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.circle_of(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Solve a circle chord problem around one point P:
+ * `{"r":5,"cross":{"p":"P","chords":[["A","B"],["C","D"]],"lengths":{"PA":2,"PB":6,"PC":4},"pos":"in"}}`
+ * → cases with the derived segment, chord lengths, centre distances, central angles.
+ * @param {string} known_json
+ * @returns {string}
+ */
+export function circle_solve(known_json) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(known_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.circle_solve(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * [{"name":"O","cx":0,"cy":0,"r":5}] plus named points → facts about powers, chords,
+ * central / inscribed angles, chord crossings.
+ * @param {string} circles_json
+ * @param {string} points_json
+ * @returns {string}
+ */
+export function circles_analyze(circles_json, points_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(circles_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(points_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.circles_analyze(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Classify a quadratic implicit curve F(x, y) = 0 (circle / ellipse / hyperbola / parabola).
  * @param {string} src
  * @param {string} env

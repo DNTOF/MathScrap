@@ -6,6 +6,7 @@
 //! - dense numeric output is `Vec<f64>` (a `Float64Array` in JS); structured output is a JSON string
 //! - errors never throw: numeric exports return NaN / empty arrays, JSON exports carry `error`
 
+pub mod circle;
 pub mod expr;
 pub mod geometry;
 pub mod numeric;
@@ -209,6 +210,46 @@ pub fn triangle_solve(known_json: &str) -> String {
         Ok(k) => json(&geometry::triangle_solve(&k)),
         Err(e) => json(&geometry::TriangleResult { cases: vec![], error: Some(e.to_string()) }),
     }
+}
+
+/// Solve a circle chord problem around one point P:
+/// `{"r":5,"cross":{"p":"P","chords":[["A","B"],["C","D"]],"lengths":{"PA":2,"PB":6,"PC":4},"pos":"in"}}`
+/// → cases with the derived segment, chord lengths, centre distances, central angles.
+#[wasm_bindgen]
+pub fn circle_solve(known_json: &str) -> String {
+    match serde_json::from_str::<circle::CircleKnown>(known_json) {
+        Ok(k) => json(&circle::circle_solve(&k)),
+        Err(e) => json(&circle::CircleResult { cases: vec![], error: Some(e.to_string()) }),
+    }
+}
+
+/// [{"name":"O","cx":0,"cy":0,"r":5}] plus named points → facts about powers, chords,
+/// central / inscribed angles, chord crossings.
+#[wasm_bindgen]
+pub fn circles_analyze(circles_json: &str, points_json: &str) -> String {
+    let cs: Vec<circle::NamedCircle> = serde_json::from_str(circles_json).unwrap_or_default();
+    let pts: Vec<geometry::NamedPoint> = serde_json::from_str(points_json).unwrap_or_default();
+    json(&circle::circles_analyze(&cs, &pts))
+}
+
+/// `{"cx":..,"cy":..,"r":..}` when the implicit curve F(x, y) = 0 is a real circle, else "null".
+#[wasm_bindgen]
+pub fn circle_of(src: &str, env: &str) -> String {
+    let Ok(c) = code(src, &["x", "y"], env) else { return "null".into() };
+    let Some(q) = numeric::quadratic2_coeffs(&c) else { return "null".into() };
+    let [a, b, cc, d, e, f] = q;
+    let det = 4.0 * a * cc - b * b;
+    if det <= 0.0 || !geometry::near(b, 0.0) || !geometry::near(a, cc) || geometry::near(a, 0.0) {
+        return "null".into();
+    }
+    let x0 = (b * e - 2.0 * cc * d) / det;
+    let y0 = (b * d - 2.0 * a * e) / det;
+    let f0 = a * x0 * x0 + b * x0 * y0 + cc * y0 * y0 + d * x0 + e * y0 + f;
+    let r2 = -f0 / a;
+    if r2 <= 1e-12 {
+        return "null".into();
+    }
+    json(&serde_json::json!({ "cx": numeric::clean(x0), "cy": numeric::clean(y0), "r": r2.sqrt() }))
 }
 
 /// [{"name":"A","p":[0,0]}, ...] → facts about distances, polygon, triangle centres.
