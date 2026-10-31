@@ -12,6 +12,7 @@
     "test:rust": "cd crates/mathcore && cargo test",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:ai": "tsx scripts/ai-mcp-smoke.ts",
+    "smoke:ocr": "tsx scripts/ocr-smoke.ts",
     "mcp": "tsx mcp/server.ts",
     "e2e": "tsx scripts/e2e-plots.ts",
     "e2e:sheet": "tsx scripts/e2e-sheet.ts"

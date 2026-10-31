@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { insertSnippet } from '@/input/Composer'
 import { matchSnippet, nextPlaceholder } from '@/input/snippets'
 import { summarizeCard } from '@/math/scene'
+import { candidateLatex } from './show'
 import { mockRecognizer, type Candidate } from './recognizer'
 
 interface Props {
@@ -49,7 +50,7 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
           <DialogTitle className="flex items-center gap-2 text-kraft-800">
             <ScanText className="size-5" /> 手写 → 公式
           </DialogTitle>
-          <DialogDescription className="text-kraft-600">演示版没有接入识别模型：下面的候选来自 {mockRecognizer.name}，请点选或直接修改，再写到纸上。</DialogDescription>
+          <DialogDescription className="text-kraft-600">还没有接入识别模型。候选来自{mockRecognizer.name}：等号、简单字母，字母上的箭头写成向量。没画出括号就不会猜成分量。请点选或直接修改，再写到纸上。</DialogDescription>
         </DialogHeader>
         {box && (
           <div className="kraft-page rounded-xl border border-kraft-600/25 p-2">
@@ -73,7 +74,7 @@ export function RecognizeDialog({ strokes, onClose, onConfirm }: Props) {
             <div className="flex flex-wrap gap-1.5">
               {cands.map((c) => (
                 <button key={c.text} onClick={() => setText(c.text)} className={cn('touch-target flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[13px]', text === c.text ? 'border-kraft-700 bg-kraft-700 text-kraft-50 [&_.katex]:text-kraft-50' : 'border-kraft-600/25 bg-kraft-50/70 hover:bg-kraft-50')}>
-                  <Tex tex={summarizeCard(c.text).lines[0]?.latex ?? c.text} />
+                  <Tex tex={candidateLatex(c.text)} />
                   <span className="text-[10px] opacity-70">{Math.round(c.confidence * 100)}%</span>
                 </button>
               ))}

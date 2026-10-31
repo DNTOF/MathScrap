@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "mcp/**/*.ts", "scripts/ai-mcp-smoke.ts"]
+  "include": ["vite.config.ts", "mcp/**/*.ts", "scripts/ai-mcp-smoke.ts", "scripts/ocr-smoke.ts"]
 }

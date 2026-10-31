@@ -24,6 +24,7 @@ npm run dev        # http://localhost:47321
 | `npm run lint` | oxlint |
 | `npm run smoke` | 不开浏览器：加载真实 WASM，对 77 个单式用例和 19 张“整页联立”用例做推导，并检查每个图形在初始坐标窗口里确实有可见的数据（`-v` 打印全部推导） |
 | `npm run smoke:ai` | 不开浏览器：起一个本地 OpenAI 兼容接口，检查「测试连接」、工具调用和空配置立刻返回；再让 MCP 服务器列出并调用工具 |
+| `npm run smoke:ocr` | 不开浏览器：用手写形状的笔迹检查 `y = x` 不会被认成向量三元组 |
 | `npm run mcp` | 启动 stdio MCP 服务器（给 Cursor / Claude 用；人直接跑它会停在 stdio 上，见下文） |
 | `npm run e2e` | 浏览器端到端：先 `npm run dev`，再用无头 Chrome 打开每个用例的坐标系，检查 SVG 线条和截图像素，确认 2D/3D 图都真的画出来了（`CHROME_PATH` 可指定浏览器路径） |
 | `npm run e2e:sheet` | 浏览器端到端，像真人一样操作：空白纸 → 双击 / `/` / Σ 工具在纸上写 5 个式子 → 点角落「坐标系」→ 断言它们画在同一套坐标轴上（桌面 + 手机），再验证分屏坐标系边写边画、缩放保持、式子逐条浮现与手写识别芯片 |
@@ -346,7 +347,7 @@ interface Recognizer {
 clusterStrokes(strokes: Stroke[]): Stroke[][]
 ```
 
-当前的 `mockRecognizer` 只根据笔迹的外形统计量（宽高比、笔画数）猜几个候选，所以结果总是要用户点选或修改。以后接入真正的识别（端侧模型、MyScript、Mathpix 或多模态 LLM）时，只需要实现 `recognize`——置信度足够高时芯片可以直接自动写上纸。
+当前的 `mockRecognizer` 按笔画外形读简单式子：等号、`y` / `x` / `a` / `b`、数字 `2`，以及画在字母上方的箭头（记成 `\vec{a}`）。普通字母没有箭头就不是向量；没画出括号，就不会猜成 `a = (1, 2, 2)` 这种分量。外形对不上的候选会被丢掉或压到很低的置信度。这还不是识别模型。以后接入端侧模型、MyScript、Mathpix 或多模态 LLM 时，只需要实现 `recognize`。
 
 ---
 

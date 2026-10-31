@@ -1,8 +1,8 @@
 import { Check, Loader2, RefreshCw, X } from 'lucide-react'
 import { useMemo } from 'react'
-import { summarizeCard } from '@/math/scene'
 import type { Stroke, View } from '@/board/types'
 import { Tex } from '@/components/Tex'
+import { candidateLatex } from './show'
 
 export interface InkChipData {
   id: string
@@ -20,7 +20,7 @@ export interface InkChipData {
  */
 export function InkChip({ chip, view, onAccept, onDismiss, onCycle }: { chip: InkChipData; view: View; onAccept: () => void; onDismiss: () => void; onCycle: () => void }) {
   const cand = chip.cands?.[chip.pick] ?? null
-  const latex = useMemo(() => (cand ? summarizeCard(cand.text).lines[0]?.latex ?? cand.text : ''), [cand])
+  const latex = useMemo(() => (cand ? candidateLatex(cand.text) : ''), [cand])
   const left = chip.at.x * view.scale + view.x
   const top = chip.at.y * view.scale + view.y
   return (
