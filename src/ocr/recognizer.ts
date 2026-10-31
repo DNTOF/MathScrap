@@ -16,13 +16,16 @@ export interface Recognizer {
   recognize(strokes: Stroke[]): Promise<Candidate[]>
 }
 
+/** A reading at or above this is written onto the sheet. Weaker ink is left alone. */
+export const OCR_ACCEPT = 0.62
+
 /** Gap (world units) below which nearby strokes are treated as one formula. */
 const GAP = 90
 
 /**
  * Group a pool of fresh strokes into clusters that each look like one formula: bounding
  * boxes closer than GAP merge (greedy, left-to-right). This is what lets the automatic
- * pipeline raise one candidate chip per written formula instead of per stroke.
+ * pipeline read one formula at a time instead of one stroke at a time.
  */
 export function clusterStrokes(strokes: Stroke[]): Stroke[][] {
   const boxes = strokes.map((s) => {
@@ -55,7 +58,7 @@ export function clusterStrokes(strokes: Stroke[]): Stroke[][] {
 }
 
 /**
- * Confirm-chip reader. The CoMER ONNX model is primary. A miss returns no formula
+ * Sheet reader. The CoMER ONNX model is primary. A miss returns no formula
  * rather than a stand-in equation.
  */
 export const mockRecognizer: Recognizer = {

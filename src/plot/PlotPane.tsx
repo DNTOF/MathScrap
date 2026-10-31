@@ -16,8 +16,10 @@ interface Props {
   cards: Card[]
   /** formula the pane was opened from — decides plane vs space when the sheet has both */
   focusId: string | null
-  variant: 'dock' | 'modal'
+  /** `float` is the corner picture only. `dock` and `modal` include the readouts. */
+  variant: 'float' | 'dock' | 'modal'
   onExpand?: () => void
+  onCollapse?: () => void
 }
 
 const staticMode = () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('static')
@@ -31,7 +33,7 @@ const staticMode = () => typeof window !== 'undefined' && new URLSearchParams(wi
  * block writing, the user's zoom survives every sheet edit (an explicit button refits), and
  * freshly added statements emerge one by one instead of appearing as one batch.
  */
-export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
+export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Props) {
   const groups = useMemo(() => pageGroups(cards), [cards])
   const [mode, setMode] = useState<2 | 3>(2)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
@@ -170,6 +172,25 @@ export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
   const conditions = active.length - drawn
   const dock = variant === 'dock'
 
+  if (variant === 'float') {
+    return (
+      <div className="h-full w-full" data-plot-pane="float" data-plot-mode={mode}>
+        {analysis && figure ? (
+          <PlotView
+            data={figure.data.map((trace) => ({ ...trace, showlegend: false }))}
+            layout={{ ...figure.layout, showlegend: false }}
+            bare
+            onRange={analysis.dim === 2 ? onRange : undefined}
+            resetKey={viewKey}
+            onReady={() => setPlotReady(true)}
+          />
+        ) : (
+          <div className="h-full w-full" />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-plot-pane={variant} data-plot-mode={mode}>
       <header className={cn('flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1', dock ? 'px-3 pt-2.5 pb-1.5' : 'px-4 pt-3 pb-2')}>
@@ -206,11 +227,18 @@ export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
           <Focus className="size-4.5" />
         </button>
         {dock ? (
-          onExpand && (
-            <button onClick={onExpand} aria-label="全屏坐标系" title="放大到全屏" className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
-              <Maximize2 className="size-4.5" />
-            </button>
-          )
+          <>
+            {onCollapse && (
+              <button onClick={onCollapse} aria-label="只看图" title="回到右下角的图" className="h-8 rounded-full px-2.5 text-[12.5px] text-kraft-700 hover:bg-kraft-800/10">
+                只看图
+              </button>
+            )}
+            {onExpand && (
+              <button onClick={onExpand} aria-label="全屏坐标系" title="放大到全屏" className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
+                <Maximize2 className="size-4.5" />
+              </button>
+            )}
+          </>
         ) : (
           <DialogPrimitive.Close className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10" aria-label="关闭">
             <X className="size-5" />
