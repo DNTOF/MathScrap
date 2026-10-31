@@ -133,6 +133,8 @@ export const engine = {
     timed(() => parseJson<{ cases: CircleCase[]; error: string | null }>(core.circle_solve(JSON.stringify(known)), { cases: [], error: '求解失败' })),
   circles: (cs: { name: string; cx: number; cy: number; r: number }[], pts: { name: string; p: number[] }[]) =>
     timed(() => parseJson<RustFact[]>(core.circles_analyze(JSON.stringify(cs), JSON.stringify(pts)), [])),
+  derivedPoints: (defs: { name: string; a: string; b: string; m: number | null; n: number | null }[], pts: { name: string; p: number[] }[]) =>
+    timed(() => parseJson<RustFact[]>(core.derived_points_analyze(JSON.stringify(defs), JSON.stringify(pts)), [])),
   circleOf: (src: string, env?: Env) => timed(() => parseJson<CircleInfo | null>(core.circle_of(src, envStr(env)), null)),
   points: (pts: { name: string; p: number[] }[]) => timed(() => parseJson<RustFact[]>(core.points_analyze(JSON.stringify(pts)), [])),
   vectors: (vs: { name: string; v: number[] }[]) => timed(() => parseJson<RustFact[]>(core.vectors_analyze(JSON.stringify(vs)), [])),

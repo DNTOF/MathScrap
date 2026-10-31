@@ -1,5 +1,5 @@
 import { engine, getStats, resetStats, type Env, type RustFact } from '@/wasm/engine'
-import { kindLabel, parseCard, statementLatex, type Ref, type Statement } from './statements'
+import { kindLabel, parseCard, statementLatex, triKeyLatex, type Ref, type Statement } from './statements'
 
 export const INK = ['#2f4a6d', '#9b3b2a', '#4d6b3c', '#8a5a1f', '#5b3f6e', '#2e6f6a', '#7a2f4f']
 
@@ -125,6 +125,61 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     if (i.st.kind === 'point') points.set(names.get(i)!, i.st.coords)
     if (i.st.kind === 'vector') vectors.set(i.st.name, i.st.comps)
     if (i.st.kind === 'curve') funcs.set(names.get(i)!, i.st.expr)
+  }
+
+  // ---- derived points & vectors (中点 / 分点 / 投影 / 向量和差) --------------------------------
+  // They become ordinary entries of the same symbol tables, so every downstream
+  // analyzer (constraints, circles, lines, vectors) sees them like any written point.
+  const derivedPointNames = new Set<string>()
+  const pointDefs: { name: string; a: string; b: string; m: number | null; n: number | null }[] = []
+  for (const i of good) {
+    if (i.st.kind !== 'pointDef') continue
+    const st = i.st
+    const A = points.get(st.a)
+    const B = points.get(st.b)
+    if (!A || !B) {
+      errors.push({ src: st.src, message: `先写出 ${!A ? st.a : st.b} 的坐标，再定义 ${st.name}` })
+      continue
+    }
+    if (points.has(st.name)) {
+      errors.push({ src: st.src, message: `点 ${st.name} 已经定义过了` })
+      continue
+    }
+    const dim = Math.max(A.length, B.length)
+    if (st.m == null && st.n == null) {
+      points.set(st.name, Array.from({ length: dim }, (_, t) => `((${A[t] ?? '0'}) + (${B[t] ?? '0'}))/2`))
+      pointDefs.push({ name: st.name, a: st.a, b: st.b, m: null, n: null })
+    } else {
+      const m = st.m != null ? Number(st.m) : 1
+      const n = st.n != null ? Number(st.n) : 1
+      if (![m, n].every(Number.isFinite) || m + n === 0 || m < 0 || n < 0) {
+        errors.push({ src: st.src, message: '分点的比要是正数，例如 1:2' })
+        continue
+      }
+      points.set(st.name, Array.from({ length: dim }, (_, t) => `((${fmt(m)})*(${A[t] ?? '0'}) + (${fmt(n)})*(${B[t] ?? '0'}))/(${fmt(m + n)})`))
+      pointDefs.push({ name: st.name, a: st.a, b: st.b, m: st.m != null ? m : null, n: st.n != null ? n : null })
+    }
+    derivedPointNames.add(st.name)
+  }
+  for (const i of good) {
+    if (i.st.kind !== 'vectorDef') continue
+    const st = i.st
+    const A = vectors.get(st.a)
+    const B = vectors.get(st.b)
+    if (!A || !B) {
+      errors.push({ src: st.src, message: `先定义向量 ${!A ? st.a : st.b}（粗体名 = (…)），再定义 ${st.name}` })
+      continue
+    }
+    let comps: string[]
+    if (st.op === 'proj') {
+      const dot = A.map((x, t) => `(${x})*(${B[t] ?? '0'})`).join(' + ')
+      const norm2 = B.map((x) => `(${x})^2`).join(' + ')
+      comps = A.map((_, t) => `((${dot})/(${norm2}))*(${B[t] ?? '0'})`)
+    } else {
+      const sign = st.op === 'sum' ? '+' : '-'
+      comps = A.map((x, t) => `(${x}) ${sign} (${B[t] ?? '0'})`)
+    }
+    vectors.set(st.name, comps)
   }
 
   // ---- unknowns ---------------------------------------------------------------
@@ -316,7 +371,7 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     const res = engine.triangle(known)
     const givenFacts: RustFact[] = Object.entries(st.known).map(([k, v]) => ({
       group: '已知',
-      label: k === 'S' ? 'S' : /[ABC]/.test(k) ? `\\angle ${st.names['ABC'.indexOf(k)]}` : st.names.toLowerCase()['abc'.indexOf(k)],
+      label: triKeyLatex(k, st.names),
       value: /[ABC]/.test(k) ? engine.latex(angleValueSrc(v)) : engine.latex(v),
       num: known[k],
       how: '',
@@ -347,17 +402,24 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     if (p.every(Number.isFinite)) numPoints.push({ name, p })
     else errors.push({ src: name, message: `点 ${name} 的坐标无法求值` })
   }
+  const basePts = numPoints.filter((p) => !derivedPointNames.has(p.name))
+  const derivedPts = numPoints.filter((p) => derivedPointNames.has(p.name))
   const pts2 = numPoints.filter((p) => p.p.length === 2)
   const pts3 = numPoints.filter((p) => p.p.length === 3)
-  if (numPoints.length) {
+  if (basePts.length) {
     equalAspect = true
-    const group = pts3.length ? pts3 : pts2
+    const group = basePts.some((p) => p.p.length === 3) ? basePts.filter((p) => p.p.length === 3) : basePts.filter((p) => p.p.length === 2)
     const facts = engine.points(group)
     if (facts.length) {
       const title = group.length >= 3 ? `${group.length === 3 ? '△' : group.length === 4 ? '四边形 ' : '多边形 '}${group.map((p) => p.name).join('')}` : `点 ${group.map((p) => p.name).join(', ')}`
-      sections.push({ id: 'points', title, subtitle: pts3.length ? '空间坐标几何' : '坐标几何', tone: 'geo', facts })
+      sections.push({ id: 'points', title, subtitle: group[0].p.length === 3 ? '空间坐标几何' : '坐标几何', tone: 'geo', facts })
     }
     objects.push({ type: 'points', pts: group, polygon: group.length >= 3, color: '#3b2a1a' })
+  }
+  if (derivedPts.length) {
+    const facts = engine.derivedPoints(pointDefs, numPoints)
+    if (facts.length) sections.push({ id: 'point-defs', title: '中点与分点', subtitle: '定比分点 · 中位线', tone: 'geo', facts })
+    objects.push({ type: 'points', pts: derivedPts, polygon: false, color: '#3b2a1a' })
   }
 
   // ---- explicit circles (⊙O: r = 5) and their chord problems ---------------------------
@@ -827,6 +889,7 @@ export function summarizeCard(text: string): CardSummary {
   let headline = '公式'
   if (kinds.has('triangle')) headline = '解三角形'
   else if (kinds.has('circle') || kinds.has('chords')) headline = '圆与弦'
+  else if (kinds.has('pointDef') || kinds.has('vectorDef')) headline = '中点与分点'
   else if (kinds.has('point') && ok.filter((s) => s.kind === 'point').length >= 2) headline = '坐标几何'
   else if (a?.solve) headline = '待定系数 / 求未知量'
   else if (kinds.has('vector')) headline = '向量'

@@ -24,6 +24,10 @@ export type Statement =
   | { kind: 'triangle'; names: string; known: Record<string, string>; src: string }
   | { kind: 'circle'; name: string; center: string | null; radius: string | null; through: { coords: string[] | null; point: string | null }[]; src: string }
   | { kind: 'chords'; p: string; chords: string[][]; lengths: Record<string, string>; pos: 'in' | 'out' | 'tan' | null; src: string }
+  /** M = 中点(A, B) or P = 分点(A, B, 1:2) — a point defined from two existing ones. */
+  | { kind: 'pointDef'; name: string; a: string; b: string; m: string | null; n: string | null; src: string }
+  /** 𝐩 = 投影(𝐚, 𝐛), 𝐜 = 𝐚 + 𝐛, 𝐜 = 𝐚 − 𝐛 — a vector defined from existing ones. */
+  | { kind: 'vectorDef'; name: string; op: 'proj' | 'sum' | 'sub'; a: string; b: string; src: string }
   | { kind: 'constraint'; c: Constraint; src: string }
   | { kind: 'error'; message: string; src: string }
 
@@ -180,6 +184,22 @@ function classifyPart(part: string): Statement[] {
   if (lowerPoint && tupleParts(lowerPoint[2]) && !(vars(src) ?? []).length)
     return [err(src, `点用大写字母命名，例如 ${lowerPoint[1].toUpperCase()}${lowerPoint[2]}；向量请写 **${lowerPoint[1]}** = ${lowerPoint[2]}`)]
 
+  // derived points: M = 中点(A, B) / M = midpoint(A, B)
+  const midDef = src.match(/^([A-Z][0-9']*)\s*=\s*(?:中点|midpoint)\s*\(\s*([A-Z][0-9']*)\s*,\s*([A-Z][0-9']*)\s*\)$/)
+  if (midDef) return [{ kind: 'pointDef', name: midDef[1], a: midDef[2], b: midDef[3], m: null, n: null, src }]
+  // section points: P = 分点(A, B, 1:2) — AP : PB = 1 : 2 (a bare number λ means AP : PB = λ : 1)
+  const sectDef = src.match(/^([A-Z][0-9']*)\s*=\s*(?:分点|定比分点|section)\s*\(\s*([A-Z][0-9']*)\s*,\s*([A-Z][0-9']*)\s*,\s*([^)]+?)\s*\)$/)
+  if (sectDef) {
+    const ratio = sectDef[4].match(/^([0-9.]+)(?:\s*[:：]\s*([0-9.]+))?$/)
+    if (!ratio) return [err(src, '分点的比写成 1:2（表示 AP : PB = 1 : 2）')]
+    return [{ kind: 'pointDef', name: sectDef[1], a: sectDef[2], b: sectDef[3], m: ratio[1], n: ratio[2] ?? null, src }]
+  }
+  // derived vectors: 𝐩 = 投影(𝐚, 𝐛), 𝐜 = 𝐚 + 𝐛, 𝐜 = 𝐚 − 𝐛
+  const projDef = src.match(new RegExp(`^(${BOLD_NAME})\\s*=\\s*(?:投影|proj)\\s*\\(\\s*(${BOLD_NAME})\\s*,\\s*(${BOLD_NAME})\\s*\\)$`, 'u'))
+  if (projDef) return [{ kind: 'vectorDef', name: unbold(projDef[1]), op: 'proj', a: unbold(projDef[2]), b: unbold(projDef[3]), src }]
+  const vecOp = src.match(new RegExp(`^(${BOLD_NAME})\\s*=\\s*(${BOLD_NAME})\\s*([+\\-])\\s*(${BOLD_NAME})$`, 'u'))
+  if (vecOp) return [{ kind: 'vectorDef', name: unbold(vecOp[1]), op: vecOp[3] === '+' ? 'sum' : 'sub', a: unbold(vecOp[2]), b: unbold(vecOp[4]), src }]
+
   // bare tuple → anonymous point
   const bare = tupleParts(src)
   if (bare) return [{ kind: 'point', name: '', coords: bare, src }]
@@ -249,7 +269,7 @@ function parseTriangle(line: string): Statement | null {
   const lower = names.toLowerCase()
   const known: Record<string, string> = {}
   const body = m[2].replace(/∠/g, '')
-  for (const raw of body.split(/[,;\s]+(?=[A-Za-z]\s*=|S\s*=)/)) {
+  for (const raw of body.split(/[,;\s]+(?=[A-Za-z][A-Za-z_]*\s*=|S\s*=)/)) {
     const kv = raw.split('=')
     if (kv.length !== 2) continue
     const k = kv[0].trim().replace(/[,;]/g, '')
@@ -257,12 +277,25 @@ function parseTriangle(line: string): Statement | null {
     if (!v) continue
     let key: string | null = null
     if (k === 'S' || k === 'area') key = 'S'
+    else if (/^m[_\s]*([abc])$/i.test(k)) key = `m${/^m[_\s]*([abc])$/i.exec(k)![1].toLowerCase()}`
+    else if (/^h[_\s]*([abc])$/i.test(k)) key = `h${/^h[_\s]*([abc])$/i.exec(k)![1].toLowerCase()}`
     else if (names.includes(k)) key = 'ABC'[names.indexOf(k)]
     else if (lower.includes(k)) key = 'abc'[lower.indexOf(k)]
     if (key) known[key] = v
   }
-  if (!Object.keys(known).length) return { kind: 'error', message: '三角形请写成 △ABC: a=3, b=4, C=90°', src: line }
+  if (!Object.keys(known).length) return { kind: 'error', message: '三角形请写成 △ABC: a=3, b=4, C=90°（也支持 m_a、h_a、面积 S）', src: line }
   return { kind: 'triangle', names, known, src: line }
+}
+
+/** Display name for a triangle known-key: a, A, S, m_a, h_c … */
+export function triKeyLatex(k: string, names: string): string {
+  if (k === 'S') return 'S'
+  if (/^[ABC]$/.test(k)) return `\\angle ${names['ABC'.indexOf(k)]}`
+  const mm = k.match(/^m([abc])$/)
+  if (mm) return `m_{${mm[1]}}`
+  const hh = k.match(/^h([abc])$/)
+  if (hh) return `h_{${hh[1]}}`
+  return names.toLowerCase()['abc'.indexOf(k)] ?? k
 }
 
 // ---------------------------------------------------------------------------
@@ -386,11 +419,18 @@ function angleValueLatex(v: string) {
 export function statementLatex(s: Statement): string {
   switch (s.kind) {
     case 'triangle': {
-      const parts = Object.entries(s.known).map(([k, v]) => {
-        const nm = k === 'S' ? 'S' : /[ABC]/.test(k) ? `\\angle ${s.names['ABC'.indexOf(k)]}` : s.names.toLowerCase()['abc'.indexOf(k)]
-        return `${nm} = ${/[ABC]/.test(k) ? angleValueLatex(v) : exprLatex(v)}`
-      })
+      const parts = Object.entries(s.known).map(([k, v]) => `${triKeyLatex(k, s.names)} = ${/[ABC]/.test(k) ? angleValueLatex(v) : exprLatex(v)}`)
       return `\\triangle ${s.names}:\\ ${parts.join(',\\ ')}`
+    }
+    case 'pointDef':
+      return s.m == null
+        ? `${s.name} = \\text{中点}\\left(${s.a},\\ ${s.b}\\right)`
+        : `${s.name} = \\text{分点}\\left(${s.a},\\ ${s.b},\\ ${exprLatex(s.m)}${s.n != null ? `:${exprLatex(s.n)}` : ''}\\right)`
+    case 'vectorDef': {
+      const nm = (x: string) => (/^[A-Z]{2}$/.test(x) ? `\\overrightarrow{${x}}` : `\\mathbf{${x}}`)
+      return s.op === 'proj'
+        ? `${nm(s.name)} = \\text{proj}\\left(${nm(s.a)},\\ ${nm(s.b)}\\right)`
+        : `${nm(s.name)} = ${nm(s.a)} ${s.op === 'sum' ? '+' : '-'} ${nm(s.b)}`
     }
     case 'point':
       return `${s.name ? s.name : ''}\\left(${s.coords.map(exprLatex).join(',\\ ')}\\right)`
@@ -469,6 +509,10 @@ export function kindLabel(s: Statement): string {
       return '圆'
     case 'chords':
       return '圆中的弦'
+    case 'pointDef':
+      return '定义点'
+    case 'vectorDef':
+      return '定义向量'
     case 'constraint':
       return '条件'
     case 'error':
