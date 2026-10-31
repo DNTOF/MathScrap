@@ -40,7 +40,7 @@ export function TopBar(p: Props) {
   const row = 'flex h-10 items-center gap-2 rounded-xl px-2.5 text-[13px] text-kraft-800 hover:bg-kraft-800/10'
   return (
     <>
-      <div className="paper-chrome fixed top-3 right-3 z-40 flex items-center gap-0.5 rounded-full p-1" data-no-board>
+      <div className="paper-chrome absolute top-3 right-3 z-40 flex items-center gap-0.5 rounded-full p-1" data-no-board>
         <IconBtn label={`撤销 (${MOD} Z)`} onClick={p.onUndo} disabled={!p.canUndo} compact={p.compact}>
           <Undo2 className="size-[18px]" />
         </IconBtn>

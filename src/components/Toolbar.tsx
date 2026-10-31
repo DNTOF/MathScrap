@@ -97,7 +97,7 @@ export function Toolbar({ tool, setTool, pen, setPen, compact, onRecognize }: Pr
   const sep = <div className="mx-0.5 h-6 w-px bg-kraft-800/15" />
   return (
     <nav
-      className={cn('paper-chrome fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-0.5 rounded-full p-1', compact ? 'bottom-[calc(12px+env(safe-area-inset-bottom))]' : 'bottom-5')}
+      className={cn('paper-chrome absolute left-1/2 z-40 flex -translate-x-1/2 items-center gap-0.5 rounded-full p-1', compact ? 'bottom-[calc(12px+env(safe-area-inset-bottom))]' : 'bottom-5')}
       data-no-board
       aria-label="工具"
     >

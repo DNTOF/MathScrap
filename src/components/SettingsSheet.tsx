@@ -12,6 +12,8 @@ export interface Prefs {
   penOnly: boolean
   showGrid: boolean
   showHints: boolean
+  /** handwriting → formula candidates raised automatically on settled ink (default on) */
+  autoOcr: boolean
 }
 
 const AI_KEY = 'mathscrap.ai.v1'
@@ -60,6 +62,7 @@ export function SettingsSheet({ open, onOpenChange, prefs, setPrefs, side }: { o
               <PenTool className="size-3.5" /> 书写
             </h3>
             {row('仅触控笔书写', '平板上手指只负责平移 / 缩放（检测到手写笔后自动开启）', prefs.penOnly, (v) => setPrefs({ ...prefs, penOnly: v }))}
+            {row('手写自动识别', '写完稍停，纸上自动浮出识别候选，点一下就写成公式（默认开；也可随时按 R 手动识别）', prefs.autoOcr, (v) => setPrefs({ ...prefs, autoOcr: v }))}
             {row('输入时在纸面显示快捷键', '写公式时把快捷键表淡淡地“印”在牛皮纸上', prefs.showHints, (v) => setPrefs({ ...prefs, showHints: v }))}
             {row('点阵纸', '跟随缩放的浅色点阵', prefs.showGrid, (v) => setPrefs({ ...prefs, showGrid: v }))}
           </section>

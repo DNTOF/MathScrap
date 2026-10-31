@@ -160,7 +160,7 @@ export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocus
 
   if (compact) {
     return (
-      <div className="paper-chrome fixed inset-x-2 bottom-[calc(80px+env(safe-area-inset-bottom))] z-30 flex flex-col gap-2 rounded-3xl px-3 pt-2 pb-2.5" data-no-board>
+      <div className="paper-chrome absolute inset-x-2 bottom-[calc(80px+env(safe-area-inset-bottom))] z-30 flex flex-col gap-2 rounded-3xl px-3 pt-2 pb-2.5" data-no-board>
         {preview && <div className="max-h-[26dvh] overflow-auto">{preview}</div>}
         <div className="flex items-end gap-1.5 border-b border-dashed border-kraft-800/30">
           {field}
@@ -182,7 +182,7 @@ export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocus
   const top = Math.max(64, Math.min(a.top, window.innerHeight - size.h - 96))
 
   return (
-    <div ref={boxRef} className="fixed z-30 flex w-[min(460px,calc(100vw-340px))] flex-col gap-1.5 animate-in fade-in" style={{ left: left - 10, top: top - 6 }} data-no-board>
+    <div ref={boxRef} className="absolute z-30 flex w-[min(460px,calc(100vw-340px))] flex-col gap-1.5 animate-in fade-in" style={{ left: left - 10, top: top - 6 }} data-no-board>
       <div className="rounded-xl border border-dashed border-kraft-800/40 bg-kraft-50/15 px-2.5 py-1">{field}</div>
       <div className="flex flex-col gap-1.5 px-2.5">
         {preview}
