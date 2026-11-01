@@ -1029,10 +1029,83 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
             why: '圆柱被斜平面截得椭圆',
             shape: null,
           })
+          const ecc = Math.sqrt(Math.max(0, 1 - (b * b) / (a * a)))
+          facts.push({
+            group: '圆柱与平面',
+            label: `e_{${cyl.name}\\cap ${p.name}}`,
+            value: engine.nice(ecc),
+            num: ecc,
+            how: 'e = \\sqrt{1 - (b/a)^2} = \\cos\\psi',
+            why: '截线椭圆离心率（ψ 为轴与平面的线面角）',
+            shape: null,
+          })
         }
       }
     }
-    if (facts.length) sections.push({ id: 'cyl-plane', title: '圆柱 ∩ 平面', subtitle: '椭圆半轴 · 线面角', tone: 'geo', facts })
+    if (facts.length) sections.push({ id: 'cyl-plane', title: '圆柱 ∩ 平面', subtitle: '椭圆半轴 · 离心率 · 线面角', tone: 'geo', facts })
+  }
+
+  // Right circular cone x²+y² = z² (α = 45°) ∩ plane → conic eccentricity e = cosβ / cosα.
+  {
+    const coneItems = good.filter((i) => i.st.kind === 'implicit3')
+    const facts: RustFact[] = []
+    for (const item of coneItems) {
+      const F = item.st.F.replace(/\s+/g, '')
+      // accept x^2+y^2-z^2(=0) or x^2+y^2=z^2
+      const isUnitCone =
+        /^(?:\()?([+-]?x\^2\+y\^2-z\^2|-?z\^2\+x\^2\+y\^2)(?:\))?(?:-\(0\)|(=0)?)?$/.test(F) ||
+        /^x\^2\+y\^2=z\^2$/.test(F) ||
+        /^z\^2=x\^2\+y\^2$/.test(F) ||
+        /^\(x\^2\+y\^2\)-\(z\^2\)$/.test(F) ||
+        /^\(x\^2\)\+\(y\^2\)-\(z\^2\)$/.test(F)
+      if (!isUnitCone) continue
+      const coneName = item.st.name ?? '\\Gamma'
+      const alpha = Math.PI / 4 // semi-vertical angle
+      const cosA = Math.cos(alpha)
+      for (const p of planes) {
+        const ln = Math.hypot(p.n[0], p.n[1], p.n[2])
+        if (ln < 1e-12) continue
+        const sinPsi = Math.abs(p.n[2]) / ln // ψ = angle between axis and plane
+        const cosPsi = Math.sqrt(Math.max(0, 1 - sinPsi * sinPsi))
+        const label = `${coneName} \\cap ${p.name}`
+        if (sinPsi < 1e-9) {
+          facts.push({
+            group: '圆锥与平面',
+            label,
+            value: '\\text{双曲线（平面 ∥ 轴）}',
+            num: null,
+            how: '\\beta = 0',
+            why: '平面平行于轴，截线为双曲线',
+            shape: null,
+          })
+          continue
+        }
+        const e = cosPsi / cosA
+        let kind = '\\text{椭圆}'
+        if (Math.abs(e - 1) < 1e-6) kind = '\\text{抛物线}'
+        else if (e > 1) kind = '\\text{双曲线}'
+        else if (e < 1e-6) kind = '\\text{圆}'
+        facts.push({
+          group: '圆锥与平面',
+          label,
+          value: kind,
+          num: e,
+          how: 'e = \\cos\\beta / \\cos\\alpha',
+          why: '直角圆锥（α=45°）被平面截得的圆锥曲线类型',
+          shape: null,
+        })
+        facts.push({
+          group: '圆锥与平面',
+          label: `e_{${coneName}\\cap ${p.name}}`,
+          value: engine.nice(e),
+          num: e,
+          how: 'e = \\cos\\beta / \\cos\\alpha,\ \\sin\\beta = |\\vec n\\cdot\\vec k|/|\\vec n|',
+          why: '圆锥截线离心率（β = 轴与平面的线面角）',
+          shape: null,
+        })
+      }
+    }
+    if (facts.length) sections.push({ id: 'cone-plane', title: '圆锥 ∩ 平面', subtitle: '离心率 · 截线类型', tone: 'geo', facts })
   }
 
 
