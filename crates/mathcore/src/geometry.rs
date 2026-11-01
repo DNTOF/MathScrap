@@ -6512,6 +6512,264 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(132)/X(133): mid(H, X(112))/mid(H, X(107)) on the nine-point circle.
+    // Also NPC antipodes of medial complements: X(132)=2N−X(127), X(133)=2N−X(122).
+    // Skip when the circumcircle parent was skipped (isos/equil/right as applicable).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        let p112 = out.iter().rev().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p107 = out.iter().rev().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p127 = out.iter().rev().find(|f| f.group == "中点X112" && f.label == "X_{127}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p122 = out.iter().rev().find(|f| f.group == "中点X107" && f.label == "X_{122}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+
+        if let Some((px, py)) = p112 {
+            let xy = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "垂心X112中点",
+                "X_{132}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(132) = \\mathrm{mid}(H,X(112)) = X(105)\\text{-of-orthic}",
+                "X(132)：H 与 X(112) 的中点（垂足三角形的 X(105)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X132".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "垂心X112中点",
+                    "X_{132}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(132)) = R/2",
+                    "X(132) 在九点圆上",
+                ));
+            }
+            if let Some((qx, qy)) = p127 {
+                let rx = 2.0 * n9[0] - qx;
+                let ry = 2.0 * n9[1] - qy;
+                if (rx - xy[0]).abs() < 1e-5 && (ry - xy[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "垂心X112中点",
+                        "X_{132}=2N-X_{127}",
+                        "\\checkmark".into(),
+                        None,
+                        "X(132) = 2N - X(127)",
+                        "X(132) 与 X(127) 互为九点圆对径点",
+                    ));
+                }
+            }
+        }
+        if let Some((px, py)) = p107 {
+            let xy = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "垂心X107中点",
+                "X_{133}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(133) = \\mathrm{mid}(H,X(107)) = X(106)\\text{-of-orthic}",
+                "X(133)：H 与 X(107) 的中点（垂足三角形的 X(106)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X133".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "垂心X107中点",
+                    "X_{133}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(133)) = R/2",
+                    "X(133) 在九点圆上",
+                ));
+            }
+            if let Some((qx, qy)) = p122 {
+                let rx = 2.0 * n9[0] - qx;
+                let ry = 2.0 * n9[1] - qy;
+                if (rx - xy[0]).abs() < 1e-5 && (ry - xy[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "垂心X107中点",
+                        "X_{133}=2N-X_{122}",
+                        "\\checkmark".into(),
+                        None,
+                        "X(133) = 2N - X(122)",
+                        "X(133) 与 X(122) 互为九点圆对径点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(128)/X(129)/X(130)/X(137): centers of the orthic triangle that lie on NPC.
+    // X(130)=Steiner-of-orthic; X(129)=Tarry-of-orthic=2N−X(130);
+    // X(128)=X(74)-of-orthic; X(137)=NPC antipode of X(128)=2N−X(128).
+    // Skip right/near-right (orthic degenerates) and isosceles (Steiner denoms vanish;
+    // X74-of-orthic may still emit when denoms are safe).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let rightish = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        if !rightish {
+            let mut feet = [[0.0f64; 2]; 3];
+            let mut ok = true;
+            for i in 0..3 {
+                let p0 = v[i];
+                let q1 = v[(i + 1) % 3];
+                let q2 = v[(i + 2) % 3];
+                let dx = q2[0] - q1[0];
+                let dy = q2[1] - q1[1];
+                let den = dx * dx + dy * dy;
+                if den < 1e-18 {
+                    ok = false;
+                    break;
+                }
+                let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+                feet[i] = [q1[0] + t * dx, q1[1] + t * dy];
+            }
+            if ok {
+                // Orthic side lengths opposite Ha, Hb, Hc.
+                let oa = dist2(feet[1], feet[2]);
+                let ob = dist2(feet[2], feet[0]);
+                let oc = dist2(feet[0], feet[1]);
+                if oa > 1e-10 && ob > 1e-10 && oc > 1e-10 {
+                    // Steiner X(99)-of-orthic = X(130): bary 1/(b'²−c'²) at Ha:Hb:Hc.
+                    let dbc = ob * ob - oc * oc;
+                    let dca = oc * oc - oa * oa;
+                    let dab = oa * oa - ob * ob;
+                    if dbc.abs() > 1e-10 && dca.abs() > 1e-10 && dab.abs() > 1e-10 {
+                        let wa = 1.0 / dbc;
+                        let wb = 1.0 / dca;
+                        let wc = 1.0 / dab;
+                        let den = wa + wb + wc;
+                        if den.abs() > 1e-12 {
+                            let st = [
+                                (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                            ];
+                            if (dist2(st, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                out.push(fact(
+                                    "垂足施泰纳",
+                                    "X_{130}",
+                                    pt(st[0], st[1]),
+                                    None,
+                                    "X(130) = \\mathrm{Steiner}\\text{-of-orthic}",
+                                    "X(130)：垂足三角形的施泰纳点（九点圆上）",
+                                ).with(Shape::Point {
+                                    x: st[0],
+                                    y: st[1],
+                                    label: "X130".into(),
+                                }));
+                                out.push(fact(
+                                    "垂足施泰纳",
+                                    "X_{130}\\in\\text{NPC}",
+                                    "\\checkmark".into(),
+                                    None,
+                                    "d(N, X(130)) = R/2",
+                                    "X(130) 在九点圆上",
+                                ));
+                                // Tarry-of-orthic = NPC antipode of Steiner-of-orthic.
+                                let ty = [2.0 * n9[0] - st[0], 2.0 * n9[1] - st[1]];
+                                out.push(fact(
+                                    "垂足塔里",
+                                    "X_{129}",
+                                    pt(ty[0], ty[1]),
+                                    None,
+                                    "X(129) = 2N - X(130) = \\mathrm{Tarry}\\text{-of-orthic}",
+                                    "X(129)：垂足三角形的塔里点（九点圆上）",
+                                ).with(Shape::Point {
+                                    x: ty[0],
+                                    y: ty[1],
+                                    label: "X129".into(),
+                                }));
+                                out.push(fact(
+                                    "垂足塔里",
+                                    "X_{129}=2N-X_{130}",
+                                    "\\text{九点圆对径}".into(),
+                                    None,
+                                    "X(129) = 2N - X(130)",
+                                    "X(129) 与 X(130) 互为九点圆对径点",
+                                ));
+                            }
+                        }
+                    }
+
+                    // X(74)-of-orthic = X(128): bary a'/(cos A' − 2 cos B' cos C').
+                    let cos_a = ((ob * ob + oc * oc - oa * oa) / (2.0 * ob * oc)).clamp(-1.0, 1.0);
+                    let cos_b = ((oc * oc + oa * oa - ob * ob) / (2.0 * oc * oa)).clamp(-1.0, 1.0);
+                    let cos_c = ((oa * oa + ob * ob - oc * oc) / (2.0 * oa * ob)).clamp(-1.0, 1.0);
+                    let da = cos_a - 2.0 * cos_b * cos_c;
+                    let db = cos_b - 2.0 * cos_c * cos_a;
+                    let dc = cos_c - 2.0 * cos_a * cos_b;
+                    if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                        let wa = oa / da;
+                        let wb = ob / db;
+                        let wc = oc / dc;
+                        let den = wa + wb + wc;
+                        if den.abs() > 1e-12 {
+                            let x128 = [
+                                (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                            ];
+                            if (dist2(x128, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                out.push(fact(
+                                    "垂足X74",
+                                    "X_{128}",
+                                    pt(x128[0], x128[1]),
+                                    None,
+                                    "X(128) = X(74)\\text{-of-orthic}",
+                                    "X(128)：垂足三角形的 X(74)（九点圆上）",
+                                ).with(Shape::Point {
+                                    x: x128[0],
+                                    y: x128[1],
+                                    label: "X128".into(),
+                                }));
+                                out.push(fact(
+                                    "垂足X74",
+                                    "X_{128}\\in\\text{NPC}",
+                                    "\\checkmark".into(),
+                                    None,
+                                    "d(N, X(128)) = R/2",
+                                    "X(128) 在九点圆上",
+                                ));
+                                let x137 = [2.0 * n9[0] - x128[0], 2.0 * n9[1] - x128[1]];
+                                out.push(fact(
+                                    "垂足X74对径",
+                                    "X_{137}",
+                                    pt(x137[0], x137[1]),
+                                    None,
+                                    "X(137) = 2N - X(128) = X(110)\\text{-of-orthic}",
+                                    "X(137)：X(128) 的九点圆对径点（垂足三角形的 X(110)）",
+                                ).with(Shape::Point {
+                                    x: x137[0],
+                                    y: x137[1],
+                                    label: "X137".into(),
+                                }));
+                                out.push(fact(
+                                    "垂足X74对径",
+                                    "X_{137}=2N-X_{128}",
+                                    "\\text{九点圆对径}".into(),
+                                    None,
+                                    "X(137) = 2N - X(128)",
+                                    "X(137) 与 X(128) 互为九点圆对径点",
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -11031,6 +11289,90 @@ mod tests {
         // X112 / X127: sin2B−sin2C may vanish on right — accept either skip or present.
         let _ = has("中点X112", "X_{127}");
         assert!(fs4.iter().any(|f| f.group == "中点X109" && f.label.contains("mid")), "mid(H,X102)");
+    }
+
+    #[test]
+    fn x128_x129_x130_x132_x133_x137() {
+        // Scalene acute 6-7-8: orthic Steiner/Tarry/X74 and mid(H, Ψ) on NPC.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let x112 = fs.iter().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").expect("X112");
+        let x107 = fs.iter().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").expect("X107");
+        let x122 = fs.iter().find(|f| f.group == "中点X107" && f.label == "X_{122}").expect("X122");
+        let x127 = fs.iter().find(|f| f.group == "中点X112" && f.label == "X_{127}").expect("X127");
+        let x132 = fs.iter().find(|f| f.group == "垂心X112中点" && f.label == "X_{132}").expect("X132");
+        let x133 = fs.iter().find(|f| f.group == "垂心X107中点" && f.label == "X_{133}").expect("X133");
+        let x130 = fs.iter().find(|f| f.group == "垂足施泰纳" && f.label == "X_{130}").expect("X130");
+        let x129 = fs.iter().find(|f| f.group == "垂足塔里" && f.label == "X_{129}").expect("X129");
+        let x128 = fs.iter().find(|f| f.group == "垂足X74" && f.label == "X_{128}").expect("X128");
+        let x137 = fs.iter().find(|f| f.group == "垂足X74对径" && f.label == "X_{137}").expect("X137");
+        let (hx, hy) = ptxy(h);
+        let (nx, ny) = ptxy(n);
+        let (p112x, p112y) = ptxy(x112);
+        let (p107x, p107y) = ptxy(x107);
+        let (p132x, p132y) = ptxy(x132);
+        let (p133x, p133y) = ptxy(x133);
+        assert!(((hx + p112x) / 2.0 - p132x).abs() < 1e-5 && ((hy + p112y) / 2.0 - p132y).abs() < 1e-5, "X132 != mid(H,X112)");
+        assert!(((hx + p107x) / 2.0 - p133x).abs() < 1e-5 && ((hy + p107y) / 2.0 - p133y).abs() < 1e-5, "X133 != mid(H,X107)");
+        let (p127x, p127y) = ptxy(x127);
+        let (p122x, p122y) = ptxy(x122);
+        assert!((2.0 * nx - p127x - p132x).abs() < 1e-5 && (2.0 * ny - p127y - p132y).abs() < 1e-5, "X132 != 2N-X127");
+        assert!((2.0 * nx - p122x - p133x).abs() < 1e-5 && (2.0 * ny - p122y - p133y).abs() < 1e-5, "X133 != 2N-X122");
+        let (p130x, p130y) = ptxy(x130);
+        let (p129x, p129y) = ptxy(x129);
+        let (p128x, p128y) = ptxy(x128);
+        let (p137x, p137y) = ptxy(x137);
+        assert!((2.0 * nx - p130x - p129x).abs() < 1e-5 && (2.0 * ny - p130y - p129y).abs() < 1e-5, "X129 != 2N-X130");
+        assert!((2.0 * nx - p128x - p137x).abs() < 1e-5 && (2.0 * ny - p128y - p137y).abs() < 1e-5, "X137 != 2N-X128");
+        assert!(fs.iter().any(|f| f.group == "垂心X112中点" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂心X107中点" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足施泰纳" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足X74" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足塔里" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "垂足X74对径" && f.label.contains("2N")));
+
+        // Isosceles 5-5-6: Steiner/Tarry of orthic skip; mid(H,X107) skips with X107;
+        // mid(H,X112) may skip with X112; X74-of-orthic may remain (orthic isos).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "垂足施泰纳"), "X130 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足塔里"), "X129 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂心X107中点"), "X133 skip isosceles");
+
+        // Equilateral: all skip.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "垂心X112中点"), "X132 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂心X107中点"), "X133 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足施泰纳"), "X130 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足塔里"), "X129 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X74"), "X128 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X74对径"), "X137 skip equilateral");
+
+        // Right 3-4-5: orthic degenerates → X128/129/130/137 skip; mid parents also skip.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.group != "垂足施泰纳"), "X130 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足塔里"), "X129 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X74"), "X128 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X74对径"), "X137 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂心X107中点"), "X133 skip right");
+        // X112 / X132: may skip on right.
+        let _ = fs4.iter().any(|f| f.group == "垂心X112中点");
     }
 
     #[test]
