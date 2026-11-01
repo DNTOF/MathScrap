@@ -1027,6 +1027,27 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         kinds.push("等腰".into());
     }
     out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kinds.join("、")), None, "", "由三个角与三边比较"));
+    // Viviani (equilateral): sum of distances to the three sides equals the altitude; at I this is 3r = h.
+    if near(a, b) && near(b, c) {
+        let h = 2.0 * area / a;
+        let sum = 3.0 * r;
+        out.push(fact(
+            "维维安尼定理",
+            "d_a + d_b + d_c",
+            nice(sum),
+            Some(sum),
+            "d_a + d_b + d_c = h",
+            "等边三角形：内点到三边距离之和等于高（内心处为 3r）",
+        ));
+        out.push(fact(
+            "维维安尼定理",
+            "h",
+            nice(h),
+            Some(h),
+            "3r = h",
+            "等边：内切圆半径是高的三分之一",
+        ));
+    }
     if near(maxg, PI / 2.0) {
         out.push(fact("形状判断", "R", nice(rr), Some(rr), "R = \\frac{\\text{斜边}}{2}", "直角三角形外心在斜边中点"));
         // altitude onto the hypotenuse and the two leg projections (射影定理).
@@ -1262,6 +1283,93 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
         } else {
             "一般凸四边形"
         };
+        // Varignon: midpoints of the four sides form a parallelogram.
+        {
+            let mids = [
+                [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0],
+                [(b[0] + c[0]) / 2.0, (b[1] + c[1]) / 2.0],
+                [(c[0] + d[0]) / 2.0, (c[1] + d[1]) / 2.0],
+                [(d[0] + a[0]) / 2.0, (d[1] + a[1]) / 2.0],
+            ];
+            let side = |i: usize, j: usize| {
+                let (u, w) = (mids[i], mids[j]);
+                [w[0] - u[0], w[1] - u[1]]
+            };
+            let (u01, u23) = (side(0, 1), side(3, 2));
+            let (u12, u30) = (side(1, 2), side(0, 3));
+            let para = |p: [f64; 2], q: [f64; 2]| {
+                let cr = p[0] * q[1] - p[1] * q[0];
+                let sc = (p[0].hypot(p[1])) * (q[0].hypot(q[1]));
+                sc < 1e-12 || cr.abs() < 1e-9 * sc
+            };
+            if para(u01, u23) && para(u12, u30) {
+                let l01 = u01[0].hypot(u01[1]);
+                let l12 = u12[0].hypot(u12[1]);
+                out.push(fact(
+                    "瓦里农定理",
+                    "\\text{Varignon}",
+                    "\\text{平行四边形}".into(),
+                    None,
+                    "M_i = \\text{中点}(P_iP_{i+1})",
+                    "任意四边形各边中点连成平行四边形",
+                ));
+                out.push(fact(
+                    "瓦里农定理",
+                    "|M_0M_1|",
+                    nice(l01),
+                    Some(l01),
+                    "",
+                    "Varignon 边长",
+                ).with(Shape::Segment {
+                    x1: mids[0][0], y1: mids[0][1], x2: mids[1][0], y2: mids[1][1],
+                    label: "Varignon".into(),
+                }));
+                out.push(fact(
+                    "瓦里农定理",
+                    "|M_1M_2|",
+                    nice(l12),
+                    Some(l12),
+                    "",
+                    "Varignon 邻边",
+                ));
+                for (i, m) in mids.iter().enumerate() {
+                    out.push(fact(
+                        "瓦里农定理",
+                        &format!("M_{}", i),
+                        pt(m[0], m[1]),
+                        None,
+                        "",
+                        "边中点",
+                    ).with(Shape::Point { x: m[0], y: m[1], label: format!("M{}", i) }));
+                }
+            }
+        }
+        // British flag theorem: for rectangle/square, PA²+PC² = PB²+PD² for any P (verify at origin).
+        if is_para && right {
+            let p0 = [0.0, 0.0];
+            let dsq = |q: [f64; 2]| (q[0] - p0[0]).powi(2) + (q[1] - p0[1]).powi(2);
+            let lhs = dsq(a) + dsq(c);
+            let rhs = dsq(b) + dsq(d);
+            if near(lhs, rhs) {
+                out.push(fact(
+                    "英国国旗定理",
+                    "PA^2 + PC^2",
+                    nice(lhs),
+                    Some(lhs),
+                    "PA^2 + PC^2 = PB^2 + PD^2",
+                    "矩形上任一点（取原点验证）：对角顶点到点的平方和相等",
+                ));
+                out.push(fact(
+                    "英国国旗定理",
+                    "PB^2 + PD^2",
+                    nice(rhs),
+                    Some(rhs),
+                    "PA^2 + PC^2 = PB^2 + PD^2",
+                    "英国国旗定理",
+                ));
+            }
+        }
+
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kind), None, "", "由对边平行、直角、边长相等判断"));
     } else {
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}{}边形}}", if convex { "凸" } else { "凹" }, n), None, "", "内角和 (n-2)·180°"));
@@ -1308,6 +1416,40 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
+            }
+
+            // Viviani for regular tetrahedron: sum of distances from an interior point to the four faces = altitude.
+            {
+                let edges = [
+                    len3(sub3(pts[1].1, pts[0].1)),
+                    len3(sub3(pts[2].1, pts[0].1)),
+                    len3(sub3(pts[3].1, pts[0].1)),
+                    len3(sub3(pts[2].1, pts[1].1)),
+                    len3(sub3(pts[3].1, pts[1].1)),
+                    len3(sub3(pts[3].1, pts[2].1)),
+                ];
+                let e0 = edges[0];
+                if e0 > 1e-12 && edges.iter().all(|e| near(*e, e0)) && vol > 1e-12 {
+                    // Regular tetra: altitude h = √6 / 3 · a; inradius ρ = h/4
+                    let h_reg = (6.0f64).sqrt() / 3.0 * e0;
+                    let rho = h_reg / 4.0;
+                    out.push(fact(
+                        "维维安尼定理",
+                        "\\sum d_{\\text{面}}",
+                        nice(h_reg),
+                        Some(h_reg),
+                        "d_1+d_2+d_3+d_4 = h",
+                        "正四面体：内点到四面距离之和等于高（形心处为 4ρ）",
+                    ));
+                    out.push(fact(
+                        "维维安尼定理",
+                        "\\rho",
+                        nice(rho),
+                        Some(rho),
+                        "\\rho = h/4",
+                        "正四面体内切球半径",
+                    ));
+                }
             }
             // Skew / intersecting lines AB and CD from the first four points.
             let (na, nb, nc, nd) = (&pts[0].0, &pts[1].0, &pts[2].0, &pts[3].0);
@@ -1486,6 +1628,23 @@ pub fn vectors_analyze(vs: &[NamedVec]) -> Vec<Fact> {
             let dif: Vec<f64> = (0..3).map(|k| a[k] - b[k]).collect();
             out.push(fact("两向量关系", &format!("{} + {}", na, nb), fmt(&sum), None, "", "坐标相加"));
             out.push(fact("两向量关系", &format!("{} - {}", na, nb), fmt(&dif), None, "", "坐标相减"));
+            // Parallelogram law: |a+b|² + |a−b|² = 2(|a|²+|b|²)
+            {
+                let sum_len2 = sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2];
+                let dif_len2 = dif[0] * dif[0] + dif[1] * dif[1] + dif[2] * dif[2];
+                let rhs = 2.0 * (la * la + lb * lb);
+                let lhs = sum_len2 + dif_len2;
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + rhs) {
+                    out.push(fact(
+                        "平行四边形法则",
+                        &format!("|{0}+{1}|^2 + |{0}-{1}|^2", vs[i].name, vs[j].name),
+                        nice(lhs),
+                        Some(lhs),
+                        "|\\vec a+\\vec b|^2 + |\\vec a-\\vec b|^2 = 2(|\\vec a|^2+|\\vec b|^2)",
+                        "平行四边形法则（向量形式）",
+                    ));
+                }
+            }
         }
     }
     if vs.len() >= 3 && is3 {
@@ -2507,4 +2666,77 @@ mod tests {
         // OI² = R(R-2r) already covered; ensure |OI| present
         assert!(fs.iter().any(|f| f.label == "|OI|"));
     }
+
+    #[test]
+    fn british_flag_on_rectangle() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.value.contains("矩形")));
+        let lhs = out.iter().find(|f| f.group == "英国国旗定理" && f.label == "PA^2 + PC^2").expect("british lhs");
+        let rhs = out.iter().find(|f| f.group == "英国国旗定理" && f.label == "PB^2 + PD^2").expect("british rhs");
+        assert!((lhs.num.unwrap() - 25.0).abs() < 1e-9);
+        assert!((rhs.num.unwrap() - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn varignon_parallelogram() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![5.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![1.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.group == "瓦里农定理" && f.value.contains("平行四边形")));
+        assert_eq!(out.iter().filter(|f| f.group == "瓦里农定理" && f.label.starts_with("M_")).count(), 4);
+    }
+
+    #[test]
+    fn viviani_equilateral() {
+        let k = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let sum = fs.iter().find(|f| f.group == "维维安尼定理" && f.label.contains("d_a")).expect("viviani sum");
+        let h = fs.iter().find(|f| f.group == "维维安尼定理" && f.label == "h").expect("viviani h");
+        assert!((sum.num.unwrap() - h.num.unwrap()).abs() < 1e-9);
+        // h = √3 for side 2
+        assert!((h.num.unwrap() - 3f64.sqrt()).abs() < 1e-9, "h = {}", h.value);
+    }
+
+    #[test]
+    fn parallelogram_law_vectors() {
+        let vs = vec![
+            NamedVec { name: "a".into(), v: vec![3.0, 4.0] },
+            NamedVec { name: "b".into(), v: vec![1.0, 0.0] },
+        ];
+        let out = vectors_analyze(&vs);
+        let f = out.iter().find(|f| f.group == "平行四边形法则").expect("parallelogram law");
+        // |a+b|² + |a-b|² = 2(25+1) = 52
+        assert!((f.num.unwrap() - 52.0).abs() < 1e-9, "got {}", f.value);
+    }
+
+    #[test]
+    fn viviani_regular_tetra() {
+        // Regular tetra with edge √2: (1,1,1),(1,-1,-1),(-1,1,-1),(-1,-1,1)
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![1.0, 1.0, 1.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, -1.0, -1.0] },
+            NamedPoint { name: "C".into(), p: vec![-1.0, 1.0, -1.0] },
+            NamedPoint { name: "D".into(), p: vec![-1.0, -1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let sum = out.iter().find(|f| f.group == "维维安尼定理" && f.label.contains("面")).expect("tetra viviani");
+        let edge = 2f64.sqrt() * 2.0 / 1.0; // |A-B| = √[(0)²+(2)²+(2)²] = √8 = 2√2
+        let e = (0.0f64.powi(2) + 2.0f64.powi(2) + 2.0f64.powi(2)).sqrt(); // √8 = 2√2
+        let h_reg = (6.0f64).sqrt() / 3.0 * e;
+        assert!((sum.num.unwrap() - h_reg).abs() < 1e-9, "sum={} expect {}", sum.value, h_reg);
+        let _ = edge;
+    }
+
 }

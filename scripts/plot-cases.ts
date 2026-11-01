@@ -98,6 +98,11 @@ export const cases: [string, string, Expect][] = [
   ['直线交球面', 'A(0,0,0)\nB(4,0,0)\nx^2 + y^2 + z^2 = 4', { dim: 3, facts: ['P_{AB\\cap', '|P_1P_2|'] }],
   ['笛卡尔圆', 'A(0,0)\nB(2,0)\nC(1,1.7320508075688772)\n⊙A: r = 1\n⊙B: r = 1\n⊙C: r = 1', { dim: 2, facts: ['\\text{Descartes}'], minFacts: 2 }],
   ['圆柱截椭圆', 'x^2 + y^2 = 4\nx - z = 0', { dim: 3, facts: ['a_', 'b_', '\\text{椭圆}'] }],
+  ['英国国旗定理', 'A(0,0), B(4,0), C(4,3), D(0,3)', { dim: 2, facts: ['矩形', 'PA^2 + PC^2'], minFacts: 4 }],
+  ['瓦里农平行四边形', 'A(0,0), B(4,0), C(5,3), D(1,3)', { dim: 2, facts: ['\\text{Varignon}', 'M_0'] }],
+  ['三圆根心', 'A(0,0)\nB(2,0)\nC(1,1.7320508075688772)\n⊙A: r = 1\n⊙B: r = 1\n⊙C: r = 1', { dim: 2, facts: ['l_{', 'R_{\\odot', '\\text{幂}'], minFacts: 5 }],
+  ['维维安尼等边', '△ABC: a = 2, b = 2, c = 2', { dim: 2, facts: ['d_a + d_b + d_c'], minFacts: 4 }],
+  ['平行四边形法则', '𝐚 = (3, 4); 𝐛 = (1, 0)', { dim: 2, kinds: ['vector', 'vector'], facts: ['|a+b|^2 + |a-b|^2'] }],
   ['空间螺旋线', 'r(t) = (cos(t), sin(t), t/3)', { dim: 3 }],
   ['空间三点', 'P(1,2,3), Q(0,1,-1), R(2,0,1)', { dim: 3 }],
 ]
