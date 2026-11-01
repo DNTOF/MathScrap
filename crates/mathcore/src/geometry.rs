@@ -4400,6 +4400,214 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(33): perspector of orthic and intangents triangles; bary sin A + tan A.
+    // Skip right △ (tan ∞). Equals G on equilateral.
+    // X(34): X(4)-beth conjugate of X(4); bary sin A − tan A; same acute guard.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa33 = g[0].sin() + g[0].tan();
+            let wb33 = g[1].sin() + g[1].tan();
+            let wc33 = g[2].sin() + g[2].tan();
+            let den33 = wa33 + wb33 + wc33;
+            if den33.abs() > 1e-12 {
+                let x33 = [
+                    (wa33 * pa[0] + wb33 * pb[0] + wc33 * pc[0]) / den33,
+                    (wa33 * pa[1] + wb33 * pb[1] + wc33 * pc[1]) / den33,
+                ];
+                out.push(fact(
+                    "垂足切线透视",
+                    "X_{33}",
+                    pt(x33[0], x33[1]),
+                    None,
+                    "X(33) = \\bigl(\\sin A+\\tan A:\\cdots\\bigr)",
+                    "X(33)：垂足三角形与内切线三角形的透视中心（锐角）",
+                ).with(Shape::Point {
+                    x: x33[0],
+                    y: x33[1],
+                    label: "X33".into(),
+                }));
+            }
+            let wa34 = g[0].sin() - g[0].tan();
+            let wb34 = g[1].sin() - g[1].tan();
+            let wc34 = g[2].sin() - g[2].tan();
+            let den34 = wa34 + wb34 + wc34;
+            if den34.abs() > 1e-12 {
+                let x34 = [
+                    (wa34 * pa[0] + wb34 * pb[0] + wc34 * pc[0]) / den34,
+                    (wa34 * pa[1] + wb34 * pb[1] + wc34 * pc[1]) / den34,
+                ];
+                out.push(fact(
+                    "垂心beth自共轭",
+                    "X_{34}",
+                    pt(x34[0], x34[1]),
+                    None,
+                    "X(34) = \\bigl(\\sin A-\\tan A:\\cdots\\bigr)",
+                    "X(34)：X(4) 对自身的 beth 共轭（锐角）",
+                ).with(Shape::Point {
+                    x: x34[0],
+                    y: x34[1],
+                    label: "X34".into(),
+                }));
+            }
+        }
+    }
+
+    // X(66): isogonal conjugate of Exeter X(22); bary 1/(b⁴+c⁴−a⁴).
+    // Skip when any denom vanishes (a⁴ = b⁴+c⁴), or Σweights≈0 (right △ → ∞).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let a4 = a2 * a2;
+        let b4 = b2 * b2;
+        let c4 = c2 * c2;
+        let da = b4 + c4 - a4;
+        let db = c4 + a4 - b4;
+        let dc = a4 + b4 - c4;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x66 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "埃克塞特等角",
+                    "X_{66}",
+                    pt(x66[0], x66[1]),
+                    None,
+                    "X(66) = \\bigl(1/(b^4+c^4-a^4):\\cdots\\bigr)",
+                    "X(66)：埃克塞特点 X(22) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x66[0],
+                    y: x66[1],
+                    label: "X66".into(),
+                }));
+                out.push(fact(
+                    "埃克塞特等角",
+                    "X_{66} \\leftrightarrow Ex",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(22)",
+                    "X(66) 与埃克塞特点 X(22) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(72): isogonal conjugate of X(28); bary (b+c) cos A.
+    // Finite on right △ (weight 0 at the right vertex). Equals G on equilateral.
+    {
+        let wa = (b + c) * g[0].cos();
+        let wb = (c + a) * g[1].cos();
+        let wc = (a + b) * g[2].cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x72 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "克劳森X25等角",
+                "X_{72}",
+                pt(x72[0], x72[1]),
+                None,
+                "X(72) = \\bigl((b+c)\\cos A:\\cdots\\bigr)",
+                "X(72)：X(28) 的等角共轭",
+            ).with(Shape::Point {
+                x: x72[0],
+                y: x72[1],
+                label: "X72".into(),
+            }));
+            out.push(fact(
+                "克劳森X25等角",
+                "X_{72} \\leftrightarrow X_{28}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(28)",
+                "X(72) 与 X(28) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(91), X(92): isogonal conjugates of X(47)=a cos 2A and X(48)=a sin 2A.
+    // Bary a sec 2A and a csc 2A. X(92) vanishes on a right angle (sin 180° = 0).
+    // Ported from cloud tip d7ac9aa / b1cc8ca double-angle isogonals.
+    {
+        let c2 = [(2.0 * g[0]).cos(), (2.0 * g[1]).cos(), (2.0 * g[2]).cos()];
+        if c2.iter().all(|c| c.abs() > 1e-9) {
+            let wa = a / c2[0];
+            let wb = b / c2[1];
+            let wc = c / c2[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x91 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "双倍角正割",
+                    "X_{91}",
+                    pt(x91[0], x91[1]),
+                    None,
+                    "X(91) = (a\\sec 2A:b\\sec 2B:c\\sec 2C)",
+                    "X(91)：X(47) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x91[0],
+                    y: x91[1],
+                    label: "X91".into(),
+                }));
+                out.push(fact(
+                    "双倍角正割",
+                    "X_{91} \\leftrightarrow X_{47}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(47)",
+                    "X(91) 与 X(47) 互为等角共轭",
+                ));
+            }
+        }
+        let s2 = [(2.0 * g[0]).sin(), (2.0 * g[1]).sin(), (2.0 * g[2]).sin()];
+        if s2.iter().all(|s| s.abs() > 1e-9) {
+            let wa = a / s2[0];
+            let wb = b / s2[1];
+            let wc = c / s2[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x92 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "双倍角余割",
+                    "X_{92}",
+                    pt(x92[0], x92[1]),
+                    None,
+                    "X(92) = (a\\csc 2A:b\\csc 2B:c\\csc 2C)",
+                    "X(92)：X(48) 的等角共轭（直角时 sin 180°=0，略过）",
+                ).with(Shape::Point {
+                    x: x92[0],
+                    y: x92[1],
+                    label: "X92".into(),
+                }));
+                out.push(fact(
+                    "双倍角余割",
+                    "X_{92} \\leftrightarrow X_{48}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(48)",
+                    "X(92) 与 X(48) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -8196,6 +8404,89 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "切线外心等角" && f.label == "X_{70}"));
         assert!(fs3.iter().any(|f| f.group == "X27等角" && f.label == "X_{71}"));
         assert!(fs3.iter().any(|f| f.group == "内心外心截点" && f.label == "X_{73}"));
+    }
+
+    #[test]
+    fn x91_x92_isogonals_of_double_angle() {
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x91 = fs.iter().find(|f| f.group == "双倍角正割" && f.label == "X_{91}").expect("X91");
+        let x47 = fs.iter().find(|f| f.group == "双倍角余弦" && f.label == "X_{47}").expect("X47");
+        assert_ne!(x91.value, x47.value);
+        let x92 = fs.iter().find(|f| f.group == "双倍角余割" && f.label == "X_{92}").expect("X92");
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        assert_ne!(x92.value, x48.value);
+        assert_ne!(x91.value, x92.value);
+        assert_eq!(fs.iter().filter(|f| f.label == "X_{79}").count(), 1);
+
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.label == "X_{91}"));
+        assert!(fs2.iter().any(|f| f.label == "X_{51}"));
+        assert!(fs2.iter().all(|f| f.group != "双倍角余割"), "X92 skip right");
+        assert!(fs2.iter().all(|f| f.group != "切线三角形外心"), "X26 skip right");
+
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs3.iter().find(|f| f.label == "X_{91}").unwrap().value, g.value);
+        assert_eq!(fs3.iter().find(|f| f.label == "X_{92}").unwrap().value, g.value);
+    }
+
+    #[test]
+    fn x33_x34_x66_x72() {
+        // Scalene acute 6-7-8: all four present; X33 ≠ X34; X66 ≠ Exeter; X72 ≠ X28.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x33 = fs.iter().find(|f| f.group == "垂足切线透视" && f.label == "X_{33}").expect("X33");
+        let x34 = fs.iter().find(|f| f.group == "垂心beth自共轭" && f.label == "X_{34}").expect("X34");
+        assert_ne!(x33.value, x34.value);
+        let x66 = fs.iter().find(|f| f.group == "埃克塞特等角" && f.label == "X_{66}").expect("X66");
+        let ex = fs.iter().find(|f| f.group == "埃克塞特点" && f.label == "Ex").expect("Ex");
+        assert_ne!(x66.value, ex.value);
+        assert!(fs.iter().any(|f| f.group == "埃克塞特等角" && f.label.contains("Ex") && f.value.contains("等角")));
+        let x72 = fs.iter().find(|f| f.group == "克劳森X25等角" && f.label == "X_{72}").expect("X72");
+        let x28 = fs.iter().find(|f| f.group == "克劳森X25截点" && f.label == "X_{28}").expect("X28");
+        assert_ne!(x72.value, x28.value);
+        assert!(fs.iter().any(|f| f.group == "克劳森X25等角" && f.label.contains("28") && f.value.contains("等角")));
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x33.value, g.value);
+        assert_ne!(x66.value, g.value);
+        assert_ne!(x72.value, g.value);
+
+        // Equilateral: all four = G (angle-symmetric / isogonal of G).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("垂足切线透视", "X_{33}"),
+            ("垂心beth自共轭", "X_{34}"),
+            ("埃克塞特等角", "X_{66}"),
+            ("克劳森X25等角", "X_{72}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X33/X34 skip (tan); X66 at ∞ (Σw≈0); X72 present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "垂足切线透视"), "X33 skip right");
+        assert!(fs3.iter().all(|f| f.group != "垂心beth自共轭"), "X34 skip right");
+        assert!(fs3.iter().all(|f| f.group != "埃克塞特等角"), "X66 skip right (infinity)");
+        assert!(fs3.iter().any(|f| f.group == "克劳森X25等角" && f.label == "X_{72}"));
     }
 
     #[test]
