@@ -29,6 +29,8 @@ export type Statement =
   /** 𝐩 = 投影(𝐚, 𝐛), 𝐜 = 𝐚 + 𝐛, 𝐜 = 𝐚 − 𝐛 — a vector defined from existing ones. */
   | { kind: 'vectorDef'; name: string; op: 'proj' | 'sum' | 'sub'; a: string; b: string; src: string }
   | { kind: 'constraint'; c: Constraint; src: string }
+  /** Display-only CoMER notation (`\sum_{i=1}^{n} i`, `\int`). Not a curve and not an error. */
+  | { kind: 'notation'; latex: string; src: string }
   | { kind: 'error'; message: string; src: string }
 
 const BOLD_A = 0x1d41a
@@ -125,9 +127,79 @@ function err(src: string, message: string): Statement {
   return { kind: 'error', message, src }
 }
 
+const NOTATION_OPS = ['\\sum', '\\int']
+
+/**
+ * `\sum_{i=1}^{n} i` and the same shape with `\int`. The sheet cannot plot these,
+ * but they are real formulas: the card shows the LaTeX and does not go red.
+ * Spaces inside limits are kept out of the rendered form (`i = 1` → `i=1`).
+ */
+function notationLatex(src: string): string | null {
+  let raw = src.trim().replace(/∑/g, '\\sum').replace(/∫/g, '\\int')
+  let prefix = ''
+  const lead = raw.match(/^y\s*=\s*/)
+  if (lead) {
+    const rest = raw.slice(lead[0].length).trim()
+    if (NOTATION_OPS.some((op) => rest.startsWith(op))) {
+      prefix = 'y = '
+      raw = rest
+    }
+  }
+  const op = NOTATION_OPS.find((name) => raw.startsWith(name) && !/[A-Za-z]/.test(raw[name.length] ?? ''))
+  if (!op) return null
+  let i = op.length
+  let sub: string | null = null
+  let sup: string | null = null
+  const braceAt = (at: number) => {
+    if (raw[at] !== '{') return null
+    let depth = 0
+    for (let j = at; j < raw.length; j++) {
+      if (raw[j] === '{') depth++
+      else if (raw[j] === '}') {
+        depth--
+        if (depth === 0) return { inner: raw.slice(at + 1, j).replace(/\s+/g, ''), next: j + 1 }
+      }
+    }
+    return null
+  }
+  const take = (mark: '_' | '^') => {
+    let j = i
+    while (raw[j] === ' ') j++
+    if (raw.startsWith('\\limits', j)) {
+      j += '\\limits'.length
+      while (raw[j] === ' ') j++
+    }
+    if (raw[j] !== mark) return
+    const brace = braceAt(j + 1)
+    if (!brace) return
+    i = brace.next
+    if (mark === '_') sub = brace.inner
+    else sup = brace.inner
+  }
+  take('_')
+  take('^')
+  if (sub == null) take('_')
+  while (raw[i] === ' ') i++
+  const term = raw.slice(i).trim()
+  if (/[=;]/.test(term)) return null
+  let latex = op
+  if (sub) latex += `_{${sub}}`
+  if (sup) latex += `^{${sup}}`
+  if (term) latex += ` ${term}`
+  return prefix + latex
+}
+
+function asNotation(src: string): Statement | null {
+  const latex = notationLatex(src)
+  if (!latex) return null
+  return { kind: 'notation', latex, src: src.trim() }
+}
+
 function classifyPart(part: string): Statement[] {
   const src = part.trim()
   if (!src) return []
+  const notation = asNotation(src)
+  if (notation) return [notation]
 
   // 过(1,3) / through (1,3) and (2,5) / 过点A
   const through = src.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.*)$/i)
@@ -478,6 +550,8 @@ export function statementLatex(s: Statement): string {
       return `${s.name ? `${s.name}\\left(x,\\ y\\right)` : 'z'} = ${exprLatex(s.expr)}`
     case 'equation1':
       return `${exprLatex(s.lhs)} = ${exprLatex(s.rhs)}`
+    case 'notation':
+      return s.latex
     case 'error':
       return `\\text{${s.src.replace(/[\\{}$&#%_^]/g, ' ')}}`
     default:
@@ -515,6 +589,8 @@ export function kindLabel(s: Statement): string {
       return '定义向量'
     case 'constraint':
       return '条件'
+    case 'notation':
+      return s.latex.includes('\\int') && !s.latex.includes('\\sum') ? '积分' : '求和'
     case 'error':
       return '待修正'
   }

@@ -15,9 +15,10 @@ import type { Stroke } from '../src/board/types.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
 import { bindInk, findOverArrow } from '../src/ocr/comer/bind.ts'
 import { classifyInk } from '../src/ocr/gate.ts'
-import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
+import { agreeConfidence, recognizeStrokes } from '../src/ocr/comer/engine.ts'
+import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
 import { isInkMeaningful, preprocessStrokes, resamplePoints, type InkStroke } from '../src/ocr/comer/preprocess.ts'
-import { arrowLetter, inkFixtures, proseNote } from '../src/ocr/comer/samples.ts'
+import { arrowLetter, inkFixtures, proseNote, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
 import { tokensToSource, vocabFromJson } from '../src/ocr/comer/source.ts'
 import { filterAbsurd, hasParenGeometry, recognizeInk } from '../src/ocr/inkShape.ts'
 
@@ -310,6 +311,15 @@ assert.equal(tokensToSource(['a', '^', '{', '2', '}', '=', 'b']), 'a^2 = b')
 assert.equal(tokensToSource(['\\frac', '{', 'a', '}', '{', 'b', '}']), '(a)/(b)')
 assert.equal(tokensToSource(['\\sqrt', '{', 'x', '}']), 'sqrt(x)')
 assert.equal(tokensToSource(['\\vec', '{', 'a', '}']), '\\vec{a}')
+assert.equal(tokensToSource(['\\sum', '_', '{', 'i', '=', '1', '}', '^', '{', 'n', '}', 'i']), '\\sum_{i = 1}^{n} i')
+assert.equal(tokensToSource(['y', '=', '\\sum', '_', '{', 'k', '=', '1', '}', '^', '{', 'n', '}', 'k']), 'y = \\sum_{k = 1}^{n} k')
+assert.equal(tokensToSource(['\\sum', 'i']), '\\sum i')
+assert.equal(tokensToSource(['\\sum', '\\limits', '_', '{', 'L', '-', '1', '}', '^', '{', 'r', '}']), '\\sum_{L - 1}^{r}')
+assert.equal(tokensToSource(['\\int', '_', '{', '0', '}', '^', '{', '1', '}', 'x']), '\\int_{0}^{1} x')
+assert.equal(tokensToSource(['\\sigma']), 'sigma')
+assert.equal(tokensToSource(['\\pi']), 'pi')
+assert.equal(tokensToSource(['\\theta']), 'theta')
+assert.equal(tokensToSource(['y', '=', '\\sigma']), 'y = sigma')
 assert.equal(tokensToSource(['\\overrightarrow', '{', 'b', '}']), '\\vec{b}')
 assert.equal(tokensToSource(['=']), '')
 assert.equal(tokensToSource(['\\frac']), '')
@@ -348,7 +358,12 @@ assert.ok(image.tensor.some((v) => v > 0.5), 'white ink')
 assert.ok(image.mask.includes(0) && image.mask.includes(1))
 assert.equal(isInkMeaningful([{ points: [{ x: 0, y: 0 }, { x: 2, y: 1 }], lineWidth: 3 }]), false)
 
-function scripted(tokens: number[]): ComerSession {
+function logitFor(p: number) {
+  const rest = vocab.vocab_size - 1
+  return Math.log((p / (1 - p)) * rest)
+}
+
+function scripted(tokens: number[], logit = 6): ComerSession {
   return {
     async run(feeds): Promise<Record<string, ComerTensor>> {
       if (feeds.pixel_values) {
@@ -361,7 +376,7 @@ function scripted(tokens: number[]): ComerSession {
       if (!(ids instanceof BigInt64Array)) throw new Error('missing input_ids')
       const want = tokens[ids.length - 1] ?? eos
       const logits = new Float32Array(ids.length * vocab.vocab_size)
-      logits[(ids.length - 1) * vocab.vocab_size + want] = 6
+      logits[(ids.length - 1) * vocab.vocab_size + want] = logit
       return { logits: { type: 'float32', data: logits, dims: [1, ids.length, vocab.vocab_size] } }
     },
   }
@@ -428,10 +443,79 @@ const boundVec = bindInk(arrowed, 'a')
 assert.match(boundVec, /^\\vec\{a\} = \([0-9.\-]+, [0-9.\-]+\)$/)
 assert.equal(bindInk(arrowed, 'a = (1, 2, 2)'), boundVec)
 assert.doesNotMatch(boundVec, /1,\s*2,\s*2/)
+assert.equal(bindInk(arrowed, '\\sum'), '\\sum')
+assert.equal(bindInk(arrowed, '\\sum_{i = 1}^{n} i'), '\\sum_{i = 1}^{n} i')
+assert.equal(bindInk(arrowed, 'y = 2'), 'y = 2')
+assert.equal(bindInk(y2strokes, '\\vec{a}'), '')
+assert.equal(bindInk(y2strokes, 'b'), '')
+assert.equal(bindInk(arrowed, 'sigma'), 'sigma')
+assert.equal(bindInk(arrowed, 'pi'), 'pi')
 console.log('ocr bind ok', { point: bindInk(y2strokes, 'A(1,2)'), vec: boundVec })
+
+const midVec = '\\vec{a} = (1, 0.02)'
+assert.equal(agreeConfidence(arrowed, midVec, 0.48), 0.78)
+assert.equal(agreeConfidence(arrowed, midVec, 0.3), 0.3)
+assert.equal(agreeConfidence(y2strokes, midVec, 0.9), 0.9)
+assert.equal(agreeConfidence(arrowed, 'y = 2', 0.48), 0.48)
+assert.equal(agreeConfidence(arrowed, '\\sum', 0.45), 0.78)
+assert.equal(agreeConfidence(arrowed, '\\sum_{i = 1}^{n} i', 0.45), 0.78)
+assert.equal(agreeConfidence(arrowed, '\\sum', 0.25), 0.25)
+assert.equal(agreeConfidence(y2strokes, 'sigma', 0.5), 0.78)
+assert.equal(agreeConfidence(y2strokes, 'sigma', 0.3), 0.3)
+assert.equal(agreeConfidence(y2strokes, 'a', 0.9), 0.9)
+
+const weak = logitFor(0.48)
+const faint = logitFor(0.3)
+const letterA = scripted([id('a')], weak)
+const agreed = await recognizeStrokes(arrowed, letterA, letterA, vocab, 1)
+assert.match(agreed[0]?.text ?? '', /^\\vec\{a\} = \(/, JSON.stringify(agreed))
+assert.ok((agreed[0]?.confidence ?? 0) >= OCR_ACCEPT, `arrow lift ${agreed[0]?.confidence}`)
+const faintArrow = await recognizeStrokes(arrowed, scripted([id('a')], faint), scripted([id('a')], faint), vocab, 1)
+assert.ok((faintArrow[0]?.confidence ?? 1) < OCR_ACCEPT, `faint arrow must stay ink (${faintArrow[0]?.confidence})`)
+const bareLetter = await recognizeStrokes(glyph, scripted([id('a')], 6), scripted([id('a')], 6), vocab, 1)
+assert.ok(!bareLetter.some((c) => /\\vec\{|^[A-Z]\(/.test(c.text)), JSON.stringify(bareLetter))
+assert.equal(bareLetter.length, 0, JSON.stringify(bareLetter))
+const sumToks = ['\\sum', '_', '{', 'i', '=', '1', '}', '^', '{', 'n', '}', 'i'].map(id)
+const sumAgreed = await recognizeStrokes(arrowed, scripted(sumToks, weak), scripted(sumToks, weak), vocab, 1)
+assert.equal(sumAgreed[0]?.text, '\\sum_{i = 1}^{n} i', JSON.stringify(sumAgreed))
+assert.ok((sumAgreed[0]?.confidence ?? 0) >= OCR_ACCEPT, `sum lift ${sumAgreed[0]?.confidence}`)
+const sumFaint = await recognizeStrokes(arrowed, scripted(sumToks, faint), scripted(sumToks, faint), vocab, 1)
+assert.ok((sumFaint[0]?.confidence ?? 1) < OCR_ACCEPT, `faint sum must stay ink (${sumFaint[0]?.confidence})`)
+const sigmaHits = await recognizeStrokes(glyph, scripted([id('\\sigma')], weak), scripted([id('\\sigma')], weak), vocab, 1)
+assert.equal(sigmaHits[0]?.text, 'sigma', JSON.stringify(sigmaHits))
+assert.ok((sigmaHits[0]?.confidence ?? 0) >= OCR_ACCEPT, `sigma lift ${sigmaHits[0]?.confidence}`)
+assert.ok(!/\\vec\{|^[A-Z]\(/.test(sigmaHits[0]?.text ?? ''))
+const sigmaFaint = await recognizeStrokes(glyph, scripted([id('\\sigma')], faint), scripted([id('\\sigma')], faint), vocab, 1)
+assert.ok((sigmaFaint[0]?.confidence ?? 1) < OCR_ACCEPT, `faint sigma stays ink (${sigmaFaint[0]?.confidence})`)
+const plain = await recognizeStrokes(glyph, scripted([id('y'), id('='), id('2')], logitFor(0.5)), scripted([id('y'), id('='), id('2')], logitFor(0.5)), vocab, 1)
+assert.equal(plain[0]?.text, 'y = 2')
+assert.ok((plain[0]?.confidence ?? 1) < OCR_ACCEPT, `ordinary formula is not lifted (${plain[0]?.confidence})`)
+console.log('ocr agreement ok', { arrow: agreed[0], sum: sumAgreed[0], faint: faintArrow[0]?.confidence, plain: plain[0]?.confidence })
+
+function sumLikeSigma(): InkStroke[] {
+  return [
+    {
+      lineWidth: 3,
+      points: [
+        { x: 40, y: 8 },
+        { x: 12, y: 10 },
+        { x: 8, y: 36 },
+        { x: 28, y: 52 },
+        { x: 8, y: 70 },
+        { x: 12, y: 96 },
+        { x: 42, y: 98 },
+      ],
+    },
+    { lineWidth: 2, points: [{ x: 48, y: 14 }, { x: 62, y: 12 }] },
+    { lineWidth: 2, points: [{ x: 48, y: 92 }, { x: 64, y: 94 }] },
+  ]
+}
 
 assert.equal(classifyInk(y2strokes), 'formula')
 assert.equal(classifyInk(arrowLetter()), 'formula')
 assert.equal(classifyInk(proseNote()), 'text', 'a line of letters is not a formula')
+assert.equal(classifyInk(sumLikeSigma()), 'formula', 'Σ with limits is a formula')
+assert.equal(classifyInk(sumGlyph()), 'formula')
+assert.equal(classifyInk(sumBar()), 'formula')
 assert.equal(classifyInk(inkFixtures(3).find((s) => s.name === 'frac')!.strokes), 'formula')
 console.log('ocr gate ok', { prose: classifyInk(proseNote()), formula: classifyInk(y2strokes) })

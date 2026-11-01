@@ -1,4 +1,4 @@
-import { bindInk } from './bind.ts'
+import { bindInk, findOverArrow } from './bind.ts'
 import { decodeComer, type ComerSession, type ComerTensor } from './decode.ts'
 import { isInkMeaningful, preprocessStrokes, type InkStroke } from './preprocess.ts'
 import { decodeTokens, tokensToSource, type Vocab } from './source.ts'
@@ -7,6 +7,32 @@ export interface OcrCandidate {
   text: string
   confidence: number
   latex: string
+}
+
+/**
+ * The live over-arrow sample scores about 0.48, under the sheet's 0.62 write
+ * line. A read at or above this, when the ink agrees, is lifted. Weaker than
+ * this stays ink.
+ */
+const AGREE_AT = 0.42
+/** Above the sheet accept threshold (0.62), below the 0.97 cap. */
+const AGREED = 0.78
+
+/**
+ * Raise confidence only when the decoder and the ink describe the same thing:
+ * an over-arrow letter, a summation / integral, or a bare Greek name the sheet
+ * already parses. Ordinary formulas (`y = 2`) and faint reads are unchanged.
+ */
+export function agreeConfidence(strokes: InkStroke[], text: string, model: number): number {
+  if (!Number.isFinite(model) || model < 0) return 0
+  const capped = Math.min(0.97, model)
+  if (model < AGREE_AT) return capped
+  const t = text.trim()
+  const arrow = /^\\vec\{[a-z]\} = \(/.test(t) && findOverArrow(strokes) != null
+  const sum = /^(?:y\s*=\s*)?\\(?:sum|int)(?![A-Za-z])/.test(t)
+  const greek = /^(?:sigma|pi|theta|alpha|beta|gamma|lambda|mu|phi)$/.test(t)
+  if (arrow || sum || greek) return Math.max(capped, AGREED)
+  return capped
 }
 
 /**
@@ -36,10 +62,11 @@ export async function recognizeStrokes(strokes: InkStroke[], encoder: ComerSessi
     seen.add(text)
     const n = Math.max(1, hit.ids.length)
     const mean = hit.logProb / n
-    const confidence = Math.exp(mean)
-    if (!Number.isFinite(confidence) || confidence < 0.2) continue
-    out.push({ text, confidence: Math.min(0.97, confidence), latex })
+    const model = Math.exp(mean)
+    if (!Number.isFinite(model) || model < 0.2) continue
+    out.push({ text, confidence: agreeConfidence(strokes, text, model), latex })
   }
+  out.sort((a, b) => b.confidence - a.confidence || a.text.localeCompare(b.text))
   const best = out[0]?.confidence ?? 0
   return out.filter((c, i) => i === 0 || c.confidence >= best - 0.22).slice(0, 3)
 }

@@ -8,7 +8,7 @@
  */
 import { mkdirSync } from 'node:fs'
 import { chromium, type Page } from 'playwright-core'
-import { arrowLetter, inkFixtures, pointPair, proseNote, shiftInk } from '../src/ocr/comer/samples.ts'
+import { arrowLetter, inkFixtures, pointPair, proseNote, shiftInk, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
 import type { InkStroke } from '../src/ocr/comer/preprocess.ts'
 
 const RAW = process.env.APP_URL ?? 'http://127.0.0.1:47321/'
@@ -304,18 +304,22 @@ async function dockAndLive() {
     ...fixtures.map((f, i) => shiftInk(f.strokes, 120, 80 + i * 420)),
     shiftInk(proseNote(), 560, 80),
     shiftInk(arrowLetter(), 560, 520),
+    shiftInk(sumGlyph(), 980, 520),
+    shiftInk(sumBar(), 980, 80),
     shiftInk(pointPair(), 120, 1500),
   ])
   await page3.addInitScript((saved) => localStorage.setItem('mathscrap.doc.v2', saved), JSON.stringify(doc))
   await page3.goto(RAW, { waitUntil: 'networkidle' })
-  await page3.waitForFunction(() => document.documentElement.dataset.ocr === 'idle', null, { timeout: 40000 })
+  await page3.waitForFunction(() => document.documentElement.dataset.ocr === 'idle', null, { timeout: 60000 })
   const read = await page3.locator('[data-formula]').evaluateAll((els) => els.map((el) => el.getAttribute('data-formula-text') ?? ''))
   const vecs = read.filter((t) => /^\\vec\{[a-z]\} = \(/.test(t))
+  const sums = read.filter((t) => /^\\sum(?![A-Za-z])/.test(t))
   const points = read.filter((t) => /^[A-Z]\([^)]+\)$/.test(t))
-  const math = read.filter((t) => !vecs.includes(t) && !points.includes(t))
+  const math = read.filter((t) => !vecs.includes(t) && !points.includes(t) && !sums.includes(t))
   check(math.length === 3 && fixtures.every((f) => math.filter((t) => f.expect.test(t)).length === 1), `ocr: model writes y = 2, y = x, a^2 = b (${read.join(' | ')})`)
   check(points.some((t) => /^A\(2,\s*2\)$/.test(t)), `ocr: handwritten point lands as A(2, 2) (${points.join(' | ') || 'none'})`)
-  check(vecs.length <= 1 && vecs.every((t) => !/1,\s*2,\s*2/.test(t)), `ocr: over-arrow stays a vector (${vecs.join(' | ') || 'ink left'})`)
+  check(vecs.length === 1 && vecs.every((t) => !/1,\s*2,\s*2/.test(t)), `ocr: over-arrow is written as a vector (${vecs.join(' | ') || 'ink left'})`)
+  check(sums.length === 2, `ocr: summation is written (${sums.join(' | ') || 'none'})`)
   check(!read.some((t) => /1,\s*2,\s*2/.test(t)), 'ocr: model does not invent a component triple')
   check(math.length === 3, `ocr: a line of letters is not written as a formula (${read.join(' | ')})`)
   check((await page3.locator('[data-ink-chip]').count()) === 0, 'ocr: acceptance does not put a chip on the paper')

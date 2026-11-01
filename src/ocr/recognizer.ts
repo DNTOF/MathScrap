@@ -1,5 +1,8 @@
 import type { Stroke } from '@/board/types'
 import { strokeBounds } from '@/board/strokes'
+import { OCR_ACCEPT } from './threshold.ts'
+
+export { OCR_ACCEPT }
 
 export interface Candidate {
   text: string
@@ -15,9 +18,6 @@ export interface Recognizer {
   name: string
   recognize(strokes: Stroke[]): Promise<Candidate[]>
 }
-
-/** A reading at or above this is written onto the sheet. Weaker ink is left alone. */
-export const OCR_ACCEPT = 0.62
 
 /** Gap (world units) below which nearby strokes are treated as one formula. */
 const GAP = 90

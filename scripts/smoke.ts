@@ -230,5 +230,22 @@ if (bare.some((s) => s.kind === 'vector' || s.kind === 'point')) {
   console.log('FAIL  bare letter classified as a point or vector', bare)
 } else console.log('ok    bare letter is not a point or vector')
 
+const sumTexts = ['\\sum_{i=1}^{n} i', '\\sum_{i = 1}^{n} i', 'y = \\sum_{k = 1}^{n} k', '∑_{i=1}^{n} i', '\\int_{0}^{1} x', '\\sum']
+for (const text of sumTexts) {
+  const card = analyze([{ id: 'sum', text }])
+  const view = summarizeCard(text)
+  const group = pageGroups([{ id: 'sum', x: 0, y: 0, text }])
+  const bad = card.errors.length > 0 || view.lines.some((l) => l.error) || view.lines[0]?.latex.includes('待修正') || !view.lines[0]?.latex.includes(text.includes('int') || text.includes('\\int') ? '\\int' : '\\sum')
+  if (bad || view.plottable || group.count[2] !== 0 || group.count[3] !== 0) {
+    failed++
+    console.log('FAIL  summation errored or was plotted', text, card.errors, view.lines, group.count)
+  } else console.log('ok    notation', view.lines[0]?.latex)
+}
+const sigma = parseCard('sigma')
+if (sigma.some((s) => s.kind === 'error' || s.kind === 'vector' || s.kind === 'point')) {
+  failed++
+  console.log('FAIL  sigma became an error, vector, or point', sigma)
+} else console.log('ok    sigma is a name, not a vector')
+
 console.log(`\n${cases.length - failed}/${cases.length} formula cases · ${pages.length - pageFailed}/${pages.length} shared-sheet cases passed`)
 process.exit(failed + pageFailed ? 1 : 0)

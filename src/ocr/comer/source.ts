@@ -24,9 +24,23 @@ export function decodeTokens(ids: number[], vocab: Vocab): string[] {
   return words
 }
 
+const NAMED: Record<string, string> = {
+  '\\alpha': 'alpha',
+  '\\beta': 'beta',
+  '\\gamma': 'gamma',
+  '\\lambda': 'lambda',
+  '\\mu': 'mu',
+  '\\phi': 'phi',
+  '\\pi': 'pi',
+  '\\sigma': 'sigma',
+  '\\theta': 'theta',
+}
+
 /**
  * CoMER tokens → the ASCII this sheet already parses.
  * `a ^ { 2 } = b` becomes `a^2 = b`. `\vec{a}` stays an arrowed letter.
+ * `\sum_{i=1}^{n} i` keeps braced LaTeX (including a `\limits` the model inserts).
+ * `\sigma` / `\pi` / `\theta` become the names the sheet already parses.
  * A component tuple is kept only when the model actually emitted parentheses.
  */
 export function tokensToSource(tokens: string[]): string {
@@ -51,16 +65,39 @@ export function tokensToSource(tokens: string[]): string {
     }
     return body
   }
+  /** Keep braces around a group so ∑ / ∫ limits stay valid LaTeX. */
+  const readLatexGroup = (): string => {
+    if (repaired[i] !== '{') return readAtom()
+    return `{${readGroup()}}`
+  }
   const readAtom = (): string => {
     const cur = repaired[i++]
     if (!cur || cur === '{' || cur === '}') return ''
     if (cur === '\\frac') return `(${readGroup()})/(${readGroup()})`
     if (cur === '\\sqrt') return `sqrt(${readGroup()})`
     if (cur === '\\vec' || cur === '\\overrightarrow') return `\\vec{${readGroup()}}`
+    if (cur === '\\sum' || cur === '\\int') {
+      let out = cur
+      const take = (mark: '_' | '^') => {
+        let j = i
+        if (repaired[j] === '\\limits') j++
+        if (repaired[j] !== mark) return
+        i = j + 1
+        out += mark + readLatexGroup()
+      }
+      take('_')
+      take('^')
+      if (!out.includes('_')) take('_')
+      if (i >= repaired.length) return out
+      const body = repaired[i] === '{' ? readLatexGroup() : readAtom()
+      if (body.trim()) out += ` ${body.trim()}`
+      return out
+    }
     if (cur === '^') return `^${readGroup()}`
     if (cur === '_') return `_${readGroup()}`
     if (cur === '\\cdot' || cur === '\\times') return ''
     if (cur === '=' || cur === '+' || cur === '-') return ` ${cur} `
+    if (NAMED[cur]) return NAMED[cur]
     return cur
   }
   let out = ''
