@@ -7044,6 +7044,321 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(140)–X(150): Euler/medial complements, anticomplements of Ge/Na, and
+    // reflections of de Longchamps X(20) in classical circumcircle points.
+    // X(140)=mid(O,N)=complement(X(5)); X(141)=complement(K), bary b²+c²:…;
+    // X(142)=mid(Ge,Mi)=complement(X(9)); X(143)=mid(N,X(52))=X(5)-of-orthic;
+    // X(144)=anticomplement(Ge); X(145)=anticomplement(Na);
+    // X(146)=2·X(110)−X(20); X(147)=2·X(99)−X(20); X(148)=2·X(98)−X(20);
+    // X(149)=2·X(104)−X(20); X(150)=2·X(103)−X(20).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        // X(140) = midpoint(O, N) = complement of X(5); on Euler line. Always.
+        let x140 = [(circ[0] + n9[0]) / 2.0, (circ[1] + n9[1]) / 2.0];
+        out.push(fact(
+            "九点补点",
+            "X_{140}",
+            pt(x140[0], x140[1]),
+            None,
+            "X(140) = \\mathrm{mid}(O,N) = \\mathrm{complement}(X(5))",
+            "X(140)：O 与 N 的中点（中点三角形的九点心；欧拉线上）",
+        ).with(Shape::Point {
+            x: x140[0],
+            y: x140[1],
+            label: "X140".into(),
+        }));
+        // Collinear O, X140, N, G, H (Euler): X140 divides O N.
+        let cross_e = (x140[0] - circ[0]) * (orth[1] - circ[1])
+            - (x140[1] - circ[1]) * (orth[0] - circ[0]);
+        if cross_e.abs() < 1e-6 {
+            out.push(fact(
+                "九点补点",
+                "X_{140}\\in\\text{Euler}",
+                "\\checkmark".into(),
+                None,
+                "X(140)\\in\\text{Euler line}",
+                "X(140) 在欧拉线上",
+            ));
+        }
+
+        // X(141) = complement of Lemoine/symmedian X(6); bary b²+c² : c²+a² : a²+b².
+        {
+            let wa = b * b + c * c;
+            let wb = c * c + a * a;
+            let wc = a * a + b * b;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x141 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "对称中线补点",
+                    "X_{141}",
+                    pt(x141[0], x141[1]),
+                    None,
+                    "X(141) = (b^2+c^2:c^2+a^2:a^2+b^2) = \\mathrm{complement}(X(6))",
+                    "X(141)：勒莫恩点的补点（中点三角形的对称中线点）",
+                ).with(Shape::Point {
+                    x: x141[0],
+                    y: x141[1],
+                    label: "X141".into(),
+                }));
+                // Cross-check: complement of K via h(G,−1/2).
+                let k_xy = out.iter().rev().find(|f| f.group == "勒莫恩点" && f.label == "K").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((kx, ky)) = k_xy {
+                    let cx = (3.0 * centroid[0] - kx) / 2.0;
+                    let cy = (3.0 * centroid[1] - ky) / 2.0;
+                    if (cx - x141[0]).abs() < 1e-5 && (cy - x141[1]).abs() < 1e-5 {
+                        out.push(fact(
+                            "对称中线补点",
+                            "X_{141}=\\mathrm{complement}(K)",
+                            "\\checkmark".into(),
+                            None,
+                            "X(141) = (3G - K)/2",
+                            "X(141) 为对称中线点关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+
+        // X(142) = midpoint(Ge, Mi) = complement of Mittenpunkt X(9).
+        let ge_xy = out.iter().rev().find(|f| f.group == "格尔巩点" && f.label == "Ge").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let mi_xy = out.iter().rev().find(|f| f.group == "米滕点" && f.label == "Mi").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let (Some((gx, gy)), Some((mx, my))) = (ge_xy, mi_xy) {
+            let x142 = [(gx + mx) / 2.0, (gy + my) / 2.0];
+            out.push(fact(
+                "米滕补点",
+                "X_{142}",
+                pt(x142[0], x142[1]),
+                None,
+                "X(142) = \\mathrm{mid}(X(7),X(9)) = \\mathrm{complement}(X(9))",
+                "X(142)：格尔巩与米滕的中点（米滕点的补点）",
+            ).with(Shape::Point {
+                x: x142[0],
+                y: x142[1],
+                label: "X142".into(),
+            }));
+            let cx = (3.0 * centroid[0] - mx) / 2.0;
+            let cy = (3.0 * centroid[1] - my) / 2.0;
+            if (cx - x142[0]).abs() < 1e-5 && (cy - x142[1]).abs() < 1e-5 {
+                out.push(fact(
+                    "米滕补点",
+                    "X_{142}=\\mathrm{complement}(Mi)",
+                    "\\checkmark".into(),
+                    None,
+                    "X(142) = (3G - Mi)/2",
+                    "X(142) 为米滕点关于重心的补点",
+                ));
+            }
+        }
+
+        // X(143) = midpoint(N, X(52)) = X(5)-of-orthic; skip right (no X52).
+        let x52_xy = out.iter().rev().find(|f| f.group == "垂足垂心" && f.label == "X_{52}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((sx, sy)) = x52_xy {
+            let x143 = [(n9[0] + sx) / 2.0, (n9[1] + sy) / 2.0];
+            out.push(fact(
+                "垂足九点心",
+                "X_{143}",
+                pt(x143[0], x143[1]),
+                None,
+                "X(143) = \\mathrm{mid}(N,X(52)) = X(5)\\text{-of-orthic}",
+                "X(143)：垂足三角形的九点圆心（锐角）",
+            ).with(Shape::Point {
+                x: x143[0],
+                y: x143[1],
+                label: "X143".into(),
+            }));
+        }
+
+        // X(144) = anticomplement of Gergonne X(7) = 3G − 2 Ge.
+        if let Some((gx, gy)) = ge_xy {
+            let x144 = [3.0 * centroid[0] - 2.0 * gx, 3.0 * centroid[1] - 2.0 * gy];
+            out.push(fact(
+                "格尔巩反补",
+                "X_{144}",
+                pt(x144[0], x144[1]),
+                None,
+                "X(144) = 3G - 2\\,X(7) = \\mathrm{anticomplement}(X(7))",
+                "X(144)：格尔巩点的反补点（反补三角形的 X(7)）",
+            ).with(Shape::Point {
+                x: x144[0],
+                y: x144[1],
+                label: "X144".into(),
+            }));
+        }
+
+        // X(145) = anticomplement of Nagel X(8) = 3G − 2 Na.
+        let na_xy = out.iter().rev().find(|f| f.group == "奈格尔点" && f.label == "Na").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((nx, ny)) = na_xy {
+            let x145 = [3.0 * centroid[0] - 2.0 * nx, 3.0 * centroid[1] - 2.0 * ny];
+            out.push(fact(
+                "奈格尔反补",
+                "X_{145}",
+                pt(x145[0], x145[1]),
+                None,
+                "X(145) = 3G - 2\\,X(8) = \\mathrm{anticomplement}(X(8))",
+                "X(145)：奈格尔点的反补点（反补三角形的 X(8)）",
+            ).with(Shape::Point {
+                x: x145[0],
+                y: x145[1],
+                label: "X145".into(),
+            }));
+            // Cross-check bary 3a−b−c : …
+            let wa = 3.0 * a - b - c;
+            let wb = 3.0 * b - c - a;
+            let wc = 3.0 * c - a - b;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let bx = (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den;
+                let by = (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den;
+                if (bx - x145[0]).abs() < 1e-5 && (by - x145[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "奈格尔反补",
+                        "X_{145}=(3a-b-c:\\cdots)",
+                        "\\checkmark".into(),
+                        None,
+                        "X(145) = (3a-b-c:3b-c-a:3c-a-b)",
+                        "X(145) 重心坐标与反补构造一致",
+                    ));
+                }
+            }
+        }
+
+        // Helpers for reflections of L = X(20) in circumcircle points.
+        let l_xy = out.iter().rev().find(|f| f.group == "德龙尚点" && f.label == "L").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((lx, ly)) = l_xy {
+            let reflect_l = |qx: f64, qy: f64| -> [f64; 2] {
+                [2.0 * qx - lx, 2.0 * qy - ly]
+            };
+
+            // X(146) = reflection of X(20) in X(110). Skip when X110 missing (isos).
+            let x110_xy = out.iter().rev().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x110_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X110反射",
+                    "X_{146}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(146) = 2\\,X(110) - X(20)",
+                    "X(146)：德龙尚点关于 X(110) 的反射（反补三角形的 X(74)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X146".into(),
+                }));
+            }
+
+            // X(147) = reflection of X(20) in Steiner X(99).
+            let st_xy = out.iter().rev().find(|f| f.group == "施泰纳点" && f.label == "St").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = st_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚施泰纳反射",
+                    "X_{147}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(147) = 2\\,X(99) - X(20) = X(98)\\text{-of-anticomplementary}",
+                    "X(147)：德龙尚点关于施泰纳点的反射（反补三角形的塔里点）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X147".into(),
+                }));
+            }
+
+            // X(148) = reflection of X(20) in Tarry X(98).
+            let ty_xy = out.iter().rev().find(|f| f.group == "塔里点" && f.label == "Ty").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = ty_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚塔里反射",
+                    "X_{148}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(148) = 2\\,X(98) - X(20) = X(99)\\text{-of-anticomplementary}",
+                    "X(148)：德龙尚点关于塔里点的反射（反补三角形的施泰纳点）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X148".into(),
+                }));
+            }
+
+            // X(149) = reflection of X(20) in X(104).
+            let x104_xy = out.iter().rev().find(|f| f.group == "X100对径" && f.label == "X_{104}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x104_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X104反射",
+                    "X_{149}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(149) = 2\\,X(104) - X(20) = X(100)\\text{-of-anticomplementary}",
+                    "X(149)：德龙尚点关于 X(104) 的反射（反补三角形的 X(100)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X149".into(),
+                }));
+            }
+
+            // X(150) = reflection of X(20) in X(103).
+            let x103_xy = out.iter().rev().find(|f| f.group == "X101对径" && f.label == "X_{103}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x103_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X103反射",
+                    "X_{150}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(150) = 2\\,X(103) - X(20) = X(101)\\text{-of-anticomplementary}",
+                    "X(150)：德龙尚点关于 X(103) 的反射（反补三角形的 X(101)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X150".into(),
+                }));
+            }
+        }
+    }
+
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -11687,6 +12002,132 @@ mod tests {
 
 
     #[test]
+    fn x140_to_x150_complements_anticomplements_reflections() {
+        // Scalene acute 6-7-8: all eleven present with geometric cross-checks.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let kpt = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        let na = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "Na").expect("Na");
+        let x52 = fs.iter().find(|f| f.group == "垂足垂心" && f.label == "X_{52}").expect("X52");
+        let x140 = fs.iter().find(|f| f.group == "九点补点" && f.label == "X_{140}").expect("X140");
+        let x141 = fs.iter().find(|f| f.group == "对称中线补点" && f.label == "X_{141}").expect("X141");
+        let x142 = fs.iter().find(|f| f.group == "米滕补点" && f.label == "X_{142}").expect("X142");
+        let x143 = fs.iter().find(|f| f.group == "垂足九点心" && f.label == "X_{143}").expect("X143");
+        let x144 = fs.iter().find(|f| f.group == "格尔巩反补" && f.label == "X_{144}").expect("X144");
+        let x145 = fs.iter().find(|f| f.group == "奈格尔反补" && f.label == "X_{145}").expect("X145");
+        let x146 = fs.iter().find(|f| f.group == "德龙尚X110反射" && f.label == "X_{146}").expect("X146");
+        let x147 = fs.iter().find(|f| f.group == "德龙尚施泰纳反射" && f.label == "X_{147}").expect("X147");
+        let x148 = fs.iter().find(|f| f.group == "德龙尚塔里反射" && f.label == "X_{148}").expect("X148");
+        let x149 = fs.iter().find(|f| f.group == "德龙尚X104反射" && f.label == "X_{149}").expect("X149");
+        let x150 = fs.iter().find(|f| f.group == "德龙尚X103反射" && f.label == "X_{150}").expect("X150");
+        let (ox, oy) = ptxy(o);
+        let (nx, ny) = ptxy(n);
+        let (gx, gy) = ptxy(g);
+        let (p140x, p140y) = ptxy(x140);
+        assert!(((ox + nx) / 2.0 - p140x).abs() < 1e-5 && ((oy + ny) / 2.0 - p140y).abs() < 1e-5, "X140 != mid(O,N)");
+        assert!(fs.iter().any(|f| f.group == "九点补点" && f.label.contains("Euler")));
+        let (kx, ky) = ptxy(kpt);
+        let (p141x, p141y) = ptxy(x141);
+        assert!(((3.0 * gx - kx) / 2.0 - p141x).abs() < 1e-5 && ((3.0 * gy - ky) / 2.0 - p141y).abs() < 1e-5, "X141 != complement(K)");
+        let (gex, gey) = ptxy(ge);
+        let (mx, my) = ptxy(mi);
+        let (p142x, p142y) = ptxy(x142);
+        assert!(((gex + mx) / 2.0 - p142x).abs() < 1e-5 && ((gey + my) / 2.0 - p142y).abs() < 1e-5, "X142 != mid(Ge,Mi)");
+        let (s52x, s52y) = ptxy(x52);
+        let (p143x, p143y) = ptxy(x143);
+        assert!(((nx + s52x) / 2.0 - p143x).abs() < 1e-5 && ((ny + s52y) / 2.0 - p143y).abs() < 1e-5, "X143 != mid(N,X52)");
+        let (p144x, p144y) = ptxy(x144);
+        assert!((3.0 * gx - 2.0 * gex - p144x).abs() < 1e-5 && (3.0 * gy - 2.0 * gey - p144y).abs() < 1e-5, "X144 != anticomplement(Ge)");
+        let (nax, nay) = ptxy(na);
+        let (p145x, p145y) = ptxy(x145);
+        assert!((3.0 * gx - 2.0 * nax - p145x).abs() < 1e-5 && (3.0 * gy - 2.0 * nay - p145y).abs() < 1e-5, "X145 != anticomplement(Na)");
+        assert!(fs.iter().any(|f| f.group == "奈格尔反补" && f.label.contains("3a")));
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        let x110 = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").expect("X110");
+        let st = fs.iter().find(|f| f.group == "施泰纳点" && f.label == "St").expect("St");
+        let ty = fs.iter().find(|f| f.group == "塔里点" && f.label == "Ty").expect("Ty");
+        let x104 = fs.iter().find(|f| f.group == "X100对径" && f.label == "X_{104}").expect("X104");
+        let x103 = fs.iter().find(|f| f.group == "X101对径" && f.label == "X_{103}").expect("X103");
+        let (lx, ly) = ptxy(l);
+        let check_ref = |q: &Fact, p: &Fact, name: &str| {
+            let (qx, qy) = ptxy(q);
+            let (px, py) = ptxy(p);
+            assert!((2.0 * qx - lx - px).abs() < 1e-5 && (2.0 * qy - ly - py).abs() < 1e-5, "{name} != 2Q-L");
+        };
+        check_ref(x110, x146, "X146");
+        check_ref(st, x147, "X147");
+        check_ref(ty, x148, "X148");
+        check_ref(x104, x149, "X149");
+        check_ref(x103, x150, "X150");
+
+        // Isosceles 5-5-6: X140–X145 remain; Steiner/Tarry/X110/X104 family skip → reflections skip.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "九点补点" && f.label == "X_{140}"));
+        assert!(fs2.iter().any(|f| f.group == "对称中线补点" && f.label == "X_{141}"));
+        assert!(fs2.iter().any(|f| f.group == "米滕补点" && f.label == "X_{142}"));
+        assert!(fs2.iter().any(|f| f.group == "格尔巩反补" && f.label == "X_{144}"));
+        assert!(fs2.iter().any(|f| f.group == "奈格尔反补" && f.label == "X_{145}"));
+        // X143 needs X52; isos acute non-eq usually has X52.
+        let _ = fs2.iter().any(|f| f.group == "垂足九点心");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X110反射"), "X146 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚施泰纳反射"), "X147 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚塔里反射"), "X148 skip isosceles");
+        // X104/X103 may survive on a=b isos; accept either for X149/X150.
+        let _ = (
+            fs2.iter().any(|f| f.group == "德龙尚X104反射"),
+            fs2.iter().any(|f| f.group == "德龙尚X103反射"),
+        );
+
+        // Equilateral: X140–X145 collapse toward G/O; reflections of circumcircle points skip.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "九点补点" && f.label == "X_{140}"));
+        assert!(fs3.iter().any(|f| f.group == "对称中线补点" && f.label == "X_{141}"));
+        assert!(fs3.iter().any(|f| f.group == "米滕补点" && f.label == "X_{142}"));
+        assert!(fs3.iter().any(|f| f.group == "格尔巩反补" && f.label == "X_{144}"));
+        assert!(fs3.iter().any(|f| f.group == "奈格尔反补" && f.label == "X_{145}"));
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X110反射"), "X146 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚施泰纳反射"), "X147 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚塔里反射"), "X148 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X104反射"), "X149 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X103反射"), "X150 skip equilateral");
+
+        // Right 3-4-5: X140/141/142/144/145; X143 skips (no X52); X110 may via bary.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "九点补点" && f.label == "X_{140}"));
+        assert!(fs4.iter().any(|f| f.group == "对称中线补点" && f.label == "X_{141}"));
+        assert!(fs4.iter().any(|f| f.group == "米滕补点" && f.label == "X_{142}"));
+        assert!(fs4.iter().any(|f| f.group == "格尔巩反补" && f.label == "X_{144}"));
+        assert!(fs4.iter().any(|f| f.group == "奈格尔反补" && f.label == "X_{145}"));
+        assert!(fs4.iter().all(|f| f.group != "垂足九点心"), "X143 skip right");
+        // X110 bary works on right scalene; Steiner/Tarry may too — presence optional for reflections.
+        let _ = (
+            fs4.iter().any(|f| f.group == "德龙尚X110反射"),
+            fs4.iter().any(|f| f.group == "德龙尚施泰纳反射"),
+            fs4.iter().any(|f| f.group == "德龙尚塔里反射"),
+        );
+    }
+
+        #[test]
     fn etc_dual_labels_steiner_tarry_parry() {
         let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
         let r = triangle_solve(&k);
