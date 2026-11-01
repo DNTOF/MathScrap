@@ -1,7 +1,11 @@
 import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { startBrowserBridge } from '@/ai/browserBridge'
 import { createToolBridge } from '@/ai/tools'
+import { AssistSheet } from '@/components/AssistSheet'
+import { pushPlotView } from '@/plot/remoteView'
 import { Board, type PenSettings } from '@/board/Board'
 import { strokeBounds } from '@/board/strokes'
 import { uid, type Card, type Doc, type Stroke, type Tool, type View } from '@/board/types'
@@ -15,9 +19,8 @@ import { Composer, insertSnippet } from '@/input/Composer'
 import { MathPalette } from '@/input/MathPalette'
 import { ShortcutHints } from '@/input/ShortcutHints'
 import { pageGroups } from '@/math/page'
-import { InkChip, type InkChipData } from '@/ocr/InkChip'
-import { clusterStrokes, mockRecognizer } from '@/ocr/recognizer'
-import { RecognizeDialog } from '@/ocr/RecognizeDialog'
+import { parseCard } from '@/math/statements'
+import { clusterStrokes, mockRecognizer, OCR_ACCEPT } from '@/ocr/recognizer'
 import { PlotButton } from '@/plot/PlotButton'
 import { PlotPanel } from '@/plot/PlotPanel'
 import { PlotPane } from '@/plot/PlotPane'
@@ -73,6 +76,16 @@ function isTyping(e: KeyboardEvent) {
   return !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)
 }
 
+/** A formula is written only when the sheet can parse it. Error text stays ink. */
+function canWriteFormula(text: string): boolean {
+  try {
+    const sts = parseCard(text)
+    return sts.length > 0 && sts.some((s) => s.kind !== 'error')
+  } catch {
+    return false
+  }
+}
+
 /** First free writing line at or below (x, y) that doesn't run into ink already on the sheet. */
 function freeSpot(x: number, y: number, cards: Card[], h = 40) {
   const hits = (py: number) =>
@@ -102,17 +115,16 @@ export default function App() {
   const [pen, setPen] = useState<PenSettings>({ color: '#2b2118', width: 3, style: 'ink' })
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
   const [selected, setSelected] = useState<string | null>(null)
-  /** `open` shows the shared coordinate system: docked beside the sheet, or full-screen (`full`) */
-  const [plot, setPlot] = useState<{ open: boolean; full: boolean; focusId: string | null }>({ open: false, full: false, focusId: null })
+  /** `open` shows the corner plot. `details` expands the readouts. `full` is the large dialog. */
+  const [plot, setPlot] = useState<{ open: boolean; details: boolean; full: boolean; focusId: string | null }>({ open: false, details: false, full: false, focusId: null })
   const [composerText, setComposerText] = useState('')
   const [composer, setComposer] = useState<ComposerState>({ open: false, at: null, editingId: null })
   const [composerFocused, setComposerFocused] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [assistOpen, setAssistOpen] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
-  const [ocrStrokes, setOcrStrokes] = useState<Stroke[] | null>(null)
-  const [inkChips, setInkChips] = useState<InkChipData[]>([])
-  const chipHandled = useRef<Set<string>>(new Set())
-  const lastRecognize = useRef(0)
+  const ocrGen = useRef(0)
+  const ocrSettled = useRef(new Set<string>())
   const dragBase = useRef<Doc | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -144,9 +156,11 @@ export default function App() {
     return freeSpot((sx - v.x) / v.scale, (sy - v.y) / v.scale, docRef.current.cards)
   }, [compact, docRef, sheet])
 
-  const openPlot = useCallback((focusId: string | null = null) => setPlot({ open: true, full: false, focusId }), [])
-  const closePlot = useCallback(() => setPlot((p) => ({ ...p, open: false, full: false })), [])
-  const togglePlot = useCallback(() => setPlot((p) => (p.open ? { ...p, open: false, full: false } : { open: true, full: false, focusId: selected })), [selected])
+  const openPlot = useCallback((focusId: string | null = null) => setPlot({ open: true, details: false, full: false, focusId }), [])
+  const ensurePlot = useCallback(() => setPlot((p) => (p.open ? p : { open: true, details: false, full: false, focusId: p.focusId })), [])
+  const closePlot = useCallback(() => setPlot({ open: false, details: false, full: false, focusId: null }), [])
+  const togglePlot = useCallback(() => setPlot((p) => (p.open ? { open: false, details: false, full: false, focusId: null } : { open: true, details: false, full: false, focusId: selected })), [selected])
+  const showDetails = useCallback(() => setPlot((p) => ({ ...p, open: true, details: true, full: false })), [])
 
   const addFormula = useCallback(
     (text: string, x?: number, y?: number) => {
@@ -234,17 +248,6 @@ export default function App() {
       return { scale: s, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }
     })
 
-  const recognize = useCallback(() => {
-    const fresh = docRef.current.strokes.filter((s) => !s.recognized && s.createdAt > lastRecognize.current && s.style !== 'marker')
-    const pool = fresh.length ? fresh : docRef.current.strokes.filter((s) => !s.recognized && s.style !== 'marker').slice(-20)
-    if (!pool.length) {
-      toast('先用笔在纸上写一个式子，再点“手写转公式”')
-      return
-    }
-    setInkChips([])
-    setOcrStrokes(pool)
-  }, [docRef])
-
   const commitRecognized = useCallback(
     (text: string, strokes: Stroke[], keep: boolean) => {
       const b = strokeBounds(strokes)
@@ -255,73 +258,79 @@ export default function App() {
         strokes: keep ? d.strokes.map((s) => (ids.has(s.id) ? { ...s, recognized: true } : s)) : d.strokes.filter((s) => !ids.has(s.id)),
         cards: [...d.cards, card],
       }))
-      lastRecognize.current = Date.now()
-      chipHandled.current = new Set([...chipHandled.current, ...ids])
-      setInkChips((cs) => cs.filter((c) => !c.strokes.some((s) => ids.has(s.id))))
-      setSelected(card.id)
+      setPlot((p) => (p.open ? { ...p, focusId: card.id } : { open: true, details: false, full: false, focusId: card.id }))
       return card
     },
     [commit],
   )
 
-  const confirmRecognize = (text: string, keep: boolean) => {
-    if (!ocrStrokes) return
-    const card = commitRecognized(text, ocrStrokes, keep)
-    setOcrStrokes(null)
-    toast.success('手写已写成公式', { action: { label: '看坐标系', onClick: () => openPlot(card.id) } })
-  }
+  const acceptInk = useCallback(
+    (text: string, strokes: Stroke[]) => {
+      const ids = new Set(strokes.map((s) => s.id))
+      const still = docRef.current.strokes.filter((s) => ids.has(s.id) && !s.recognized)
+      if (still.length !== strokes.length || !canWriteFormula(text)) return null
+      return commitRecognized(text, still, true)
+    },
+    [commitRecognized, docRef],
+  )
 
-  // ---- handwriting → formula, automatically -------------------------------------------------
-  // While auto-OCR is on (default), settled ink raises a small candidate chip on the paper.
-  // Accepting writes the formula — and the docked plot emerges it statement by statement.
-  useEffect(() => {
-    if (!prefs.autoOcr || composer.open || ocrStrokes) {
+  const recognize = useCallback(() => {
+    const pool = docRef.current.strokes.filter((s) => !s.recognized && s.style !== 'marker').slice(-24)
+    if (!pool.length) {
+      toast('先用笔在纸上写一个式子')
       return
     }
-    const fresh = doc.strokes.filter((s) => !s.recognized && s.style !== 'marker' && !chipHandled.current.has(s.id))
-    setInkChips((chips) => chips.filter((c) => c.strokes.every((s) => fresh.some((f) => f.id === s.id))))
-    if (fresh.length < 1) return
+    const clusters = clusterStrokes(pool)
+    let pending = clusters.length
+    let wrote = 0
+    for (const cl of clusters) {
+      const key = cl.map((s) => s.id).sort().join(',')
+      ocrSettled.current.add(key)
+      void mockRecognizer.recognize(cl).then((cands) => {
+        const best = cands[0]
+        if (best && best.confidence >= OCR_ACCEPT && acceptInk(best.text, cl)) wrote += 1
+        pending -= 1
+        if (pending === 0 && wrote === 0) toast('没认出来')
+      })
+    }
+  }, [acceptInk, docRef])
+
+  // Settled ink is read on its own. A confident reading is written onto the sheet and the
+  // corner plot updates. Nothing is drawn over the paper while that happens.
+  useEffect(() => {
+    if (!prefs.autoOcr || composer.open) return
+    const fresh = doc.strokes.filter((s) => !s.recognized && s.style !== 'marker')
+    if (!fresh.length) {
+      document.documentElement.dataset.ocr = 'idle'
+      return
+    }
+    document.documentElement.dataset.ocr = 'run'
+    const mine = ++ocrGen.current
     const t = setTimeout(() => {
-      const clusters = clusterStrokes(fresh)
-      setInkChips((chips) => {
-        const kept = chips.filter((c) => {
-          const ids = c.strokes.map((s) => s.id)
-          const cl = clusters.find((x) => x.some((s) => s.id === ids[0]))
-          return !!cl && cl.length === ids.length && cl.every((s) => ids.includes(s.id))
-        })
-        const used = new Set(kept.flatMap((c) => c.strokes.map((s) => s.id)))
-        const add = clusters
-          .filter((cl) => !cl.some((s) => used.has(s.id)))
-          .map<InkChipData>((cl) => {
-            const b = strokeBounds(cl)
-            const chip: InkChipData = { id: uid(), strokes: cl, at: { x: (b.x0 + b.x1) / 2, y: b.y1 + 12 }, cands: null, pick: 0 }
-            mockRecognizer.recognize(cl).then((cands) => setInkChips((cs) => cs.map((x) => (x.id === chip.id ? { ...x, cands } : x))))
-            return chip
-          })
-        return kept.length + add.length ? [...kept, ...add] : []
+      const jobs: Promise<unknown>[] = []
+      for (const cl of clusterStrokes(fresh)) {
+        const key = cl.map((s) => s.id).sort().join(',')
+        if (ocrSettled.current.has(key)) continue
+        jobs.push(
+          mockRecognizer.recognize(cl).then((cands) => {
+            const ids = new Set(cl.map((s) => s.id))
+            const now = docRef.current.strokes.filter((s) => !s.recognized && s.style !== 'marker')
+            const group = clusterStrokes(now).find((g) => g.some((s) => ids.has(s.id)))
+            const same = !!group && group.length === cl.length && cl.every((s) => group.some((g) => g.id === s.id))
+            if (!same) return
+            ocrSettled.current.add(key)
+            const best = cands[0]
+            if (!best || best.confidence < OCR_ACCEPT) return
+            acceptInk(best.text, cl)
+          }),
+        )
+      }
+      void Promise.all(jobs).finally(() => {
+        if (mine === ocrGen.current) document.documentElement.dataset.ocr = 'idle'
       })
     }, 900)
     return () => clearTimeout(t)
-  }, [doc.strokes, prefs.autoOcr, composer.open, ocrStrokes])
-
-  const acceptChip = useCallback(
-    (chip: InkChipData) => {
-      const cand = chip.cands?.[chip.pick]
-      if (!cand) return
-      const card = commitRecognized(cand.text, chip.strokes, true)
-      toast.success(`识别为公式并写到纸上（${Math.round(cand.confidence * 100)}%）`, { action: { label: '看坐标系', onClick: () => openPlot(card.id) } })
-    },
-    [commitRecognized, openPlot],
-  )
-
-  const dismissChip = useCallback((chip: InkChipData) => {
-    chipHandled.current = new Set([...chipHandled.current, ...chip.strokes.map((s) => s.id)])
-    setInkChips((cs) => cs.filter((c) => c.id !== chip.id))
-  }, [])
-
-  const cycleChip = useCallback((chip: InkChipData) => {
-    setInkChips((cs) => cs.map((c) => (c.id === chip.id && c.cands?.length ? { ...c, pick: (c.pick + 1) % c.cands.length } : c)))
-  }, [])
+  }, [doc.strokes, prefs.autoOcr, composer.open, acceptInk])
 
   const writeSample = (blocks: string[]) => {
     const placed = writeBlocks(blocks)
@@ -376,17 +385,29 @@ export default function App() {
 
   // MCP-ready local tool bridge for experimentation from devtools
   const bridge = useMemo(
-    () => createToolBridge({ getDoc: () => docRef.current, addCard: (t, x, y) => addFormula(t, x, y), updateCard, openPlot: (id) => openPlot(id ?? null) }),
-    [docRef, addFormula, updateCard, openPlot],
+    () =>
+      createToolBridge({
+        getDoc: () => docRef.current,
+        addCard: (t, x, y) => addFormula(t, x, y),
+        updateCard,
+        openPlot: (id) => openPlot(id ?? null),
+        setPlotView: (input) => {
+          ensurePlot()
+          return pushPlotView(input)
+        },
+      }),
+    [docRef, addFormula, updateCard, openPlot, ensurePlot],
   )
   useEffect(() => {
-    ;(window as unknown as { mathscrap: unknown }).mathscrap = { tools: bridge }
+    ;(window as unknown as { mathscrap: { tools: typeof bridge } }).mathscrap = { tools: bridge }
+    return startBrowserBridge((name, args) => bridge.call(name, args))
   }, [bridge])
 
   const anchor = composer.at ? { left: composer.at.x * view.scale + view.x, top: composer.at.y * view.scale + view.y } : null
   const showHints = prefs.showHints && composer.open && composerFocused && (!compact || !composerText)
-  const docked = plot.open && !plot.full && !compact
-  const modal = plot.open && (plot.full || compact)
+  const floated = plot.open && !plot.details && !plot.full
+  const docked = plot.open && plot.details && !plot.full && !compact
+  const modal = plot.open && (plot.full || (plot.details && compact))
 
   return (
     <div className="fixed inset-0 flex overflow-hidden">
@@ -422,10 +443,6 @@ export default function App() {
           <ShortcutHints visible={showHints} compact={compact} placement={anchor && anchor.top < sheet.h / 2 ? 'bottom' : 'top'} />
         </Board>
 
-        {inkChips.map((chip) => (
-          <InkChip key={chip.id} chip={chip} view={view} onAccept={() => acceptChip(chip)} onDismiss={() => dismissChip(chip)} onCycle={() => cycleChip(chip)} />
-        ))}
-
         <TopBar
           compact={compact}
           scale={view.scale}
@@ -437,11 +454,28 @@ export default function App() {
           onFit={() => setView(fitView(docRef.current, compact, sheet.w, sheet.h))}
           onClear={() => setConfirmClear(true)}
           onSettings={() => setSettingsOpen(true)}
+          onAssist={() => setAssistOpen(true)}
           onSample={writeSample}
         />
 
         <Toolbar tool={tool} setTool={setTool} pen={pen} setPen={setPen} compact={compact} onRecognize={recognize} />
-        <PlotButton count={plottable} compact={compact} open={docked} onOpen={compact ? () => openPlot(selected) : togglePlot} />
+        <PlotButton count={plottable} compact={compact} open={plot.open && !plot.full} onOpen={togglePlot} />
+
+        {floated && (
+          <div
+            data-plot-float=""
+            data-no-board
+            className={cn(
+              'absolute z-30 overflow-hidden rounded-2xl opacity-80 shadow-[0_10px_28px_rgba(60,40,20,0.22)]',
+              compact ? 'right-3 bottom-[calc(132px+env(safe-area-inset-bottom))] h-[200px] w-[min(300px,78vw)]' : 'right-5 bottom-[4.75rem] h-[240px] w-[360px]',
+            )}
+          >
+            <PlotPane cards={doc.cards} focusId={plot.focusId} variant="float" />
+            <button type="button" onClick={showDetails} aria-label="详情" className="paper-chrome absolute top-2 right-2 h-7 rounded-full px-2.5 text-[12px] text-kraft-800">
+              详情
+            </button>
+          </div>
+        )}
 
         <Composer
           value={composerText}
@@ -465,13 +499,22 @@ export default function App() {
 
       {docked && (
         <aside className="kraft-panel relative z-30 hidden w-[42%] min-w-[400px] max-w-[760px] flex-col border-l border-kraft-800/15 md:flex" data-no-board data-plot-dock="">
-          <PlotPane cards={doc.cards} focusId={plot.focusId} variant="dock" onExpand={() => setPlot((p) => ({ ...p, full: true }))} />
+          <PlotPane cards={doc.cards} focusId={plot.focusId} variant="dock" onCollapse={() => setPlot((p) => ({ ...p, details: false, full: false }))} onExpand={() => setPlot((p) => ({ ...p, full: true }))} />
         </aside>
       )}
 
       <PlotPanel cards={doc.cards} open={modal} focusId={plot.focusId} onClose={closePlot} />
-      <RecognizeDialog strokes={ocrStrokes} onClose={() => setOcrStrokes(null)} onConfirm={confirmRecognize} />
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} prefs={prefs} setPrefs={setPrefs} side={compact ? 'bottom' : 'right'} />
+      <AssistSheet
+        open={assistOpen}
+        onOpenChange={setAssistOpen}
+        side={compact ? 'bottom' : 'right'}
+        call={(name, args) => bridge.call(name, args)}
+        onOpenSettings={() => {
+          setAssistOpen(false)
+          setSettingsOpen(true)
+        }}
+      />
 
       <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
         <DialogContent className="kraft-panel bg-transparent" data-no-board>

@@ -128,7 +128,7 @@ export function Toolbar({ tool, setTool, pen, setPen, compact, onRecognize }: Pr
       <ToolButton active={tool === 'type'} onClick={() => setTool('type')} label="写公式 · 点哪儿写哪儿" shortcut="T" compact={compact}>
         <Sigma className={icon} />
       </ToolButton>
-      <ToolButton onClick={onRecognize} label="手写转公式（演示 OCR）" shortcut="R" compact={compact}>
+      <ToolButton onClick={onRecognize} label="把手写收成公式" shortcut="R" compact={compact}>
         <ScanText className={icon} />
       </ToolButton>
     </nav>

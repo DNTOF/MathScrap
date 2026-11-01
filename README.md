@@ -23,8 +23,12 @@ npm run dev        # http://localhost:47321
 | `npm run preview` | 预览生产构建（端口 47322） |
 | `npm run lint` | oxlint |
 | `npm run smoke` | 不开浏览器：加载真实 WASM，对 77 个单式用例和 19 张“整页联立”用例做推导，并检查每个图形在初始坐标窗口里确实有可见的数据（`-v` 打印全部推导） |
+| `npm run smoke:ai` | 不开浏览器：起一个本地 OpenAI 兼容接口，检查「测试连接」、工具调用和空配置立刻返回；再让 MCP 服务器列出并调用工具 |
+| `npm run smoke:ocr` | 不开浏览器：几何回归，以及 CoMER 预处理 + 假的编码器/解码器（不会自己编 `y = x`） |
+| `npm run ocr:live` | 本机用 ONNX Runtime Web WASM 跑仓库里的 CoMER INT8，检查 `y = 2`、`y = x`、`a^2 = b`、`1/2` |
+| `npm run mcp` | 启动 stdio MCP 服务器（给 Cursor / Claude 用；人直接跑它会停在 stdio 上，见下文） |
 | `npm run e2e` | 浏览器端到端：先 `npm run dev`，再用无头 Chrome 打开每个用例的坐标系，检查 SVG 线条和截图像素，确认 2D/3D 图都真的画出来了（`CHROME_PATH` 可指定浏览器路径） |
-| `npm run e2e:sheet` | 浏览器端到端，像真人一样操作：空白纸 → 双击 / `/` / Σ 工具在纸上写 5 个式子 → 点角落「坐标系」→ 断言它们画在同一套坐标轴上（桌面 + 手机），再验证分屏坐标系边写边画、缩放保持、式子逐条浮现与手写识别芯片 |
+| `npm run e2e:sheet` | 浏览器端到端：空白纸 → 在纸上写式子 → 右下角半透明图 → 详情展开，并检查手写会自己写上纸、更新图 |
 | `npm run build:wasm` | 重新编译 Rust → WASM（需要 Rust + wasm-pack） |
 | `npm run test:rust` | Rust 单元测试 |
 
@@ -38,7 +42,7 @@ npm run dev        # http://localhost:47321
 - **写公式**：双击纸面、按 `/`，或选底部的 Σ 工具再点纸面。在点的位置会出现一个光标，下面实时预览墨迹效果；按 Enter（或点别处）就写上纸了。
 - **改公式**：双击写好的式子可以原地改写，改成空白就是擦掉它。
 - **移动公式**：用「选择」工具（`V`）拖动式子，空白处拖动是平移；在有手写笔的设备上，手指本来就负责选择和平移。
-- **看图**：右下角的 **坐标系** 按钮显示纸上有几个可画的式子。宽屏上点开是**贴着纸面的分屏坐标系**——左边继续写、右边实时画；「全屏」按钮可放大成全屏视图，手机上点开即全屏：
+- **看图**：右下角的 **坐标系** 按钮显示纸上有几个可画的式子。点开后，右下角只浮着一张略透明的图，纸面继续可以写。点图上的 **详情** 才展开式子列表和推导；宽屏上这时是左边纸、右边图，手机上则是全屏。图开着的时候继续写，图形会跟着更新：
   - 交点在两两之间自动求出。
   - 同名字母视为同一个未知数，一起求解。比如 `A(0,0), B(4,0), C(1,t)` 写一行、`AC ⊥ BC` 写另一行，也能解出 t。
   - 只写条件的式子（`AC ⊥ BC`、`f(0) = 1`）归到它前面那个式子所在的坐标系。
@@ -124,7 +128,7 @@ AC ⊥ BC
 
 ## 三种写字方式（PC 端也不只是键盘）
 
-1. **手写**：鼠标、触控、手写笔都能直接在牛皮纸上写。写完点底部工具栏的「手写转公式」（快捷键 `R`），会弹出识别候选（目前是演示桩，见下文），确认或修改后就在原处写成公式；原来的笔迹可以选择保留。
+1. **手写**：鼠标、触控、手写笔都能直接在牛皮纸上写。写完点底部工具栏的「手写转公式」（快捷键 `R`），会弹出本机模型给出的候选（见下文），确认或修改后就在原处写成公式；原来的笔迹可以选择保留。
 2. **键盘 + 纸上快捷键提示**：双击纸面或按 `/` 开始写，快捷键表会以铅笔字的样子淡淡浮现在纸上。
 
    | 快捷键 | 插入 | 快捷键 | 插入 |
@@ -162,10 +166,10 @@ AC ⊥ BC
   - 右下角是「坐标系」按钮。
   - 右上角只有撤销、重做和「…」菜单（缩放、示例、设置、清空）。
   - 纸面上不放任何面板。
-- **手机**：按钮更大；写公式时书写条停在键盘上方，带一排数学按键。坐标系面板全屏，图在上、推导结果在下。
-- **平板 / 桌面**：公式在点击的位置原地书写；坐标系面板左边是图、右边是推导结果。
+  - **手机**：按钮更大；写公式时书写条停在键盘上方，带一排数学按键。坐标系先是右下角的图，详情再打开全屏。
+  - **平板 / 桌面**：公式在点击的位置原地书写。坐标系先是右下角的图；详情之后左边是纸、右边是图和推导。
 - **输入方式**：Pointer Events 统一处理鼠标、触控和手写笔。检测到手写笔之后会自动开启防误触（手掌触碰不画线，单指触碰改为平移）；设置里也可以强制开启「仅手写笔书写」。
-- **手写笔 / 数位板**：这类应用最理想的输入设备是 Apple Pencil、Surface Pen 或 Wacom 数位板。压感已经接入笔画粗细。后续计划利用倾斜角和悬停预览，并接入真正的手写公式识别。
+- **手写笔 / 数位板**：这类应用最理想的输入设备是 Apple Pencil、Surface Pen 或 Wacom 数位板。压感已经接入笔画粗细。写完稍停会在本机认成式子。
 
 ---
 
@@ -255,18 +259,35 @@ npm run smoke
 
 ---
 
-## AI API 与 MCP（预留）
+## AI API
 
-这一版**不调用任何模型**。预留的部分如下：
+设置 → AI 接口可以填写服务类型、Base URL、模型名和 API Key。配置只写在这台浏览器的 localStorage（`mathscrap.ai.v1`）。密钥不会打进日志，也不会交给 MCP 进程。
 
-- **设置 → AI API**：可以填 provider、Base URL、模型和 Key。这些只保存在浏览器的 localStorage（`mathscrap.ai.v1`）里，不会发出去；「测试连接」目前只是提示。
-- **工具层（MCP 形状）**：`src/ai/tools.ts` 按 MCP tool 的格式定义了 `name`、`description` 和 `inputSchema`，处理函数已经在浏览器里接好。可以在控制台试：
+| 服务类型 | 怎么发 | Base URL 示例 |
+| --- | --- | --- |
+| OpenAI 兼容接口 | `POST {base}/chat/completions`，测试时先 `GET {base}/models` | `https://api.openai.com/v1` |
+| Anthropic | `POST {base}/v1/messages`（默认主机 `https://api.anthropic.com`） | `https://api.anthropic.com` |
+| 本地模型（Ollama 等） | 同样走 OpenAI 兼容路径。只写了主机时会自动补上 `/v1` | `http://127.0.0.1:11434/v1` |
+
+「测试连接」发一条很短的请求（模型列表，没有这个路径时再发 `max_tokens: 1` 的对话）。Base URL 和模型名还空着时按钮是禁用的，点了也会立刻提示，不会转圈。Anthropic 还需要 API Key；本地模型的 Key 可以留空。
+
+右上角 **…** 菜单里的「帮我推一步」是纸面旁边的对话条（不是写在牛皮纸上的字）。它把当前公式和你的一句请求发给已配置的模型，并优先用下面同一套工具：写到纸上用 `page_add_formula`，推导用 `solve_analyze`。模型若不会函数调用，只要返回 `{"add":["…"],"analyze":true,"note":"…"}` 也会照着写到纸上。向量会改写成粗体加等号（`**b** = (1, 2)`）。
+
+开发服务器（`npm run dev` / `npm run preview`）会把浏览器的模型请求经本机 `POST /__mathscrap/ai/forward` 转发出去，这样页面不会被浏览器的 CORS 拦住。静态打开 `dist/` 时没有这个转发，浏览器会直接请求你填的地址，对方必须允许跨域。
+
+## MCP
+
+MCP 和上面的 AI API 是两条路。AI API 是设置里填写的 OpenAI 兼容、Anthropic 或 Ollama 对话接口，密钥只留在这台浏览器里，「帮我推一步」用它聊天。MCP 不保存密钥，也不去调用那个聊天接口。它把**同一份工具**交给本机上的外部程序：读这张纸、写式子、做推导、打开坐标系、读笔迹。推导仍由页面里的 Rust/WASM 完成；MCP 进程只负责转发。
+
+工具定义在 `src/ai/specs.ts`，处理函数在页面里（`src/ai/tools.ts`），应用加载后挂到 `window.mathscrap.tools`。可以在控制台试：
 
 ```js
 mathscrap.tools.specs
 mathscrap.tools.call('page_read')
 mathscrap.tools.call('solve_analyze', { texts: ['△ABC: a=3, b=4, C=90°'] })
 mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' })
+mathscrap.tools.call('plot_set_view', { x: [-2, 4], y: [-2, 4] })
+mathscrap.tools.call('ink_read', {})
 ```
 
 | 工具 | 状态 | 说明 |
@@ -275,34 +296,89 @@ mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' })
 | `page_add_formula` / `page_update_formula` | 本地可用 | 在纸上写一个式子 / 改写某个式子 |
 | `solve_analyze` | 本地可用 | 对一组条件做推导，返回结构化结果（由 Rust 计算） |
 | `plot_open` | 本地可用 | 打开整张纸共享的坐标系（可传 id 决定先看平面还是空间） |
-| `plot_set_view` | 规划中 | 修改坐标范围、3D 相机、叠加对象，让 AI 能直接操作坐标系 |
-| `ink_read` | 规划中 | 把笔迹点序列交给识别模型或多模态 LLM |
+| `plot_set_view` | 本地可用 | 修改坐标范围、3D 相机、叠加或拿掉哪些式子 |
+| `ink_read` | 本地可用 | 读取手写笔迹的点序列（`pts` 为 x, y, pressure） |
 
-**后续计划**：
+外部 agent 用 stdio MCP 服务器 `mcp/server.ts`（`@modelcontextprotocol/sdk`）。它不计算数学：`tools/call` 经 HTTP 交给正在运行的 Vite 页，页面轮询 `GET /__mathscrap/bridge/wait` 后在本地执行。
 
-1. 写一个很薄的 MCP server（stdio 或 WebSocket），把上面这些工具桥接到页面，让外部 agent 能读懂页面、改公式、调整坐标系。
-2. 推导仍然交给 Rust，LLM 只负责“读题 → 写成本应用的语法”和“用自然语言解释推导步骤”。
+1. 终端里 `npm run dev`，浏览器打开 `http://127.0.0.1:47321` 并保持这个标签页。
+2. 把下面的片段放进 Cursor 的 `~/.cursor/mcp.json`（或项目里的 `.cursor/mcp.json`），Claude Desktop 则放进 `claude_desktop_config.json`。把路径换成这台机器上的仓库根目录。
+
+```json
+{
+  "mcpServers": {
+    "mathscrap": {
+      "command": "node",
+      "args": ["--import", "tsx", "mcp/server.ts"],
+      "cwd": "/ABSOLUTE/PATH/TO/mathscrap",
+      "env": {
+        "MATHSCRAP_BRIDGE": "http://127.0.0.1:47321"
+      }
+    }
+  }
+}
+```
+
+`MATHSCRAP_BRIDGE` 可以不写，默认就是 `http://127.0.0.1:47321`。不要用 `npm run mcp` 当作上面的 `command`：npm 会往 stdout 打一行脚本名，stdio 协议会坏。`npm run mcp` 只适合在终端里看进程是否能起来。
+
+页面加载大约一秒后才连上桥，这样不会占住浏览器的空闲网络。页面没开、或刚打开还没连上时，`tools/list` 仍然返回这 7 个工具；`tools/call` 会立刻返回「页面还没连上」，不会一直等。
+
+### 安全
+
+- API Key 只在浏览器 localStorage。测试连接和「帮我推一步」把它放进发往**你填写的 Base URL** 的请求头。代码路径里不打印密钥、Authorization 或 `x-api-key`。
+- MCP 进程看不到密钥。它只把工具名和参数发给 `127.0.0.1` 上的开发服务器。
+- 开发服务器上的转发只允许 GET/POST，路径必须以 `/models`、`/chat/completions` 或 `/messages` 结尾，并拒绝链路本地地址和云元数据主机。
+- 桥接没有单独的口令：谁能访问这个开发端口，谁就能让开着的页面改公式。`npm run dev` 只在本机或你信任的局域网使用，不要把它暴露到公网。
+- 推导仍由 Rust/WASM 完成。模型只负责把题写成本应用的语法，并用自然语言说明下一步。
 
 ---
 
 ## 手写识别（默认开启）
 
-写完一笔稍停（约 1 秒），笔迹会自动聚成「一条式子」，纸上浮出一枚**识别候选芯片**：显示最佳候选（LaTeX）与置信度，点 ✓ 写到纸上（并立刻进入旁边的坐标系），⟳ 换候选，✕ 忽略。设置里可以关掉这个自动识别（`手写自动识别`，默认开）；按 `R` 仍可随时对最近的笔迹手动打开识别对话框。
+写完一笔稍停（约 1 秒），先看这团笔迹像不像算式（等号、分式、上标、字母上的箭头、坐标点）。像一句普通字就留在纸上，不会送进公式模型，也不会写成非法式子。像算式才走 CoMER：置信度够就写上纸并更新右下角的图。纸上不出现确认条。单独一个字母不是向量也不是点；字母上方有一横箭头时记成 `\vec{a}`。坐标写成 `A(1, 2)` 这种点。认不出就保持笔迹，不会拿 `y = x` 充数，也不会编出 `a = (1, 2, 2)`。设置里可以关掉自动识别（`手写自动识别`，默认开）；按 `R` 会对最近的笔迹再认一次。
 
-`src/ocr/recognizer.ts` 定义了识别管线接口：
+候选来自 **CoMER**（ECCV 2022）的 INT8 ONNX。权重由 [ink-on](https://github.com/kimseungdae/ink-on) 以 Apache-2.0 分发（Copyright 2025 kimseungdae）。路径是：笔迹点 → 纯 TypeScript 预处理 → 编码器 / 解码器 → LaTeX。核心在 `src/ocr/comer/`，不引用 React 或 DOM。
 
 ```ts
-interface Recognizer {
-  id: string
-  name: string
-  recognize(strokes: Stroke[]): Promise<{ text: string; confidence: number }[]>
-}
-
-// 自动管线的笔迹分组：相邻笔迹聚成一条式子，逐簇给候选
-clusterStrokes(strokes: Stroke[]): Stroke[][]
+recognizeStrokes(strokes, encoder, decoder, vocab) → { text, latex, confidence }[]
 ```
 
-当前的 `mockRecognizer` 只根据笔迹的外形统计量（宽高比、笔画数）猜几个候选，所以结果总是要用户点选或修改。以后接入真正的识别（端侧模型、MyScript、Mathpix 或多模态 LLM）时，只需要实现 `recognize`——置信度足够高时芯片可以直接自动写上纸。
+`text` 是这张纸已经能解析的写法（`a^2 = b`、`(1)/(2)`、`sqrt(x)`）。模型若给出 `\vec{…}` 或 `\overrightarrow{…}`，会收成 `\vec{…}`。Web 演示把 `onnxruntime-web` 的 WASM 接在这个函数外面；确认条调用的就是它。
+
+### 模型文件
+
+已经放在仓库里，开发服务器按静态资源提供，浏览器按普通缓存保存：
+
+| 文件 | 大小 |
+| --- | --- |
+| `public/models/comer/encoder_int8.onnx` | 3.4 MB |
+| `public/models/comer/decoder_int8.onnx` | 4.0 MB |
+| `public/models/comer/vocab.json` | 词表，113 个 token |
+
+出处和 Apache-2.0 说明在 `public/models/comer/NOTICE.md` 与同目录的 `LICENSE`。预处理和 ink-on 一致：大约每 3px 重采样，黑底白字，内容缩放到大约 128px 高，放在高 256、宽为 64 的倍数（128–1024）的左上角。
+
+WASM 运行时不进 git。`npm install` 之后，开发服务器和 `vite preview` 从 `node_modules/onnxruntime-web/dist` 提供 `/ort/ort-wasm-simd-threaded.wasm`（约 12 MB）和对应的 `.mjs`。线程数设为 1，所以不需要跨域隔离。
+
+### 以后接到原生 ONNX Runtime
+
+桌面或手机不走浏览器。加载同一对 `encoder_int8.onnx` / `decoder_int8.onnx` 和 `vocab.json`，用 ONNX Runtime（或把同一计算图转成 Core ML）建两个 session，再调用 `recognizeStrokes`：
+
+1. `preprocessStrokes` 得到 `float32` 图像 `[1,1,256,W]`（`pixel_values`）和 `uint8` 掩码 `[1,256,W]`（`pixel_mask`，0 是内容，1 是补边）。
+2. 编码器输出 `encoder_features`、`encoder_mask`。
+3. 解码器每步吃这两个张量加上 `input_ids`（int64，从 `<sos>` 开始），读最后一步的 `logits`。
+4. 波束宽度 2。`<eos>` 或连续重复 3 次就停。
+
+`src/ocr/comer/decode.ts` 里的循环不绑定某一种 Runtime，session 只要实现 `run(feeds)`。
+
+### 怎么验证
+
+```bash
+npm run smoke:ocr   # 预处理尺寸、词表整理、脚本化的假模型；不加载 ONNX
+npm run ocr:live    # 本机 WASM 跑真正的 INT8，样例笔迹应读成 y = 2、y = x、a^2 = b、(1)/(2)
+npm run dev         # http://127.0.0.1:47321 ，同一局域网用 http://<本机IP>:47321
+```
+
+在纸上写 `y = 2`、`y = x` 或 `a^2 = b`，确认条应给出对应的式子。模型文件缺失或 WASM 加载失败时，确认条是「没认出来」，不会退回以前的几何规则。`src/ocr/inkShape.ts` 只留作回归测试。
 
 ---
 
@@ -316,8 +392,9 @@ src/
   plot/                   共享坐标系面板与角落按钮、Plotly 图形构建、推导结果列表
   math/                   语句解析与场景推导（调用 WASM）
   wasm/                   WASM 产物与类型化封装
-  ocr/                    识别接口与演示桩
-  ai/                     MCP 形状的工具定义
+  ocr/                    笔迹分组、确认条，以及 CoMER 预处理 / 解码（不依赖 DOM）
+  ai/                     模型客户端、本机配置、MCP 形状的工具定义
+mcp/                    stdio MCP 服务器，以及 Vite 上的本机工具桥 / 请求转发
   components/             顶栏、工具栏、设置、KaTeX；ui/ 是 shadcn 组件
 crates/mathcore/          Rust 数学核心
 scripts/smoke.ts          Node 端到端冒烟测试（单式 + 整页联立）

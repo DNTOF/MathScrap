@@ -59,6 +59,7 @@ export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, mova
   return (
     <div
       data-formula={card.id}
+      data-formula-text={card.text}
       className={cn('group absolute select-none', hidden && 'invisible')}
       style={{ left: card.x, top: card.y, cursor: movable ? 'grab' : undefined }}
       onPointerDown={down}

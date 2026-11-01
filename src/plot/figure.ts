@@ -1,5 +1,6 @@
 import type { Analysis, PlotObj } from '@/math/scene'
 import { engine, type Env, type RustShape } from '@/wasm/engine'
+import type { Camera3 } from './remoteView'
 
 type Trace = Record<string, unknown>
 type Layout = Record<string, unknown>
@@ -230,7 +231,7 @@ function shapeTraces2d(shapes: RustShape[]): Trace[] {
   return out
 }
 
-export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[]): { data: Trace[]; layout: Layout } {
+export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revision = 'keep'): { data: Trace[]; layout: Layout } {
   const data: Trace[] = []
   const annotations: Record<string, unknown>[] = []
   const spanY = r.y[1] - r.y[0]
@@ -343,7 +344,7 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[]): { da
     xaxis: { ...axis, range: r.x },
     yaxis: { ...axis, range: r.y, ...(a.equalAspect ? { scaleanchor: 'x', scaleratio: 1 } : {}) },
     annotations,
-    uirevision: 'keep',
+    uirevision: revision,
   }
   return { data, layout }
 }
@@ -486,13 +487,13 @@ function zRange3(a: Analysis, R: number, grids: Float64Array[]): [number, number
   return [lo - pad, hi + pad]
 }
 
-export function buildFigure3d(a: Analysis, shapes: RustShape[]): { data: Trace[]; layout: Layout } {
+export function buildFigure3d(a: Analysis, shapes: RustShape[], opts?: { camera?: Camera3; z?: [number, number]; revision?: string }): { data: Trace[]; layout: Layout } {
   const data: Trace[] = []
   const R = bound3(a, shapes)
   const n3 = 72
   const grids = new Map<string, Float64Array>()
   for (const o of a.objects) if (o.type === 'surface') grids.set(o.name, engine.sampleGrid(o.expr, 'x', 'y', a.env, -R, R, -R, R, n3, n3))
-  const zr = zRange3(a, R, [...grids.values()])
+  const zr = opts?.z ?? zRange3(a, R, [...grids.values()])
   const zSpan = zr[1] - zr[0]
   for (const o of a.objects) {
     switch (o.type) {
@@ -606,9 +607,14 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[]): { data: Trace[]
       zaxis: ax('z', zr),
       aspectmode: 'cube',
       dragmode: 'orbit',
-      camera: { eye: { x: 1.55, y: 1.35, z: 0.95 } },
+      ...(opts?.revision ? { uirevision: opts.revision } : {}),
+      camera: {
+        eye: opts?.camera?.eye ?? { x: 1.55, y: 1.35, z: 0.95 },
+        ...(opts?.camera?.center ? { center: opts.camera.center } : {}),
+        ...(opts?.camera?.up ? { up: opts.camera.up } : {}),
+      },
     },
-    uirevision: 'keep',
+    uirevision: opts?.revision ?? 'keep',
   }
   return { data, layout }
 }

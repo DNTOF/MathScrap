@@ -13,11 +13,13 @@ interface Props {
   resetKey: string
   /** fired once after the first successful draw — the progressive reveal waits for it */
   onReady?: () => void
+  /** corner picture: the chart only, no mode bar */
+  bare?: boolean
 }
 
 type PlotDiv = HTMLDivElement & { on?: (ev: string, cb: (e: Record<string, unknown>) => void) => void; layout?: { xaxis?: { range?: number[] }; yaxis?: { range?: number[] } } }
 
-export function PlotView({ data, layout, onRange, resetKey, onReady }: Props) {
+export function PlotView({ data, layout, onRange, resetKey, onReady, bare }: Props) {
   const ref = useRef<PlotDiv>(null)
   const [lib, setLib] = useState<PlotlyLib | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +41,7 @@ export function PlotView({ data, layout, onRange, resetKey, onReady }: Props) {
       responsive: true,
       scrollZoom: true,
       displaylogo: false,
+      displayModeBar: bare ? false : undefined,
       modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian', 'resetCameraLastSave3d'],
     }
     lib.react(el, data as never, layout as never, config as never)
@@ -58,7 +61,7 @@ export function PlotView({ data, layout, onRange, resetKey, onReady }: Props) {
         }, 120)
       })
     }
-  }, [lib, data, layout])
+  }, [lib, data, layout, bare])
 
   // a different object set should start from a fresh view
   useEffect(() => {

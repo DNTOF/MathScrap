@@ -877,7 +877,12 @@ export function summarizeCard(text: string): CardSummary {
   const hit = summaryCache.get(text)
   if (hit) return hit
   const sts = parseCard(text)
-  const lines = sts.map((s) => ({ latex: statementLatex(s), kind: kindLabel(s), error: s.kind === 'error' ? s.message : undefined }))
+  const arrowName = text.trim().match(/^\\(?:vec|overrightarrow)\{([a-z])\}/)
+  const lines = sts.map((s) => ({
+    latex: arrowName && s.kind === 'vector' ? `\\vec{${arrowName[1]}}` : statementLatex(s),
+    kind: kindLabel(s),
+    error: s.kind === 'error' ? s.message : undefined,
+  }))
   let a: Analysis | null = null
   try {
     a = analyze([{ id: 'card', text }])

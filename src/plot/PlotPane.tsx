@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Focus, Maximize2, Scan, Sparkles, X } from 'lucide-react'
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import type { Card } from '@/board/types'
 import { Tex } from '@/components/Tex'
@@ -9,14 +9,17 @@ import { analyze } from '@/math/scene'
 import type { RustShape } from '@/wasm/engine'
 import { FactsPanel, factKey } from './FactsPanel'
 import { buildFigure2d, buildFigure3d, initialRanges, type Ranges } from './figure'
+import { subscribePlotView, takePlotView, type Camera3, type PlotViewCommand } from './remoteView'
 import { PlotView } from './PlotView'
 
 interface Props {
   cards: Card[]
   /** formula the pane was opened from — decides plane vs space when the sheet has both */
   focusId: string | null
-  variant: 'dock' | 'modal'
+  /** `float` is the corner picture only. `dock` and `modal` include the readouts. */
+  variant: 'float' | 'dock' | 'modal'
   onExpand?: () => void
+  onCollapse?: () => void
 }
 
 const staticMode = () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('static')
@@ -30,13 +33,17 @@ const staticMode = () => typeof window !== 'undefined' && new URLSearchParams(wi
  * block writing, the user's zoom survives every sheet edit (an explicit button refits), and
  * freshly added statements emerge one by one instead of appearing as one batch.
  */
-export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
+export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Props) {
   const groups = useMemo(() => pageGroups(cards), [cards])
   const [mode, setMode] = useState<2 | 3>(2)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [solution, setSolution] = useState(0)
   const [visible, setVisible] = useState<Set<string>>(new Set())
   const [ranges, setRanges] = useState<Ranges | null>(null)
+  const [camera, setCamera] = useState<Camera3 | undefined>(undefined)
+  const [zRange, setZRange] = useState<[number, number] | undefined>(undefined)
+  const [rev, setRev] = useState(0)
+  const holdRange = useRef(false)
 
   const focusEntry = useMemo(() => groups.entries.find((e) => e.card.id === focusId), [groups, focusId])
   // plane vs space on (re)open, and follow the focused formula across the sheet
@@ -46,6 +53,8 @@ export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
     setSolution(0)
     setVisible(new Set())
     setRanges(null)
+    setCamera(undefined)
+    setZRange(undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusEntry?.card.id])
 
@@ -91,15 +100,53 @@ export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
   )
 
   const viewKey = `${mode}`
+  const revision = rev === 0 ? 'keep' : `v${rev}`
   const base = useMemo(() => (analysis && analysis.dim === 2 ? initialRanges(analysis) : null), [analysis])
   const figure = useMemo(() => {
     if (!shownAnalysis) return null
-    if (shownAnalysis.dim === 3) return buildFigure3d(shownAnalysis, shapes)
-    return buildFigure2d(shownAnalysis, ranges ?? base!, shapes)
-  }, [shownAnalysis, shapes, ranges, base])
+    if (shownAnalysis.dim === 3) return buildFigure3d(shownAnalysis, shapes, { camera, z: zRange, revision })
+    return buildFigure2d(shownAnalysis, ranges ?? base!, shapes, revision)
+  }, [shownAnalysis, shapes, ranges, base, camera, zRange, revision])
 
   // the user's zoom survives sheet edits; only switching plane/space refits
-  useEffect(() => setRanges(null), [viewKey])
+  useEffect(() => {
+    if (holdRange.current) {
+      holdRange.current = false
+      return
+    }
+    setRanges(null)
+  }, [viewKey])
+
+  useEffect(() => {
+    const apply = (req: PlotViewCommand) => {
+      if ((req.mode === 2 || req.mode === 3) && req.mode !== mode) {
+        holdRange.current = true
+        setMode(req.mode)
+      }
+      if (req.fit) {
+        setRanges(null)
+        setCamera(undefined)
+        setZRange(undefined)
+        setRev((n) => n + 1)
+      } else {
+        if (req.x && req.y) setRanges({ x: req.x, y: req.y })
+        if (req.camera) setCamera(req.camera)
+        if (req.z) setZRange(req.z)
+        if (req.x || req.camera || req.z) setRev((n) => n + 1)
+      }
+      if (req.only || req.show || req.hide) {
+        setHidden((prev) => {
+          const next = req.only ? new Set(groups.entries.map((e) => e.card.id).filter((id) => !req.only!.includes(id))) : new Set(prev)
+          for (const id of req.show ?? []) next.delete(id)
+          for (const id of req.hide ?? []) next.add(id)
+          return next
+        })
+      }
+    }
+    const missed = takePlotView()
+    if (missed) apply(missed)
+    return subscribePlotView(apply)
+  }, [mode, groups.entries])
 
   const onRange = useCallback((x: [number, number], y: [number, number]) => {
     setRanges((r) => (r && Math.abs(r.x[0] - x[0]) < 1e-9 && Math.abs(r.x[1] - x[1]) < 1e-9 && Math.abs(r.y[0] - y[0]) < 1e-9 ? r : { x, y }))
@@ -125,6 +172,25 @@ export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
   const conditions = active.length - drawn
   const dock = variant === 'dock'
 
+  if (variant === 'float') {
+    return (
+      <div className="h-full w-full" data-plot-pane="float" data-plot-mode={mode}>
+        {analysis && figure ? (
+          <PlotView
+            data={figure.data.map((trace) => ({ ...trace, showlegend: false }))}
+            layout={{ ...figure.layout, showlegend: false }}
+            bare
+            onRange={analysis.dim === 2 ? onRange : undefined}
+            resetKey={viewKey}
+            onReady={() => setPlotReady(true)}
+          />
+        ) : (
+          <div className="h-full w-full" />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-plot-pane={variant} data-plot-mode={mode}>
       <header className={cn('flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1', dock ? 'px-3 pt-2.5 pb-1.5' : 'px-4 pt-3 pb-2')}>
@@ -147,15 +213,32 @@ export function PlotPane({ cards, focusId, variant, onExpand }: Props) {
             ))}
           </div>
         )}
-        <button onClick={() => setRanges(null)} aria-label="适应视野" title="回到恰好框住所有图形的初始视野" className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
+        <button
+          onClick={() => {
+            setRanges(null)
+            setCamera(undefined)
+            setZRange(undefined)
+            setRev((n) => n + 1)
+          }}
+          aria-label="适应视野"
+          title="回到恰好框住所有图形的初始视野"
+          className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10"
+        >
           <Focus className="size-4.5" />
         </button>
         {dock ? (
-          onExpand && (
-            <button onClick={onExpand} aria-label="全屏坐标系" title="放大到全屏" className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
-              <Maximize2 className="size-4.5" />
-            </button>
-          )
+          <>
+            {onCollapse && (
+              <button onClick={onCollapse} aria-label="只看图" title="回到右下角的图" className="h-8 rounded-full px-2.5 text-[12.5px] text-kraft-700 hover:bg-kraft-800/10">
+                只看图
+              </button>
+            )}
+            {onExpand && (
+              <button onClick={onExpand} aria-label="全屏坐标系" title="放大到全屏" className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
+                <Maximize2 className="size-4.5" />
+              </button>
+            )}
+          </>
         ) : (
           <DialogPrimitive.Close className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10" aria-label="关闭">
             <X className="size-5" />
