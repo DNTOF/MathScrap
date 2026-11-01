@@ -669,7 +669,14 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         "",
         "内心的等角共轭是自身",
     ));
-
+    out.push(fact(
+        "等角共轭",
+        "G \\leftrightarrow K",
+        "\\text{等角共轭}".into(),
+        None,
+        "\\text{重心} \\leftrightarrow \\text{勒莫恩点}",
+        "重心与勒莫恩（对称中线）点互为等角共轭",
+    ));
 
     // Carnot: signed distances from O to the three sides sum to R + r.
     {
@@ -953,6 +960,145 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     "重心按 1:2 分 INa",
                 ));
             }
+        }
+    }
+
+
+    // Gergonne point: concurrence of vertex-to-incircle-contact cevians; bary a/(s−a):…
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a / sa;
+            let wb = b / sb;
+            let wc = c / sc;
+            let den = wa + wb + wc;
+            let ge = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "格尔巩点",
+                "Ge",
+                pt(ge[0], ge[1]),
+                None,
+                "Ge = \\frac{\\frac{a}{s-a}A+\\frac{b}{s-b}B+\\frac{c}{s-c}C}{\\sum}",
+                "格尔巩点：顶点与对边内切圆切点的连线交点",
+            ).with(Shape::Point {
+                x: ge[0],
+                y: ge[1],
+                label: "Ge 格尔巩".into(),
+            }));
+            out.push(fact(
+                "格尔巩点",
+                "Ge \\leftrightarrow Na",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic}",
+                "格尔巩点与奈格尔点互为等截共轭",
+            ));
+        }
+    }
+
+    // Lemoine / symmedian point K: concurrence of symmedians; bary (a²:b²:c²).
+    {
+        let wa = a * a;
+        let wb = b * b;
+        let wc = c * c;
+        let den = wa + wb + wc;
+        if den > 1e-18 {
+            let kpt = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "勒莫恩点",
+                "K",
+                pt(kpt[0], kpt[1]),
+                None,
+                "K = \\frac{a^2 A + b^2 B + c^2 C}{a^2 + b^2 + c^2}",
+                "勒莫恩点（对称中线点）：三对称中线交点",
+            ).with(Shape::Point {
+                x: kpt[0],
+                y: kpt[1],
+                label: "K 勒莫恩".into(),
+            }));
+        }
+    }
+
+    // Brocard angle ω and Brocard points Ω, Ω′.
+    // cot ω = (a²+b²+c²)/(4S); Ω trilinear (c/b : a/c : b/a), Ω′ (b/c : c/a : a/b).
+    if area > 1e-12 {
+        let sum_sq = a * a + b * b + c * c;
+        let cot_w = sum_sq / (4.0 * area);
+        let tan_w = 1.0 / cot_w;
+        let omega = tan_w.atan();
+        out.push(fact(
+            "布罗卡",
+            "\\omega",
+            deg(omega),
+            Some(omega),
+            "\\cot\\omega = \\frac{a^2+b^2+c^2}{4S}",
+            "布罗卡角",
+        ));
+        out.push(fact(
+            "布罗卡",
+            "\\tan\\omega",
+            nice(tan_w),
+            Some(tan_w),
+            "\\tan\\omega = \\frac{4S}{a^2+b^2+c^2}",
+            "布罗卡角的正切",
+        ));
+        out.push(fact(
+            "布罗卡",
+            "\\cot\\omega",
+            nice(cot_w),
+            Some(cot_w),
+            "\\cot\\omega = \\frac{a^2+b^2+c^2}{4S}",
+            "与 tan ω 互为倒数",
+        ));
+        if a > 1e-12 && b > 1e-12 && c > 1e-12 {
+            let wa = a * c / b;
+            let wb = b * a / c;
+            let wc = c * b / a;
+            let den = wa + wb + wc;
+            let om = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "布罗卡",
+                "\\Omega",
+                pt(om[0], om[1]),
+                None,
+                "\\text{trilinear }(c/b:a/c:b/a)",
+                "第一布罗卡点",
+            ).with(Shape::Point {
+                x: om[0],
+                y: om[1],
+                label: "Ω 布罗卡".into(),
+            }));
+            let wa2 = a * b / c;
+            let wb2 = b * c / a;
+            let wc2 = c * a / b;
+            let den2 = wa2 + wb2 + wc2;
+            let omp = [
+                (wa2 * pa[0] + wb2 * pb[0] + wc2 * pc[0]) / den2,
+                (wa2 * pa[1] + wb2 * pb[1] + wc2 * pc[1]) / den2,
+            ];
+            out.push(fact(
+                "布罗卡",
+                "\\Omega'",
+                pt(omp[0], omp[1]),
+                None,
+                "\\text{trilinear }(b/c:c/a:a/b)",
+                "第二布罗卡点（与 Ω 互为等角共轭）",
+            ).with(Shape::Point {
+                x: omp[0],
+                y: omp[1],
+                label: "Ω′ 布罗卡".into(),
+            }));
         }
     }
 
@@ -3716,6 +3862,40 @@ mod tests {
         let ig = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "IG:GNa").expect("IG:GNa");
         assert!((ig.num.unwrap() - 2.0).abs() < 1e-6, "IG:GNa={}", ig.value);
         assert!(fs.iter().any(|f| f.group == "奈格尔点" && f.value.contains("共线")));
+    }
+
+    #[test]
+    fn gergonne_lemoine_brocard() {
+        // 3-4-5: Ge → (3.25, 1.5); K → (3.2, 1.2); tan ω = 12/25 = 0.48; cot ω = 25/12.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
+        // nice() prefers exact forms: (13/4, 3/2) == (3.25, 1.5)
+        assert!(
+            (ge.value.contains("3.25") || ge.value.contains("13/4") || ge.value.contains("\\frac{13}{4}"))
+                && (ge.value.contains("1.5") || ge.value.contains("3/2") || ge.value.contains("\\frac{3}{2}")),
+            "Ge={}",
+            ge.value
+        );
+        assert!(fs.iter().any(|f| f.group == "格尔巩点" && f.value.contains("等截")));
+        let kp = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        // (3.2, 1.2) == (16/5, 6/5)
+        assert!(
+            (kp.value.contains("3.2") || kp.value.contains("16/5") || kp.value.contains("\\frac{16}{5}"))
+                && (kp.value.contains("1.2") || kp.value.contains("6/5") || kp.value.contains("\\frac{6}{5}")),
+            "K={}",
+            kp.value
+        );
+        assert!(fs.iter().any(|f| f.group == "等角共轭" && f.label.contains("G") && f.label.contains("K")));
+        let tan_w = fs.iter().find(|f| f.group == "布罗卡" && f.label == "\\tan\\omega").expect("tan ω");
+        assert!((tan_w.num.unwrap() - 0.48).abs() < 1e-9, "tan ω={}", tan_w.value);
+        let cot_w = fs.iter().find(|f| f.group == "布罗卡" && f.label == "\\cot\\omega").expect("cot ω");
+        assert!((cot_w.num.unwrap() - 25.0 / 12.0).abs() < 1e-9, "cot ω={}", cot_w.value);
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\omega"));
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\Omega"));
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\Omega'"));
     }
 
     #[test]
