@@ -647,6 +647,7 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
 
   // ---- 3D: planes / surfaces / implicit ------------------------------------------------------
   const planes: { name: string; n: number[]; d: number }[] = []
+  const spheres: { name: string; c: number[]; r: number }[] = []
   for (const i of good) {
     if (i.st.kind === 'implicit3') {
       const co = engine.linearCoeffs(i.st.F, ['x', 'y', 'z'], env)
@@ -657,8 +658,11 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
       } else {
         const name = i.st.name ?? nextName(['Σ'], (k) => `Σ_${k}`)
         objects.push({ type: 'implicit3', name, F: i.st.F, color: nextColor() })
-        const sphere = sphereFacts(i.st.F, env)
-        if (sphere.length) sections.push({ id: `sph-${i.idx}`, title: `曲面 ${name}`, subtitle: '球面识别', tone: 'func', facts: sphere })
+        const sph = parseSphere(i.st.F, env)
+        if (sph) {
+          spheres.push({ name, c: sph.c, r: sph.r })
+          sections.push({ id: `sph-${i.idx}`, title: `曲面 ${name}`, subtitle: '球面识别', tone: 'func', facts: sphereFactsFrom(sph) })
+        }
       }
     } else if (i.st.kind === 'surface') {
       const name = names.get(i)!
@@ -696,6 +700,66 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     }
   }
   if (planes.length) sections.push({ id: 'planes', title: `平面 ${planes.map((p) => p.name).join(', ')}`, subtitle: '法向量 · 夹角 · 交线 / 交点', tone: 'geo', facts: engine.planes(planes, pts3) })
+
+  if (spheres.length && planes.length) {
+    const facts: RustFact[] = []
+    for (const s of spheres) {
+      for (const p of planes) {
+        const ln = Math.hypot(p.n[0], p.n[1], p.n[2])
+        if (ln < 1e-12) continue
+        const signed = (p.n[0] * s.c[0] + p.n[1] * s.c[1] + p.n[2] * s.c[2] - p.d) / ln
+        const dist = Math.abs(signed)
+        const label = `${s.name} \\cap ${p.name}`
+        if (dist > s.r + 1e-9) {
+          facts.push({ group: '球面与平面', label, value: '\\varnothing', num: null, how: 'd > r', why: '球心到平面的距离大于半径，不相交', shape: null })
+        } else if (Math.abs(dist - s.r) < 1e-9) {
+          const t = -signed
+          const q = [s.c[0] + (t * p.n[0]) / ln, s.c[1] + (t * p.n[1]) / ln, s.c[2] + (t * p.n[2]) / ln]
+          facts.push({
+            group: '球面与平面',
+            label,
+            value: `\\text{相切于 }\\left(${fmt(q[0])},\\ ${fmt(q[1])},\\ ${fmt(q[2])}\\right)`,
+            num: 0,
+            how: 'd = r',
+            why: '球心到平面的距离等于半径',
+            shape: { type: 'point3', x: q[0], y: q[1], z: q[2], label: `${s.name}∩${p.name}` },
+          })
+        } else {
+          const rho = Math.sqrt(Math.max(0, s.r * s.r - dist * dist))
+          const t = -signed
+          const q = [s.c[0] + (t * p.n[0]) / ln, s.c[1] + (t * p.n[1]) / ln, s.c[2] + (t * p.n[2]) / ln]
+          facts.push({
+            group: '球面与平面',
+            label: `\\text{交圆圆心}_{${s.name},${p.name}}`,
+            value: `\\left(${fmt(q[0])},\\ ${fmt(q[1])},\\ ${fmt(q[2])}\\right)`,
+            num: null,
+            how: "O' = O - \\dfrac{ax_0+by_0+cz_0-d}{|n|^2}\\vec n",
+            why: '球心在平面上的投影',
+            shape: { type: 'point3', x: q[0], y: q[1], z: q[2], label: '交圆圆心' },
+          })
+          facts.push({
+            group: '球面与平面',
+            label: `\\rho_{${s.name}\\cap ${p.name}}`,
+            value: engine.nice(rho),
+            num: rho,
+            how: '\\rho = \\sqrt{r^2 - d^2}',
+            why: '交圆半径',
+            shape: null,
+          })
+          facts.push({
+            group: '球面与平面',
+            label,
+            value: '\\text{圆}',
+            num: rho,
+            how: 'd < r',
+            why: '球面被平面截得一圆',
+            shape: null,
+          })
+        }
+      }
+    }
+    if (facts.length) sections.push({ id: 'sphere-plane', title: '球面 ∩ 平面', subtitle: '交圆 · 相切 · 相离', tone: 'geo', facts })
+  }
 
   if (marks.length) objects.push({ type: 'marks', pts: marks })
 
@@ -831,24 +895,28 @@ function equationFacts(st: Extract<Statement, { kind: 'equation1' }>, name: stri
   return { facts, roots: zs }
 }
 
-function sphereFacts(F: string, env: Env): RustFact[] {
+function parseSphere(F: string, env: Env): { c: number[]; r: number } | null {
   // F = x² + y² + z² + Dx + Ey + Fz + G (up to a common factor)
   const f = (x: number, y: number, z: number) => engine.eval(F, { ...env, x, y, z })
   const g = f(0, 0, 0)
   const ax = (f(1, 0, 0) + f(-1, 0, 0)) / 2 - g
   const ay = (f(0, 1, 0) + f(0, -1, 0)) / 2 - g
   const az = (f(0, 0, 1) + f(0, 0, -1)) / 2 - g
-  if (!(Math.abs(ax - ay) < 1e-9 && Math.abs(ay - az) < 1e-9 && Math.abs(ax) > 1e-12)) return []
+  if (!(Math.abs(ax - ay) < 1e-9 && Math.abs(ay - az) < 1e-9 && Math.abs(ax) > 1e-12)) return null
   const D = (f(1, 0, 0) - f(-1, 0, 0)) / 2 / ax
   const E = (f(0, 1, 0) - f(0, -1, 0)) / 2 / ax
   const G = (f(0, 0, 1) - f(0, 0, -1)) / 2 / ax
   const c = [-D / 2, -E / 2, -G / 2]
   const test = f(2.3, -1.1, 0.7) / ax
   const pred = 2.3 ** 2 + 1.1 ** 2 + 0.7 ** 2 + D * 2.3 - E * 1.1 + G * 0.7 + g / ax
-  if (Math.abs(test - pred) > 1e-7 * (1 + Math.abs(test))) return []
+  if (Math.abs(test - pred) > 1e-7 * (1 + Math.abs(test))) return null
   const r2 = c[0] ** 2 + c[1] ** 2 + c[2] ** 2 - g / ax
-  if (r2 <= 0) return []
-  const r = Math.sqrt(r2)
+  if (r2 <= 0) return null
+  return { c, r: Math.sqrt(r2) }
+}
+
+function sphereFactsFrom(sph: { c: number[]; r: number }): RustFact[] {
+  const { c, r } = sph
   return [
     { group: '球面', label: '\\text{类型}', value: '\\text{球面}', num: null, how: '(x-a)^2 + (y-b)^2 + (z-c)^2 = r^2', why: '配方', shape: null },
     { group: '球面', label: '\\text{球心}', value: `\\left(${fmt(c[0])},\\ ${fmt(c[1])},\\ ${fmt(c[2])}\\right)`, num: null, how: '', why: '配方', shape: { type: 'point3', x: c[0], y: c[1], z: c[2], label: '球心' } },

@@ -47,7 +47,7 @@ export const cases: [string, string, Expect][] = [
   ['直线过两点', 'y = kx + b, 过(1, 3), 过(2, 5)', { solve: { k: 2, b: 1 } }],
   // ---- triangles / coordinate geometry ----
   ['解三角形 SAS', '△ABC: a = 5, b = 7, C = 60°', { dim: 2, facts: ['\\sqrt{39}'], minFacts: 10 }],
-  ['解三角形 SSS', '△ABC: a=3, b=4, c=5', { dim: 2, facts: ['90', 'S_{\\text{海伦}}', '|OI|', 'r_a=', 'AF_{c}'], minFacts: 18 }],
+  ['解三角形 SSS', '△ABC: a=3, b=4, c=5', { dim: 2, facts: ['90', 'S_{\\text{海伦}}', '|OI|', 'r_a=', 'AF_{c}', '\\Pi_{\\text{Ceva}}', '\\Pi_{\\text{Menelaus}}'], minFacts: 22 }],
   ['解三角形 SSA 两解', '△ABC: a = 6, b = 8, A = 40°', { dim: 2 }],
   ['坐标 + 垂直', 'A(0,0), B(4,0), C(1,t)\nAC ⊥ BC', { dim: 2, solve: { t: Math.sqrt(3) }, inView: [[0, 0], [4, 0]] }],
   ['平行四边形', 'A(0,0), B(4,0), C(5,3), D(1,3)', { dim: 2, facts: ['平行四边形'], inView: [[5, 3]] }],
@@ -88,6 +88,8 @@ export const cases: [string, string, Expect][] = [
   ['碗面 z = x² + y²', 'z = x^2 + y^2', { dim: 3 }],
   ['两平面交线', 'x + y + z = 3\nx - y + 2z = 1', { dim: 3, facts: ['α \\cap β'] }],
   ['球面', 'x^2 + y^2 + z^2 = 4', { dim: 3, facts: ['r=2'] }],
+  ['球面 ∩ 平面', 'x^2 + y^2 + z^2 = 4\nz = 1', { dim: 3, facts: ['\\rho_', '\\text{圆}'] }],
+  ['异面直线四点', 'A(0,0,0)\nB(1,0,0)\nC(0,1,0)\nD(0,1,1)', { dim: 3, facts: ['d(AB, CD)=1', '异面'] }],
   ['空间螺旋线', 'r(t) = (cos(t), sin(t), t/3)', { dim: 3 }],
   ['空间三点', 'P(1,2,3), Q(0,1,-1), R(2,0,1)', { dim: 3 }],
 ]

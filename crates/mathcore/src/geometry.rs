@@ -620,6 +620,126 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         "外心与垂心的距离",
     ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
 
+    // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
+    // Emit the classical families that are always concurrent from three sides alone.
+    {
+        // Medians: each ratio = 1.
+        out.push(fact(
+            "塞瓦与梅涅劳斯",
+            "\\Pi_{\\text{Ceva}}^{\\text{中线}}",
+            "1".into(),
+            Some(1.0),
+            "\\frac{BD}{DC}\\cdot\\frac{CE}{EA}\\cdot\\frac{AF}{FB} = 1\\cdot 1\\cdot 1",
+            "塞瓦定理：三中线交于重心",
+        ));
+        // Angle bisectors: BD/DC = c/b, CE/EA = a/c, AF/FB = b/a.
+        let bis = (c / b) * (a / c) * (b / a);
+        out.push(fact(
+            "塞瓦与梅涅劳斯",
+            "\\Pi_{\\text{Ceva}}^{\\text{角平分线}}",
+            nice(bis),
+            Some(bis),
+            &format!(
+                "\\frac{{c}}{{b}}\\cdot\\frac{{a}}{{c}}\\cdot\\frac{{b}}{{a}} = {}",
+                nice(bis)
+            ),
+            "塞瓦定理：三角平分线交于内心",
+        ));
+        // Altitudes: feet of the three altitudes; directed product = 1.
+        let mut alt_prod = 1.0;
+        let mut alt_ok = true;
+        for i in 0..3 {
+            let (p0, q1, q2) = (v[i], v[(i + 1) % 3], v[(i + 2) % 3]);
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                alt_ok = false;
+                break;
+            }
+            let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+            let foot = [q1[0] + t * dx, q1[1] + t * dy];
+            match directed_ratio(q1, q2, foot) {
+                Some(r) => alt_prod *= r,
+                None => {
+                    alt_ok = false;
+                    break;
+                }
+            }
+        }
+        if alt_ok {
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{高}}",
+                nice(alt_prod),
+                Some(alt_prod),
+                "\\frac{BD}{DC}\\cdot\\frac{CE}{EA}\\cdot\\frac{AF}{FB} = 1",
+                "塞瓦定理：三高交于垂心（有向比）",
+            ));
+        }
+        // Gergonne: incircle contact points. BD = s−b, DC = s−c, …
+        let (ta, tb, tc) = (p - a, p - b, p - c);
+        if ta > 1e-12 && tb > 1e-12 && tc > 1e-12 {
+            let ger = (tb / tc) * (tc / ta) * (ta / tb);
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{切点}}",
+                nice(ger),
+                Some(ger),
+                "\\frac{s-b}{s-c}\\cdot\\frac{s-c}{s-a}\\cdot\\frac{s-a}{s-b} = 1",
+                "塞瓦定理：内切圆切点连线交于格尔巩点",
+            ));
+        }
+    }
+
+    // Menelaus: a transversal DEF with D on BC, E on CA, F on AB (or extensions)
+    // satisfies (BD/DC)(CE/EA)(AF/FB) = −1 (directed). Construct D,E then F = DE ∩ AB.
+    {
+        let d_pt = section_point(pb, pc, 2.0, 1.0); // BD:DC = 2:1
+        let e_pt = section_point(pc, pa, 2.0, 1.0); // CE:EA = 2:1
+        if let Some(f_pt) = line_line_isect2(d_pt, e_pt, pa, pb) {
+            if let (Some(r_bc), Some(r_ca), Some(r_ab)) = (
+                directed_ratio(pb, pc, d_pt),
+                directed_ratio(pc, pa, e_pt),
+                directed_ratio(pa, pb, f_pt),
+            ) {
+                let prod = r_bc * r_ca * r_ab;
+                out.push(fact(
+                    "塞瓦与梅涅劳斯",
+                    "\\Pi_{\\text{Menelaus}}",
+                    nice(prod),
+                    Some(prod),
+                    &format!(
+                        "\\frac{{BD}}{{DC}}\\cdot\\frac{{CE}}{{EA}}\\cdot\\frac{{AF}}{{FB}} = {}\\cdot{}\\cdot{} = {}",
+                        nice(r_bc),
+                        nice(r_ca),
+                        nice(r_ab),
+                        nice(prod)
+                    ),
+                    "梅涅劳斯定理：横截线分三边的有向比之积为 −1",
+                ).with(Shape::Segment {
+                    x1: d_pt[0],
+                    y1: d_pt[1],
+                    x2: e_pt[0],
+                    y2: e_pt[1],
+                    label: "Menelaus 横截线".into(),
+                }));
+                out.push(fact(
+                    "塞瓦与梅涅劳斯",
+                    "F_{\\text{Menelaus}}",
+                    pt(f_pt[0], f_pt[1]),
+                    None,
+                    "DE \\cap AB",
+                    "横截线与 AB（延长线）的交点",
+                ).with(Shape::Point {
+                    x: f_pt[0],
+                    y: f_pt[1],
+                    label: "F Menelaus".into(),
+                }));
+            }
+        }
+    }
+
     let mut kinds: Vec<String> = Vec::new();
     let maxg = g.iter().cloned().fold(0.0, f64::max);
     if near(maxg, PI / 2.0) {
@@ -664,9 +784,43 @@ pub struct NamedPoint {
     pub p: Vec<f64>,
 }
 
+
 pub(crate) fn dist2(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
+
+/// Directed ratio AP:PB for P on the line AB. P = A + t(B−A) ⇒ AP:PB = t:(1−t).
+fn directed_ratio(a: [f64; 2], b: [f64; 2], p: [f64; 2]) -> Option<f64> {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len2 = dx * dx + dy * dy;
+    if len2 < 1e-18 {
+        return None;
+    }
+    let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
+    if (1.0 - t).abs() < 1e-14 {
+        return None;
+    }
+    Some(t / (1.0 - t))
+}
+
+fn section_point(a: [f64; 2], b: [f64; 2], m: f64, n: f64) -> [f64; 2] {
+    // divides AB in AP:PB = m:n
+    let den = m + n;
+    [(n * a[0] + m * b[0]) / den, (n * a[1] + m * b[1]) / den]
+}
+
+fn line_line_isect2(p: [f64; 2], q: [f64; 2], r: [f64; 2], s: [f64; 2]) -> Option<[f64; 2]> {
+    let d1 = [q[0] - p[0], q[1] - p[1]];
+    let d2 = [s[0] - r[0], s[1] - r[1]];
+    let det = d1[0] * d2[1] - d1[1] * d2[0];
+    if det.abs() < 1e-14 * (d1[0].hypot(d1[1]) * d2[0].hypot(d2[1])).max(1e-18) {
+        return None;
+    }
+    let t = ((r[0] - p[0]) * d2[1] - (r[1] - p[1]) * d2[0]) / det;
+    Some([p[0] + t * d1[0], p[1] + t * d1[1]])
+}
+
 
 fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
     // a x + b y = c, normalised for display
@@ -883,6 +1037,75 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
+            }
+            // Skew / intersecting lines AB and CD from the first four points.
+            let (na, nb, nc, nd) = (&pts[0].0, &pts[1].0, &pts[2].0, &pts[3].0);
+            let (pa, pb, pc, pd) = (pts[0].1, pts[1].1, pts[2].1, pts[3].1);
+            let ab = sub3(pb, pa);
+            let cd = sub3(pd, pc);
+            let nskew = cross3(ab, cd);
+            let ln = len3(nskew);
+            let ac = sub3(pc, pa);
+            if ln < 1e-12 * len3(ab).max(len3(cd)).max(1e-12) {
+                let parallel = len3(ab) > 1e-12 && len3(cd) > 1e-12;
+                if parallel {
+                    let n2 = cross3(ab, ac);
+                    let dpar = len3(n2) / len3(ab);
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} \\parallel {}{}", na, nb, nc, nd),
+                        "\\checkmark".into(),
+                        None,
+                        "\\vec{AB} \\times \\vec{CD} = \\mathbf{0}",
+                        "方向向量共线",
+                    ));
+                    out.push(fact(
+                        "异面直线",
+                        &format!("d({}{}, {}{})", na, nb, nc, nd),
+                        nice(dpar),
+                        Some(dpar),
+                        "d = \\frac{|\\vec{AB}\\times\\vec{AC}|}{|\\vec{AB}|}",
+                        "平行直线间距离",
+                    ));
+                }
+            } else {
+                let triple = dot3(ac, nskew);
+                let dskew = triple.abs() / ln;
+                if dskew < 1e-9 {
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} , {}{}", na, nb, nc, nd),
+                        "\\text{共面（相交或平行）}".into(),
+                        Some(0.0),
+                        "\\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD}) = 0",
+                        "混合积为 0 ⇒ 共面",
+                    ));
+                } else {
+                    out.push(fact(
+                        "异面直线",
+                        &format!("d({}{}, {}{})", na, nb, nc, nd),
+                        nice(dskew),
+                        Some(dskew),
+                        "d = \\frac{|\\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD})|}{|\\vec{AB}\\times\\vec{CD}|}",
+                        "异面直线的距离",
+                    ).with(Shape::Line3 {
+                        px: pa[0],
+                        py: pa[1],
+                        pz: pa[2],
+                        dx: ab[0],
+                        dy: ab[1],
+                        dz: ab[2],
+                        label: format!("{na}{nb}"),
+                    }));
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} \\nparallel {}{}", na, nb, nc, nd),
+                        "\\text{异面}".into(),
+                        None,
+                        "\\vec{AB}\\times\\vec{CD}\\ne\\mathbf{0},\\ \\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD})\\ne 0",
+                        "既不平行也不相交",
+                    ));
+                }
             }
         }
     }
@@ -1766,5 +1989,47 @@ mod tests {
         let out = lines_analyze(&ls, &[]);
         let sim = out.iter().find(|f| f.label.starts_with("\\text{相似比}")).unwrap();
         assert!((sim.num.unwrap() - 1.0 / 3.0).abs() < 1e-9, "k = {}", sim.value);
+    }
+
+    #[test]
+    fn ceva_and_menelaus_on_345() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap_or_else(|| panic!("missing {label}"));
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{中线}}").num.unwrap() - 1.0).abs() < 1e-9);
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{角平分线}}").num.unwrap() - 1.0).abs() < 1e-9);
+        // right triangle: an altitude foot sits on a vertex → skip 高 family
+        assert!(fs.iter().all(|f| f.label != "\\Pi_{\\text{Ceva}}^{\\text{高}}"));
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{切点}}").num.unwrap() - 1.0).abs() < 1e-9);
+        let men = get("\\Pi_{\\text{Menelaus}}").num.unwrap();
+        assert!((men + 1.0).abs() < 1e-9, "Menelaus = {men}");
+    }
+
+    #[test]
+    fn ceva_altitudes_acute() {
+        // 6-5-5 acute isosceles: all altitude feet interior → Ceva product = 1
+        let k = TriangleKnown { a: Some(6.0), b: Some(5.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let alt = fs.iter().find(|f| f.label == "\\Pi_{\\text{Ceva}}^{\\text{高}}").unwrap();
+        assert!((alt.num.unwrap() - 1.0).abs() < 1e-9, "alt = {}", alt.value);
+    }
+
+    #[test]
+    fn skew_lines_distance() {
+        // AB = (0,0,0)->(1,0,0), CD = (0,1,0)->(0,1,1): skew, distance = 1
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let d = out.iter().find(|f| f.label == "d(AB, CD)").unwrap();
+        assert!((d.num.unwrap() - 1.0).abs() < 1e-9, "d = {}", d.value);
+        assert!(out.iter().any(|f| f.value.contains("异面")));
     }
 }
