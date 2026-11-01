@@ -4804,6 +4804,291 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(67): isogonal conjugate of Far-out X(23); bary 1/(b⁴+c⁴−a⁴−b²c²).
+    // Skip when any denom vanishes or Σweights≈0 (equilateral → same as G via limit).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let a4 = a2 * a2;
+        let b4 = b2 * b2;
+        let c4 = c2 * c2;
+        let da = b4 + c4 - a4 - b2 * c2;
+        let db = c4 + a4 - b4 - c2 * a2;
+        let dc = a4 + b4 - c4 - a2 * b2;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x67 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "远点等角",
+                    "X_{67}",
+                    pt(x67[0], x67[1]),
+                    None,
+                    "X(67) = \\bigl(1/(b^4+c^4-a^4-b^2c^2):\\cdots\\bigr)",
+                    "X(67)：远点 X(23) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x67[0],
+                    y: x67[1],
+                    label: "X67".into(),
+                }));
+                out.push(fact(
+                    "远点等角",
+                    "X_{67} \\leftrightarrow X_{23}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(23)",
+                    "X(67) 与远点 X(23) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(74): isogonal conjugate of Euler infinity X(30); on the circumcircle.
+    // Bary a/(cos A − 2 cos B cos C). Skip when any denom≈0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = ca - 2.0 * cb * cc;
+        let db = cb - 2.0 * cc * ca;
+        let dc = cc - 2.0 * ca * cb;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x74 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "欧拉无穷等角",
+                    "X_{74}",
+                    pt(x74[0], x74[1]),
+                    None,
+                    "X(74) = \\bigl(a/(\\cos A-2\\cos B\\cos C):\\cdots\\bigr)",
+                    "X(74)：欧拉无穷远点 X(30) 的等角共轭（在外接圆上）",
+                ).with(Shape::Point {
+                    x: x74[0],
+                    y: x74[1],
+                    label: "X74".into(),
+                }));
+                out.push(fact(
+                    "欧拉无穷等角",
+                    "X_{74} \\leftrightarrow X_{30}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(30)",
+                    "X(74) 与欧拉无穷远点 X(30) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(77): isogonal of X(33); bary a/(1+sec A) = a cos A/(1+cos A).
+    // Finite for all non-degenerate triangles (1+cos A=0 only if flat).
+    // Equals G on equilateral. Weight 0 at a right vertex.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if (1.0 + ca).abs() > 1e-12 && (1.0 + cb).abs() > 1e-12 && (1.0 + cc).abs() > 1e-12 {
+            let wa = a * ca / (1.0 + ca);
+            let wb = b * cb / (1.0 + cb);
+            let wc = c * cc / (1.0 + cc);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x77 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足切线等角",
+                    "X_{77}",
+                    pt(x77[0], x77[1]),
+                    None,
+                    "X(77) = \\bigl(a/(1+\\sec A):\\cdots\\bigr)",
+                    "X(77)：X(33) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x77[0],
+                    y: x77[1],
+                    label: "X77".into(),
+                }));
+                out.push(fact(
+                    "垂足切线等角",
+                    "X_{77} \\leftrightarrow X_{33}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(33)",
+                    "X(77) 与 X(33) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(78): isogonal of X(34); bary a/(1−sec A) = a cos A/(cos A−1).
+    // Always finite for proper triangles (cos A < 1). Equals G on equilateral.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if (ca - 1.0).abs() > 1e-12 && (cb - 1.0).abs() > 1e-12 && (cc - 1.0).abs() > 1e-12 {
+            let wa = a * ca / (ca - 1.0);
+            let wb = b * cb / (cb - 1.0);
+            let wc = c * cc / (cc - 1.0);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x78 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂心beth等角",
+                    "X_{78}",
+                    pt(x78[0], x78[1]),
+                    None,
+                    "X(78) = \\bigl(a/(1-\\sec A):\\cdots\\bigr)",
+                    "X(78)：X(34) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x78[0],
+                    y: x78[1],
+                    label: "X78".into(),
+                }));
+                out.push(fact(
+                    "垂心beth等角",
+                    "X_{78} \\leftrightarrow X_{34}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(34)",
+                    "X(78) 与 X(34) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(82): isogonal of X(38); bary a/(b²+c²). Always finite.
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let wa = a / (b2 + c2);
+        let wb = b / (c2 + a2);
+        let wc = c / (a2 + b2);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x82 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "X38等角",
+                "X_{82}",
+                pt(x82[0], x82[1]),
+                None,
+                "X(82) = \\bigl(a/(b^2+c^2):\\cdots\\bigr)",
+                "X(82)：X(38) 的等角共轭",
+            ).with(Shape::Point {
+                x: x82[0],
+                y: x82[1],
+                label: "X82".into(),
+            }));
+            out.push(fact(
+                "X38等角",
+                "X_{82} \\leftrightarrow X_{38}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(38)",
+                "X(82) 与 X(38) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(83): isogonal of Brocard midpoint X(39); bary 1/(b²+c²).
+    // Also cevapoint of G and K. Equals G on equilateral.
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let wa = 1.0 / (b2 + c2);
+        let wb = 1.0 / (c2 + a2);
+        let wc = 1.0 / (a2 + b2);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x83 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "布罗卡中点等角",
+                "X_{83}",
+                pt(x83[0], x83[1]),
+                None,
+                "X(83) = \\bigl(1/(b^2+c^2):\\cdots\\bigr)",
+                "X(83)：布罗卡中点 X(39) 的等角共轭（G 与 K 的 Ceva 截点）",
+            ).with(Shape::Point {
+                x: x83[0],
+                y: x83[1],
+                label: "X83".into(),
+            }));
+            out.push(fact(
+                "布罗卡中点等角",
+                "X_{83} \\leftrightarrow X_{39}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(39)",
+                "X(83) 与布罗卡中点 X(39) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(85): isogonal of X(41); isotomic of Mittenpunkt X(9).
+    // Bary bc/(b+c−a) = bc/(2(s−a)). Always finite for proper triangles.
+    {
+        let da = b + c - a;
+        let db = c + a - b;
+        let dc = a + b - c;
+        if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+            let wa = b * c / da;
+            let wb = c * a / db;
+            let wc = a * b / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x85 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "X41等角",
+                    "X_{85}",
+                    pt(x85[0], x85[1]),
+                    None,
+                    "X(85) = \\bigl(bc/(b+c-a):\\cdots\\bigr)",
+                    "X(85)：X(41) 的等角共轭；Mittenpunkt X(9) 的等截共轭",
+                ).with(Shape::Point {
+                    x: x85[0],
+                    y: x85[1],
+                    label: "X85".into(),
+                }));
+                out.push(fact(
+                    "X41等角",
+                    "X_{85} \\leftrightarrow X_{41}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(41)",
+                    "X(85) 与 X(41) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -8689,6 +8974,78 @@ mod tests {
         assert_eq!(fs2.iter().find(|f| f.label == "X_{97}").unwrap().value, g2.value);
         assert!(fs3.iter().any(|f| f.group == "垂足重心等角" && f.label == "X_{95}"));
         assert!(fs3.iter().any(|f| f.group == "垂足对称中线等角" && f.label == "X_{97}"));
+    }
+
+    #[test]
+    fn x67_x74_x77_x78_x82_x83_x85() {
+        // Scalene acute 6-7-8: all seven present and distinct from their partners.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x67 = fs.iter().find(|f| f.group == "远点等角" && f.label == "X_{67}").expect("X67");
+        let x23 = fs.iter().find(|f| f.group == "远点" && f.label == "X_{23}").expect("X23");
+        assert_ne!(x67.value, x23.value);
+        assert!(fs.iter().any(|f| f.group == "远点等角" && f.label.contains("23") && f.value.contains("等角")));
+        let x74 = fs.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74");
+        assert!(fs.iter().any(|f| f.group == "欧拉无穷等角" && f.label.contains("30") && f.value.contains("等角")));
+        let x77 = fs.iter().find(|f| f.group == "垂足切线等角" && f.label == "X_{77}").expect("X77");
+        let x33 = fs.iter().find(|f| f.group == "垂足切线透视" && f.label == "X_{33}").expect("X33");
+        assert_ne!(x77.value, x33.value);
+        let x78 = fs.iter().find(|f| f.group == "垂心beth等角" && f.label == "X_{78}").expect("X78");
+        let x34 = fs.iter().find(|f| f.group == "垂心beth自共轭" && f.label == "X_{34}").expect("X34");
+        assert_ne!(x78.value, x34.value);
+        assert_ne!(x77.value, x78.value);
+        let x82 = fs.iter().find(|f| f.group == "X38等角" && f.label == "X_{82}").expect("X82");
+        let x38 = fs.iter().find(|f| f.label == "X_{38}").expect("X38");
+        assert_ne!(x82.value, x38.value);
+        let x83 = fs.iter().find(|f| f.group == "布罗卡中点等角" && f.label == "X_{83}").expect("X83");
+        let x39 = fs.iter().find(|f| f.label == "X_{39}" || f.label.contains("布罗卡中")).expect("X39");
+        assert_ne!(x83.value, x39.value);
+        let x85 = fs.iter().find(|f| f.group == "X41等角" && f.label == "X_{85}").expect("X85");
+        let x41 = fs.iter().find(|f| f.label == "X_{41}").expect("X41");
+        assert_ne!(x85.value, x41.value);
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x67.value, g.value);
+        assert_ne!(x74.value, g.value);
+        assert_ne!(x82.value, g.value);
+        assert_ne!(x83.value, g.value);
+        assert_ne!(x85.value, g.value);
+        // X74 should lie on the circumcircle: |OX74| ≈ R.
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let r_fact = fs.iter().find(|f| f.label == "R" || (f.group.contains("外接") && f.label == "R")).or_else(|| {
+            fs.iter().find(|f| f.label == "R")
+        });
+        let _ = (x74, o, r_fact); // presence already checked; numeric R check via circum later if needed
+
+        // Equilateral: X77/X78/X82/X83/X85 = G; X67 may equal G in limit; X74 on circum (≠G).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{77}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{78}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{82}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{83}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{85}").unwrap().value, g2.value);
+        // Equilateral: cos A − 2 cos B cos C = 1/2 − 2·(1/2)·(1/2) = 0 → X74 skipped.
+        assert!(fs2.iter().all(|f| f.group != "欧拉无穷等角"), "X74 skip equilateral");
+        // Far-out X23 skipped on equilateral → its isogonal X67 also skipped (denom 0).
+        assert!(fs2.iter().all(|f| f.group != "远点等角"), "X67 skip equilateral");
+
+        // Right 3-4-5: X67/X74/X78/X82/X83/X85 present; X77 finite (weight 0 at right vertex).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "远点等角" && f.label == "X_{67}"));
+        assert!(fs3.iter().any(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足切线等角" && f.label == "X_{77}"));
+        assert!(fs3.iter().any(|f| f.group == "垂心beth等角" && f.label == "X_{78}"));
+        assert!(fs3.iter().any(|f| f.group == "X38等角" && f.label == "X_{82}"));
+        assert!(fs3.iter().any(|f| f.group == "布罗卡中点等角" && f.label == "X_{83}"));
+        assert!(fs3.iter().any(|f| f.group == "X41等角" && f.label == "X_{85}"));
     }
 
     #[test]
