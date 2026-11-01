@@ -3964,6 +3964,219 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(51): centroid of the orthic triangle; bary a³ cos(B−C).
+    // Geometric cross-check: mean of altitude feet. Equals G on equilateral.
+    {
+        let wa = a.powi(3) * (g[1] - g[2]).cos();
+        let wb = b.powi(3) * (g[2] - g[0]).cos();
+        let wc = c.powi(3) * (g[0] - g[1]).cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x51 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "垂足重心",
+                "X_{51}",
+                pt(x51[0], x51[1]),
+                None,
+                "X(51) = \\bigl(a^3\\cos(B-C):\\cdots\\bigr)",
+                "X(51)：垂足三角形的重心",
+            ).with(Shape::Point {
+                x: x51[0],
+                y: x51[1],
+                label: "X51".into(),
+            }));
+            // Mean of altitude feet ≈ X(51).
+            let mut feet = [[0.0f64; 2]; 3];
+            let mut ok = true;
+            for i in 0..3 {
+                let p0 = v[i];
+                let q1 = v[(i + 1) % 3];
+                let q2 = v[(i + 2) % 3];
+                let dx = q2[0] - q1[0];
+                let dy = q2[1] - q1[1];
+                let d2 = dx * dx + dy * dy;
+                if d2 < 1e-18 {
+                    ok = false;
+                    break;
+                }
+                let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / d2;
+                feet[i] = [q1[0] + t * dx, q1[1] + t * dy];
+            }
+            if ok {
+                let g_orth = [
+                    (feet[0][0] + feet[1][0] + feet[2][0]) / 3.0,
+                    (feet[0][1] + feet[1][1] + feet[2][1]) / 3.0,
+                ];
+                if dist2(x51, g_orth) < 1e-5 * (1.0 + rr) {
+                    out.push(fact(
+                        "垂足重心",
+                        "G_{\\text{orthic}}",
+                        "\\checkmark".into(),
+                        None,
+                        "X(51) = (H_a+H_b+H_c)/3",
+                        "与垂足三角形三顶点的重心重合",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(53): symmedian point of the orthic triangle; bary a tan A cos(B−C).
+    // Skip right △ (tan ∞) and near-right (cos≈0).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa = a * (g[0].sin() / ca) * (g[1] - g[2]).cos();
+            let wb = b * (g[1].sin() / cb) * (g[2] - g[0]).cos();
+            let wc = c * (g[2].sin() / cc) * (g[0] - g[1]).cos();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x53 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足对称中线点",
+                    "X_{53}",
+                    pt(x53[0], x53[1]),
+                    None,
+                    "X(53) = \\bigl(a\\tan A\\cos(B-C):\\cdots\\bigr)",
+                    "X(53)：垂足三角形的对称中线点（锐角）",
+                ).with(Shape::Point {
+                    x: x53[0],
+                    y: x53[1],
+                    label: "X53".into(),
+                }));
+            }
+        }
+    }
+
+    // X(26): circumcenter of the tangential triangle; on Euler line.
+    // Bary a²(b² cos 2B + c² cos 2C − a² cos 2A). Isogonal of X(70).
+    // Right △: Σweights = 0 → point at infinity on Euler — skip.
+    {
+        let c2a = (2.0 * g[0]).cos();
+        let c2b = (2.0 * g[1]).cos();
+        let c2c = (2.0 * g[2]).cos();
+        let wa = a * a * (b * b * c2b + c * c * c2c - a * a * c2a);
+        let wb = b * b * (c * c * c2c + a * a * c2a - b * b * c2b);
+        let wc = c * c * (a * a * c2a + b * b * c2b - c * c * c2c);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x26 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "切线三角形外心",
+                "X_{26}",
+                pt(x26[0], x26[1]),
+                None,
+                "X(26) = \\bigl(a^2(b^2\\cos 2B+c^2\\cos 2C-a^2\\cos 2A):\\cdots\\bigr)",
+                "X(26)：切线三角形的外心（在欧拉线上）",
+            ).with(Shape::Point {
+                x: x26[0],
+                y: x26[1],
+                label: "X26".into(),
+            }));
+            // On Euler line OH: cross (X−O)×(H−O) ≈ 0.
+            let hx = orth[0] - circ[0];
+            let hy = orth[1] - circ[1];
+            let xx = x26[0] - circ[0];
+            let xy = x26[1] - circ[1];
+            let cross = xx * hy - xy * hx;
+            let scale = (1.0 + dist2(circ, orth)) * (1.0 + dist2(circ, x26));
+            if cross.abs() < 1e-5 * scale {
+                out.push(fact(
+                    "切线三角形外心",
+                    "X_{26}\\in OH",
+                    "\\checkmark".into(),
+                    None,
+                    "X(26)\\in\\text{Euler}",
+                    "X(26) 在欧拉线 OH 上",
+                ));
+            }
+        }
+    }
+
+    // X(27): cevapoint of H and Clawson X(19); bary tan A/(b+c).
+    // Skip right △ (tan ∞).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa = (g[0].sin() / ca) / (b + c);
+            let wb = (g[1].sin() / cb) / (c + a);
+            let wc = (g[2].sin() / cc) / (a + b);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x27 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂心克劳森截点",
+                    "X_{27}",
+                    pt(x27[0], x27[1]),
+                    None,
+                    "X(27) = \\bigl(\\tan A/(b+c):\\cdots\\bigr)",
+                    "X(27)：垂心与克劳森点的截线交点（锐角）",
+                ).with(Shape::Point {
+                    x: x27[0],
+                    y: x27[1],
+                    label: "X27".into(),
+                }));
+            }
+        }
+    }
+
+    // X(29): cevapoint of I and H; bary tan A/(cos B + cos C).
+    // Skip right △ (tan ∞). Denom cos B+cos C = 2 sin(A/2)cos((B−C)/2) > 0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc;
+        let db = cc + ca;
+        let dc = ca + cb;
+        if ca.abs() > 1e-12
+            && cb.abs() > 1e-12
+            && cc.abs() > 1e-12
+            && da.abs() > 1e-12
+            && db.abs() > 1e-12
+            && dc.abs() > 1e-12
+        {
+            let wa = (g[0].sin() / ca) / da;
+            let wb = (g[1].sin() / cb) / db;
+            let wc = (g[2].sin() / cc) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x29 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "内心垂心截点",
+                    "X_{29}",
+                    pt(x29[0], x29[1]),
+                    None,
+                    "X(29) = \\bigl(\\tan A/(\\cos B+\\cos C):\\cdots\\bigr)",
+                    "X(29)：内心与垂心的截线交点（锐角）",
+                ).with(Shape::Point {
+                    x: x29[0],
+                    y: x29[1],
+                    label: "X29".into(),
+                }));
+            }
+        }
+    }
+
     // X(79), X(80): isogonal conjugates of X(35) and X(36).
     // Trilinears 1/(1±2 cos A); bary a/(1±2 cos A).
     // X(79) blows up when an angle is 120°; X(80) when an angle is 60° (equilateral).
@@ -4039,6 +4252,77 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     None,
                     "\\text{isogonal of }X(36)",
                     "X(80) 与反演内心 X(36) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(91), X(92): isogonal conjugates of X(47)=a cos 2A and X(48)=a sin 2A.
+    // Bary a sec 2A and a csc 2A. X(92) vanishes on a right angle (sin 180° = 0).
+    {
+        let c2 = [(2.0 * g[0]).cos(), (2.0 * g[1]).cos(), (2.0 * g[2]).cos()];
+        if c2.iter().all(|c| c.abs() > 1e-9) {
+            let wa = a / c2[0];
+            let wb = b / c2[1];
+            let wc = c / c2[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x91 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "双倍角正割",
+                    "X_{91}",
+                    pt(x91[0], x91[1]),
+                    None,
+                    "X(91) = (a\\sec 2A:b\\sec 2B:c\\sec 2C)",
+                    "X(91)：X(47) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x91[0],
+                    y: x91[1],
+                    label: "X91".into(),
+                }));
+                out.push(fact(
+                    "双倍角正割",
+                    "X_{91} \\leftrightarrow X_{47}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(47)",
+                    "X(91) 与 X(47) 互为等角共轭",
+                ));
+            }
+        }
+        let s2 = [(2.0 * g[0]).sin(), (2.0 * g[1]).sin(), (2.0 * g[2]).sin()];
+        if s2.iter().all(|s| s.abs() > 1e-9) {
+            let wa = a / s2[0];
+            let wb = b / s2[1];
+            let wc = c / s2[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x92 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "双倍角余割",
+                    "X_{92}",
+                    pt(x92[0], x92[1]),
+                    None,
+                    "X(92) = (a\\csc 2A:b\\csc 2B:c\\csc 2C)",
+                    "X(92)：X(48) 的等角共轭（直角时 sin 180°=0，略过）",
+                ).with(Shape::Point {
+                    x: x92[0],
+                    y: x92[1],
+                    label: "X92".into(),
+                }));
+                out.push(fact(
+                    "双倍角余割",
+                    "X_{92} \\leftrightarrow X_{48}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(48)",
+                    "X(92) 与 X(48) 互为等角共轭",
                 ));
             }
         }
@@ -7712,6 +7996,56 @@ mod tests {
     }
 
     #[test]
+    fn x51_x53_x26_x27_x29() {
+        // Scalene acute 6-7-8: all five present; X51 = orthic centroid; X26 on Euler.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x51 = fs.iter().find(|f| f.group == "垂足重心" && f.label == "X_{51}").expect("X51");
+        assert!(fs.iter().any(|f| f.group == "垂足重心" && f.label.contains("orthic")));
+        let x53 = fs.iter().find(|f| f.group == "垂足对称中线点" && f.label == "X_{53}").expect("X53");
+        let x26 = fs.iter().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").expect("X26");
+        assert!(fs.iter().any(|f| f.group == "切线三角形外心" && f.label.contains("OH")));
+        let x27 = fs.iter().find(|f| f.group == "垂心克劳森截点" && f.label == "X_{27}").expect("X27");
+        let x29 = fs.iter().find(|f| f.group == "内心垂心截点" && f.label == "X_{29}").expect("X29");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x51.value, g.value);
+        assert_ne!(x51.value, x53.value);
+        assert_ne!(x26.value, x51.value);
+        assert_ne!(x27.value, x29.value);
+        assert_ne!(x27.value, x51.value);
+
+        // Equilateral: X51=X53=X26=X27=X29=G (angle-symmetric).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("垂足重心", "X_{51}"),
+            ("垂足对称中线点", "X_{53}"),
+            ("切线三角形外心", "X_{26}"),
+            ("垂心克劳森截点", "X_{27}"),
+            ("内心垂心截点", "X_{29}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X51 present; X26 at ∞ (Σ=0); X53/X27/X29 skip (tan ∞).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "垂足重心" && f.label == "X_{51}"));
+        assert!(fs3.iter().all(|f| f.group != "切线三角形外心"), "X26 skip right (infinity)");
+        assert!(fs3.iter().all(|f| f.group != "垂足对称中线点"), "X53 skip right");
+        assert!(fs3.iter().all(|f| f.group != "垂心克劳森截点"), "X27 skip right");
+        assert!(fs3.iter().all(|f| f.group != "内心垂心截点"), "X29 skip right");
+    }
+
+    #[test]
     fn x79_x80_isogonals_of_x35_x36() {
         let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
         let r = triangle_solve(&k);
@@ -7742,6 +8076,39 @@ mod tests {
         let x79e = fs3.iter().find(|f| f.label == "X_{79}").unwrap();
         assert_eq!(x79e.value, g.value);
         assert!(fs3.iter().all(|f| f.group != "反演内心等角"), "X80 skip equilateral");
+    }
+
+    #[test]
+    fn x91_x92_isogonals_of_double_angle() {
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x91 = fs.iter().find(|f| f.group == "双倍角正割" && f.label == "X_{91}").expect("X91");
+        let x47 = fs.iter().find(|f| f.group == "双倍角余弦" && f.label == "X_{47}").expect("X47");
+        assert_ne!(x91.value, x47.value);
+        let x92 = fs.iter().find(|f| f.group == "双倍角余割" && f.label == "X_{92}").expect("X92");
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        assert_ne!(x92.value, x48.value);
+        assert_ne!(x91.value, x92.value);
+        assert_eq!(fs.iter().filter(|f| f.label == "X_{79}").count(), 1);
+
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.label == "X_{91}"));
+        assert!(fs2.iter().any(|f| f.label == "X_{51}"));
+        assert!(fs2.iter().all(|f| f.group != "双倍角余割"), "X92 skip right");
+        assert!(fs2.iter().all(|f| f.group != "切线三角形外心"), "X26 skip right");
+
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs3.iter().find(|f| f.label == "X_{91}").unwrap().value, g.value);
+        assert_eq!(fs3.iter().find(|f| f.label == "X_{92}").unwrap().value, g.value);
     }
 
     #[test]
