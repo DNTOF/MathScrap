@@ -629,9 +629,13 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
 
   // ---- circles × named points: powers, chords, central / inscribed angles --------------
   const allCircles = [...sheetCircles.values(), ...detectedCircles]
-  if (allCircles.length && pts2.length) {
+  if ((allCircles.length && pts2.length) || allCircles.length >= 2) {
     const facts = engine.circles(allCircles, pts2)
-    if (facts.length) sections.push({ id: 'circle-points', title: `圆与点 ${allCircles.map((c) => `⊙${c.name}`).join(' ')}`, subtitle: '点的幂 · 弦 · 圆周角', tone: 'geo', facts })
+    if (facts.length) {
+      const title = pts2.length ? `圆与点 ${allCircles.map((c) => `⊙${c.name}`).join(' ')}` : `两圆 ${allCircles.map((c) => `⊙${c.name}`).join(' ')}`
+      const subtitle = allCircles.length >= 2 ? '点的幂 · 弦 · 根轴' : '点的幂 · 弦 · 圆周角'
+      sections.push({ id: 'circle-points', title, subtitle, tone: 'geo', facts })
+    }
   }
 
   // ---- vectors ----------------------------------------------------------------------------

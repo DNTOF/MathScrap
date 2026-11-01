@@ -620,6 +620,36 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         "外心与垂心的距离",
     ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
 
+    // Euler line: G divides OH with OG:GH = 1:2. Nine-point center N is the midpoint of OH, radius R/2.
+    {
+        let og = dist2(circ, centroid);
+        let gh = dist2(centroid, orth);
+        let nx = (circ[0] + orth[0]) / 2.0;
+        let ny = (circ[1] + orth[1]) / 2.0;
+        let r9 = rr / 2.0;
+        if oh > 1e-9 {
+            out.push(fact("特殊点", "|OG|", nice(og), Some(og), "|OG| = \\frac13|OH|", "欧拉线：重心分外心与垂心为 1:2"));
+            out.push(fact("特殊点", "|GH|", nice(gh), Some(gh), "|GH| = \\frac23|OH|", "欧拉线"));
+            let ratio = og / oh;
+            out.push(fact(
+                "特殊点",
+                "\\frac{|OG|}{|OH|}",
+                nice(ratio),
+                Some(ratio),
+                "\\frac{|OG|}{|OH|} = \\frac13",
+                "欧拉线分比",
+            ));
+        }
+        let ogv = [centroid[0] - circ[0], centroid[1] - circ[1]];
+        let ohv = [orth[0] - circ[0], orth[1] - circ[1]];
+        let colin = (ogv[0] * ohv[1] - ogv[1] * ohv[0]).abs() <= 1e-6 * (1.0 + oh);
+        if colin {
+            out.push(fact("特殊点", "\\text{欧拉线}", "\\checkmark".into(), None, "G,\\ O,\\ H \\text{ 共线}", "欧拉线"));
+        }
+        out.push(fact("特殊点", "N", pt(nx, ny), None, "N = \\frac{O + H}{2}", "九点圆圆心（OH 中点）").with(Shape::Circle { cx: nx, cy: ny, r: r9, label: "九点圆".into() }));
+        out.push(fact("外接圆与内切圆", "R_{9}", nice(r9), Some(r9), "R_9 = \\frac{R}{2}", "九点圆半径"));
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -789,6 +819,36 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                             s = SIDE[i],
                         ),
                         "斯特瓦尔特定理（角平分线）",
+                    ));
+                }
+            }
+            // altitude: signed segments along side i (foot may lie on the extension)
+            let bpt = v[(i + 1) % 3];
+            let cpt = v[(i + 2) % 3];
+            let apt = v[i];
+            let (dx, dy) = (cpt[0] - bpt[0], cpt[1] - bpt[1]);
+            let den2 = dx * dx + dy * dy;
+            if den2 > 1e-18 && aa > 1e-12 {
+                let t = ((apt[0] - bpt[0]) * dx + (apt[1] - bpt[1]) * dy) / den2;
+                let m = t * aa;
+                let nseg = (1.0 - t) * aa;
+                let d = 2.0 * area / aa;
+                let lhs = bb * bb * m + cc * cc * nseg;
+                let rhs = aa * (d * d + m * nseg);
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                    out.push(fact(
+                        "斯特瓦尔特定理",
+                        &format!("\\text{{Stewart}}_{{h_{}}}", SIDE[i]),
+                        nice(lhs),
+                        Some(lhs),
+                        &format!(
+                            "{b}^2 m + {c}^2 n = {a}(h_{s}^2 + mn)",
+                            a = SIDE[i],
+                            b = SIDE[(i + 1) % 3],
+                            c = SIDE[(i + 2) % 3],
+                            s = SIDE[i],
+                        ),
+                        "斯特瓦尔特定理（高，有向线段）",
                     ));
                 }
             }
@@ -990,7 +1050,7 @@ fn line_line_isect2(p: [f64; 2], q: [f64; 2], r: [f64; 2], s: [f64; 2]) -> Optio
 }
 
 
-fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
+pub(crate) fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
     // a x + b y = c, normalised for display
     if near(b, 0.0) {
         return format!("x = {}", nice_short(c / a));
@@ -1211,6 +1271,19 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
             let (pa, pb, pc, pd) = (pts[0].1, pts[1].1, pts[2].1, pts[3].1);
             let ab = sub3(pb, pa);
             let cd = sub3(pd, pc);
+            let (lab, lcd) = (len3(ab), len3(cd));
+            if lab > 1e-12 && lcd > 1e-12 {
+                let cosang = (dot3(ab, cd).abs() / (lab * lcd)).clamp(0.0, 1.0);
+                let theta = cosang.acos();
+                out.push(fact(
+                    "异面直线",
+                    &format!("\\theta({}{}, {}{})", na, nb, nc, nd),
+                    deg(theta),
+                    Some(theta),
+                    "\\cos\\theta = \\frac{|\\vec{AB}\\cdot\\vec{CD}|}{|\\vec{AB}||\\vec{CD}|}",
+                    "两直线方向的夹角（取锐角或直角）",
+                ));
+            }
             let nskew = cross3(ab, cd);
             let ln = len3(nskew);
             let ac = sub3(pc, pa);
@@ -1613,6 +1686,18 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             let x = [q.p[0], *q.p.get(1).unwrap_or(&0.0), *q.p.get(2).unwrap_or(&0.0)];
             let d = (dot3(p.n, x) - p.d).abs() / ln;
             out.push(fact("点与平面", &format!("d({}, {})", q.name, p.name), nice(d), Some(d), "\\frac{|ax_0+by_0+cz_0-d|}{\\sqrt{a^2+b^2+c^2}}", "点到平面距离"));
+            if ln > 1e-12 && d > 1e-8 && d.is_finite() {
+                let lam = (p.d - dot3(p.n, x)) / (ln * ln);
+                let foot = [x[0] + lam * p.n[0], x[1] + lam * p.n[1], x[2] + lam * p.n[2]];
+                out.push(fact(
+                    "点与平面",
+                    &format!("\\text{{foot}}({}, {})", q.name, p.name),
+                    pt3(foot),
+                    None,
+                    "P + \\frac{d - \\vec n\\cdot P}{|\\vec n|^2}\\vec n",
+                    "点到平面的垂足",
+                ).with(Shape::Point3 { x: foot[0], y: foot[1], z: foot[2], label: format!("foot {} {}", q.name, p.name) }));
+            }
         }
     }
     // Line–plane angle: every pair of 3D points defines a line.
@@ -2279,8 +2364,16 @@ mod tests {
         assert!((med.num.unwrap() - 62.5).abs() < 1e-6, "med = {}", med.value);
         let bis = fs.iter().find(|f| f.label == "\\text{Stewart}_{t_c}").unwrap();
         assert!(bis.num.unwrap().is_finite());
-        // both sides of Stewart agree for every median/bisector we emitted
-        assert_eq!(fs.iter().filter(|f| f.label.starts_with("\\text{Stewart}_")).count(), 6);
+        // altitude to the hypotenuse: m = 16/5, n = 9/5, h = 12/5 → LHS = 57.6
+        let alt = fs.iter().find(|f| f.label == "\\text{Stewart}_{h_c}").unwrap();
+        assert!((alt.num.unwrap() - 57.6).abs() < 1e-6, "alt = {}", alt.value);
+        // medians, bisectors, and altitudes
+        assert_eq!(fs.iter().filter(|f| f.label.starts_with("\\text{Stewart}_")).count(), 9);
+        let ratio = fs.iter().find(|f| f.label == "\\frac{|OG|}{|OH|}").unwrap();
+        assert!((ratio.num.unwrap() - 1.0 / 3.0).abs() < 1e-9, "OG/OH = {}", ratio.value);
+        let r9 = fs.iter().find(|f| f.label == "R_{9}").unwrap();
+        assert!((r9.num.unwrap() - 1.25).abs() < 1e-9, "R9 = {}", r9.value);
+        assert!(fs.iter().any(|f| f.label == "\\text{欧拉线}"));
     }
 
     #[test]
@@ -2300,6 +2393,26 @@ mod tests {
         let th2 = out.iter().find(|f| f.label == "\\theta(AC, α)").unwrap();
         assert!(th2.num.unwrap().abs() < 1e-9, "θ(AC) = {}", th2.value);
         assert!(out.iter().any(|f| f.label == "AC \\parallel α"));
+        let foot = out.iter().find(|f| f.label == "\\text{foot}(B, α)").unwrap();
+        assert!(foot.value.contains('0'), "foot = {}", foot.value);
+        if let Shape::Point3 { x, y, z, .. } = foot.shape.as_ref().unwrap() {
+            assert!(x.abs() < 1e-9 && y.abs() < 1e-9 && z.abs() < 1e-9);
+        } else {
+            panic!("foot should be a point");
+        }
+    }
+
+    #[test]
+    fn skew_line_angle() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let th = out.iter().find(|f| f.label == "\\theta(AB, CD)").unwrap();
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9, "θ = {}", th.value);
     }
 
     #[test]

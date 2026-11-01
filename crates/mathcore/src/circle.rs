@@ -3,7 +3,7 @@
 //! chord lengths, centre-to-chord distances, central angles, and a canonical picture of
 //! the whole configuration. Plus cross inference between circles and named points.
 
-use crate::geometry::{deg, dist2, near, nice, Fact, NamedPoint, Shape};
+use crate::geometry::{deg, dist2, line_eq_latex, near, nice, Fact, NamedPoint, Shape};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -473,6 +473,54 @@ pub fn circles_analyze(circles: &[NamedCircle], points: &[NamedPoint]) -> Vec<Fa
             }
         }
     }
+    // Radical axis of each pair: subtract the two circle equations.
+    for i in 0..circles.len() {
+        for j in i + 1..circles.len() {
+            let (a, b) = (&circles[i], &circles[j]);
+            if a.r <= 0.0 || b.r <= 0.0 {
+                continue;
+            }
+            let g = "两圆根轴";
+            let (c1, c2) = ([a.cx, a.cy], [b.cx, b.cy]);
+            let (nx, ny) = (c2[0] - c1[0], c2[1] - c1[1]);
+            let ln = nx.hypot(ny);
+            if ln < 1e-12 {
+                let same = (a.r - b.r).abs() < 1e-9;
+                out.push(fact(g, &format!("\\odot {},\\ \\odot {}", a.name, b.name), format!("\\text{{{}}}", if same { "同心等半径（重合）" } else { "同心不等半径（无根轴）" }), None, "O_1 = O_2", "两圆圆心重合"));
+                continue;
+            }
+            let rhs = (c2[0] * c2[0] + c2[1] * c2[1] - c1[0] * c1[0] - c1[1] * c1[1] + a.r * a.r - b.r * b.r) / 2.0;
+            out.push(fact(
+                g,
+                &format!("l_{{{}{}}}", a.name, b.name),
+                line_eq_latex(nx, ny, rhs),
+                None,
+                "(O_2 - O_1)\\cdot X = \\frac{|O_2|^2 - |O_1|^2 + r_1^2 - r_2^2}{2}",
+                "两圆方程相减得根轴",
+            ));
+            out.push(seg_fact(g, &format!("|O_{}O_{}|", a.name, b.name), ln, "\\sqrt{(a_2-a_1)^2 + (b_2-b_1)^2}", "圆心距"));
+            let signed = (nx * c1[0] + ny * c1[1] - rhs) / ln;
+            let h = signed.abs();
+            let rho2 = a.r * a.r - h * h;
+            let (sum, diff) = (a.r + b.r, (a.r - b.r).abs());
+            let rel = if near(ln, sum) {
+                "外切"
+            } else if near(ln, diff) {
+                "内切"
+            } else if ln > sum {
+                "外离"
+            } else if ln + 1e-9 < diff {
+                "内含"
+            } else {
+                "相交"
+            };
+            out.push(fact(g, &format!("\\odot {} ,\\ \\odot {}", a.name, b.name), format!("\\text{{{rel}}}"), None, "|O_1O_2| \\text{ 与 } r_1\\pm r_2", "两圆位置关系"));
+            if rho2 > 1e-9 {
+                let chord = 2.0 * rho2.sqrt();
+                out.push(seg_fact(g, &format!("|\\text{{公共弦}}_{{{}{}}}|", a.name, b.name), chord, "2\\sqrt{r_1^2 - d^2}", "公共弦长（落在根轴上）"));
+            }
+        }
+    }
     out
 }
 
@@ -596,5 +644,30 @@ mod tests {
         assert!((ins - central / 2.0).abs() < 1e-9, "inscribed {ins} vs central {central}");
         // C is on the circle
         assert!(out.iter().any(|x| x.label == "C \\in \\odot O" && x.value.contains("圆上")));
+    }
+
+    #[test]
+    fn radical_axis_of_two_circles() {
+        // unit circles at (0,0) and (1,0): radical axis x = 1/2, common chord √3
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 1.0, cy: 0.0, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        let axis = out.iter().find(|f| f.label == "l_{AB}").unwrap();
+        assert!(axis.value.contains("\\frac{1}{2}") || axis.value.contains("0.5"), "axis = {}", axis.value);
+        let chord = out.iter().find(|f| f.label == "|\\text{公共弦}_{AB}|").unwrap();
+        assert!((chord.num.unwrap() - 3f64.sqrt()).abs() < 1e-9, "chord = {}", chord.value);
+        assert!(out.iter().any(|f| f.value.contains("相交")));
+        // separate equal circles: x = 3/2, no chord
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 3.0, cy: 0.0, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        let axis = out.iter().find(|f| f.label == "l_{AB}").unwrap();
+        assert!(axis.value.contains("\\frac{3}{2}"), "axis = {}", axis.value);
+        assert!(out.iter().all(|f| f.label != "|\\text{公共弦}_{AB}|"));
+        assert!(out.iter().any(|f| f.value.contains("外离")));
     }
 }
