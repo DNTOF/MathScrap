@@ -940,6 +940,76 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     if (facts.length) sections.push({ id: 'line-sphere', title: '直线 ∩ 球面', subtitle: '交点 · 相切 · 相离', tone: 'geo', facts })
   }
 
+  // Right circular cylinder ∥ z (circle in xy) ∩ plane → ellipse semi-axes.
+  if (planes.length) {
+    const cyls = [...sheetCircles.values(), ...detectedCircles]
+    const facts: RustFact[] = []
+    for (const cyl of cyls) {
+      if (!(cyl.r > 0)) continue
+      for (const p of planes) {
+        const ln = Math.hypot(p.n[0], p.n[1], p.n[2])
+        if (ln < 1e-12) continue
+        const sinTheta = Math.abs(p.n[2]) / ln
+        const label = `\\mathrm{Cyl}_{${cyl.name}} \\cap ${p.name}`
+        if (sinTheta < 1e-9) {
+          facts.push({
+            group: '圆柱与平面',
+            label,
+            value: '\\text{平行（无界）}',
+            num: null,
+            how: '\\vec n \\cdot \\vec k = 0',
+            why: '平面平行于母线，交线是直线或空',
+            shape: null,
+          })
+          continue
+        }
+        const b = cyl.r
+        const a = cyl.r / sinTheta
+        if (Math.abs(sinTheta - 1) < 1e-9) {
+          facts.push({
+            group: '圆柱与平面',
+            label,
+            value: `\\text{圆},\\ r = ${fmt(b)}`,
+            num: b,
+            how: '\\vec n \\parallel \\vec k',
+            why: '平面垂直于轴，交线是圆',
+            shape: null,
+          })
+        } else {
+          facts.push({
+            group: '圆柱与平面',
+            label: `a_{${cyl.name}\\cap ${p.name}}`,
+            value: engine.nice(a),
+            num: a,
+            how: 'a = R / \\sin\\theta',
+            why: '椭圆长半轴（θ = 轴与平面的线面角）',
+            shape: null,
+          })
+          facts.push({
+            group: '圆柱与平面',
+            label: `b_{${cyl.name}\\cap ${p.name}}`,
+            value: engine.nice(b),
+            num: b,
+            how: 'b = R',
+            why: '椭圆短半轴等于圆柱半径',
+            shape: null,
+          })
+          facts.push({
+            group: '圆柱与平面',
+            label,
+            value: '\\text{椭圆}',
+            num: a,
+            how: '\\sin\\theta = |\\vec n \\cdot \\vec k| / |\\vec n|',
+            why: '圆柱被斜平面截得椭圆',
+            shape: null,
+          })
+        }
+      }
+    }
+    if (facts.length) sections.push({ id: 'cyl-plane', title: '圆柱 ∩ 平面', subtitle: '椭圆半轴 · 线面角', tone: 'geo', facts })
+  }
+
+
 
   if (marks.length) objects.push({ type: 'marks', pts: marks })
 

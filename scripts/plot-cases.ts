@@ -47,7 +47,7 @@ export const cases: [string, string, Expect][] = [
   ['直线过两点', 'y = kx + b, 过(1, 3), 过(2, 5)', { solve: { k: 2, b: 1 } }],
   // ---- triangles / coordinate geometry ----
   ['解三角形 SAS', '△ABC: a = 5, b = 7, C = 60°', { dim: 2, facts: ['\\sqrt{39}'], minFacts: 10 }],
-  ['解三角形 SSS', '△ABC: a=3, b=4, c=5', { dim: 2, facts: ['90', 'S_{\\text{海伦}}', '|OI|', 'r_a=', 'AF_{c}', '\\Pi_{\\text{Ceva}}', '\\Pi_{\\text{Menelaus}}', '\\text{Stewart}_{m_', 'ID_{a}', '\\mathcal{A}_', 'R_{9}', '\\text{欧拉线}'], minFacts: 36 }],
+  ['解三角形 SSS', '△ABC: a=3, b=4, c=5', { dim: 2, facts: ['90', 'S_{\\text{海伦}}', '|OI|', 'r_a=', 'AF_{c}', '\\Pi_{\\text{Ceva}}', '\\Pi_{\\text{Menelaus}}', '\\text{Stewart}_{m_', 'ID_{a}', '\\mathcal{A}_', 'OG:GH', 'R_{\\text{九点}}'], minFacts: 37 }],
   ['解三角形 SSA 两解', '△ABC: a = 6, b = 8, A = 40°', { dim: 2 }],
   ['坐标 + 垂直', 'A(0,0), B(4,0), C(1,t)\nAC ⊥ BC', { dim: 2, solve: { t: Math.sqrt(3) }, inView: [[0, 0], [4, 0]] }],
   ['平行四边形', 'A(0,0), B(4,0), C(5,3), D(1,3)', { dim: 2, facts: ['平行四边形'], inView: [[5, 3]] }],
@@ -96,6 +96,8 @@ export const cases: [string, string, Expect][] = [
   ['四面体体积', 'A(0,0,0)\nB(1,0,0)\nC(0,1,0)\nD(0,0,1)', { dim: 3, facts: ['V_{\\text{四面体}}'] }],
   ['二面角', 'x + 0*z = 0\ny + 0*z = 0', { dim: 3, facts: ['\\text{二面角}', '\\perp'] }],
   ['直线交球面', 'A(0,0,0)\nB(4,0,0)\nx^2 + y^2 + z^2 = 4', { dim: 3, facts: ['P_{AB\\cap', '|P_1P_2|'] }],
+  ['笛卡尔圆', 'A(0,0)\nB(2,0)\nC(1,1.7320508075688772)\n⊙A: r = 1\n⊙B: r = 1\n⊙C: r = 1', { dim: 2, facts: ['\\text{Descartes}'], minFacts: 2 }],
+  ['圆柱截椭圆', 'x^2 + y^2 = 4\nx - z = 0', { dim: 3, facts: ['a_', 'b_', '\\text{椭圆}'] }],
   ['空间螺旋线', 'r(t) = (cos(t), sin(t), t/3)', { dim: 3 }],
   ['空间三点', 'P(1,2,3), Q(0,1,-1), R(2,0,1)', { dim: 3 }],
 ]
