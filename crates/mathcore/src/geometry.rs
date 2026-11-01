@@ -1348,6 +1348,31 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     "垂足三角形内接于九点圆",
                 ));
             }
+            // Circumcenter of the orthic triangle is the nine-point center N.
+            if let Some((o_h, _)) = circum2(feet[0], feet[1], feet[2]) {
+                out.push(fact(
+                    "垂足三角形",
+                    "O(H_a H_b H_c)",
+                    pt(o_h[0], o_h[1]),
+                    None,
+                    "O_{\\text{orthic}} = N",
+                    "垂足三角形的外心（等于九点圆心）",
+                ).with(Shape::Point {
+                    x: o_h[0],
+                    y: o_h[1],
+                    label: "O_H 垂足外心".into(),
+                }));
+                if dist2(o_h, n9loc) < 1e-5 * (1.0 + rr) {
+                    out.push(fact(
+                        "垂足三角形",
+                        "O(H_a H_b H_c) = N",
+                        "\\checkmark".into(),
+                        None,
+                        "O_{\\text{orthic}} = N = \\tfrac{O+H}{2}",
+                        "垂足外心与九点圆心重合",
+                    ));
+                }
+            }
         }
     }
 
@@ -2363,6 +2388,72 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                         label: "Ip 等周".into(),
                     }));
                 }
+            }
+        }
+    }
+
+    // Moses point X(75): isotomic conjugate of the incenter; bary (bc : ca : ab).
+    {
+        let wa = b * c;
+        let wb = c * a;
+        let wc = a * b;
+        let den = wa + wb + wc;
+        if den > 1e-18 {
+            let mo = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "摩西点",
+                "Mo",
+                pt(mo[0], mo[1]),
+                None,
+                "Mo = \\frac{bc\\,A + ca\\,B + ab\\,C}{\\sum}",
+                "摩西点 X(75)：内心的等截共轭",
+            ).with(Shape::Point {
+                x: mo[0],
+                y: mo[1],
+                label: "Mo 摩西".into(),
+            }));
+            out.push(fact(
+                "摩西点",
+                "Mo \\leftrightarrow I",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }I",
+                "摩西点与内心互为等截共轭（bary I=a:b:c ↔ 1/a:1/b:1/c）",
+            ));
+        }
+    }
+
+    // X(25): homothetic center of orthic and tangential triangles; bary a²/(b²+c²−a²).
+    // Denominator vanishes at a right angle — skip then.
+    {
+        let da = b * b + c * c - a * a;
+        let db = c * c + a * a - b * b;
+        let dc = a * a + b * b - c * c;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x25 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足切线同调中心",
+                    "X_{25}",
+                    pt(x25[0], x25[1]),
+                    None,
+                    "X(25) = \\bigl(a^2/(b^2+c^2-a^2):\\cdots\\bigr)",
+                    "X(25)：垂足三角形与切线三角形的同调中心",
+                ).with(Shape::Point {
+                    x: x25[0],
+                    y: x25[1],
+                    label: "X25 同调".into(),
+                }));
             }
         }
     }
@@ -5515,6 +5606,46 @@ mod tests {
         let f1o = fs3.iter().find(|f| f.group == "费马点" && f.label == "F_1").expect("F1 obtuse");
         // F1 should be at C = verts[2]
         assert!(f1o.why.contains("120") || f1o.how.contains("obtuse") || f1o.how.contains("120"), "why={}", f1o.why);
+    }
+
+    #[test]
+    fn moses_x25_orthic_circumcenter() {
+        // Scalene acute 6-7-8: Moses, X(25), orthic circumcenter = N.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(mo.value, i.value, "Moses ≠ I on scalene");
+        assert!(fs.iter().any(|f| f.group == "摩西点" && f.value.contains("等截")));
+        let x25 = fs.iter().find(|f| f.group == "垂足切线同调中心" && f.label.contains("25")).expect("X25");
+        assert_ne!(x25.value, mo.value);
+        assert!(fs.iter().any(|f| f.group == "垂足三角形" && f.label.contains("O(H_a")));
+        assert!(fs.iter().any(|f| f.group == "垂足三角形" && f.label.contains("= N")));
+        let oh = fs.iter().find(|f| f.group == "垂足三角形" && f.label == "O(H_a H_b H_c)").expect("Oh");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        assert_eq!(oh.value, n.value, "orthic circumcenter = N");
+
+        // Right 3-4-5: Moses still; X(25) skipped (right angle); orthic degenerates (two feet = right vertex).
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "摩西点" && f.label == "Mo"));
+        assert!(fs2.iter().all(|f| f.group != "垂足切线同调中心"), "X25 skip right");
+        assert!(fs2.iter().all(|f| !(f.group == "垂足三角形" && f.label.contains("O(H_a"))), "orthic O skip right");
+
+        // Equilateral: Moses = I = G; X(25) = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let moe = fs3.iter().find(|f| f.group == "摩西点" && f.label == "Mo").unwrap();
+        assert_eq!(moe.value, g.value);
+        let x25e = fs3.iter().find(|f| f.group == "垂足切线同调中心" && f.label.contains("25")).unwrap();
+        assert_eq!(x25e.value, g.value);
     }
 
     #[test]
