@@ -306,6 +306,62 @@ export function shiftInk(strokes: InkStroke[], dx: number, dy: number): InkStrok
   return strokes.map((s) => ({ points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })), lineWidth: s.lineWidth }))
 }
 
+/** Isolated σ: an open loop and a short tail. The model often reads this as 0. */
+export function sigmaLoop(width = 3): InkStroke[] {
+  const pts: StrokePoint[] = []
+  const cx = 48
+  const cy = 56
+  const rx = 26
+  const ry = 30
+  const a0 = -0.2
+  const a1 = Math.PI * 1.7
+  const n = 42
+  for (let i = 0; i <= n; i++) {
+    const t = a0 + ((a1 - a0) * i) / n
+    pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) })
+  }
+  const last = pts[pts.length - 1]
+  pts.push({ x: last.x + 10, y: last.y - 2 })
+  pts.push({ x: last.x + 22, y: last.y + 6 })
+  return [{ points: pts, lineWidth: width }]
+}
+
+/** Schoolbook σ: a bowl whose end hooks back inside. Often read as u. */
+export function sigmaHook(width = 3): InkStroke[] {
+  return [through([[78, 26], [50, 16], [24, 32], [16, 58], [32, 84], [60, 90], [82, 68], [76, 48], [52, 44]], width)]
+}
+
+/** A closed oval. This is a zero, not a sigma. */
+export function closedZero(width = 3): InkStroke[] {
+  return [circle(48, 56, 28, width, 40)]
+}
+
+/** An open bowl with both ends on top. This is a u, not a sigma. */
+export function bowlU(width = 3): InkStroke[] {
+  return [through([[18, 22], [16, 50], [30, 76], [50, 86], [72, 74], [82, 48], [80, 22]], width)]
+}
+
+/** Two strokes meeting in a fork. This is a Y, not a sigma. */
+export function forkY(width = 3): InkStroke[] {
+  return [through([[16, 14], [48, 52], [80, 14]], width), through([[48, 52], [50, 98]], width)]
+}
+
+function through(corners: number[][], lineWidth: number): InkStroke {
+  const points: StrokePoint[] = []
+  for (let i = 1; i < corners.length; i++) {
+    const [x0, y0] = corners[i - 1]
+    const [x1, y1] = corners[i]
+    const n = Math.max(6, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3))
+    for (let k = 0; k < n; k++) {
+      const t = k / n
+      points.push({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t })
+    }
+  }
+  const last = corners[corners.length - 1]
+  points.push({ x: last[0], y: last[1] })
+  return { points, lineWidth }
+}
+
 function line(pts: number[][], lineWidth: number): InkStroke {
   return { points: pts.map(([x, y]) => ({ x, y })), lineWidth }
 }

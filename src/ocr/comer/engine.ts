@@ -2,6 +2,7 @@ import { bindInk, findOverArrow } from './bind.ts'
 import { decodeComer, type ComerSession, type ComerTensor } from './decode.ts'
 import { looksLikeIsolatedSigma } from '../gate.ts'
 import { isInkMeaningful, preprocessStrokes, type InkStroke } from './preprocess.ts'
+import { repairIsolatedSigma } from './sigma.ts'
 import { decodeTokens, tokensToSource, type Vocab } from './source.ts'
 
 export interface OcrCandidate {
@@ -64,14 +65,19 @@ export async function recognizeStrokes(strokes: InkStroke[], encoder: ComerSessi
   const out: OcrCandidate[] = []
   const seen = new Set<string>()
   for (const hit of hits) {
-    const latex = decodeTokens(hit.ids, vocab).join(' ')
-    const text = bindInk(strokes, tokensToSource(decodeTokens(hit.ids, vocab)))
-    if (!text || seen.has(text)) continue
-    seen.add(text)
+    const decoded = decodeTokens(hit.ids, vocab)
+    const latex = decoded.join(' ')
+    const source = tokensToSource(decoded)
     const n = Math.max(1, hit.ids.length)
     const mean = hit.logProb / n
     const model = Math.exp(mean)
     if (!Number.isFinite(model) || model < 0.2) continue
+    // A mid-or-better read of 0 / Y / u is σ only when the ink has that glyph.
+    // Fainter than AGREE_AT stays the model's text, so a weak guess is not promoted.
+    const repaired = model >= AGREE_AT ? repairIsolatedSigma(strokes, source) : null
+    const text = repaired ?? bindInk(strokes, source)
+    if (!text || seen.has(text)) continue
+    seen.add(text)
     out.push({ text, confidence: agreeConfidence(strokes, text, model), latex })
   }
   out.sort((a, b) => b.confidence - a.confidence || a.text.localeCompare(b.text))
