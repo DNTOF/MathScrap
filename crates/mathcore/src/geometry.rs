@@ -620,6 +620,79 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         "外心与垂心的距离",
     ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
 
+    // Euler line: O, G, H collinear with OG:GH = 1:2 (and |OH| = 3|OG|).
+    // Note: |OI|^2 = R(R−2r) is the Euler distance formula for the incenter (already above);
+    // it is not |OH|^2.
+    {
+        let og = dist2(circ, centroid);
+        let gh = dist2(centroid, orth);
+        let cross = (centroid[0] - circ[0]) * (orth[1] - circ[1]) - (centroid[1] - circ[1]) * (orth[0] - circ[0]);
+        let scale = (1.0 + og) * (1.0 + oh);
+        if cross.abs() < 1e-6 * scale {
+            out.push(fact(
+                "欧拉线",
+                "O,\\ G,\\ H",
+                "\\text{共线}".into(),
+                None,
+                "\\vec{OH} = 3\\vec{OG}",
+                "欧拉线：外心、重心、垂心共线",
+            ));
+            if og > 1e-12 {
+                let ratio = gh / og;
+                out.push(fact(
+                    "欧拉线",
+                    "OG:GH",
+                    format!("1:{}", nice(ratio)),
+                    Some(ratio),
+                    "OG:GH = 1:2",
+                    "重心按 1:2 分 OH",
+                ));
+                out.push(fact(
+                    "欧拉线",
+                    "|OG|",
+                    nice(og),
+                    Some(og),
+                    "|OH| = 3|OG|",
+                    "欧拉线上的线段",
+                ).with(Shape::Segment {
+                    x1: circ[0],
+                    y1: circ[1],
+                    x2: centroid[0],
+                    y2: centroid[1],
+                    label: "OG".into(),
+                }));
+            }
+        }
+        // Nine-point circle: center N = midpoint of OH, radius R/2.
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        out.push(fact(
+            "欧拉线",
+            "N",
+            pt(n9[0], n9[1]),
+            None,
+            "N = \\text{中点}(O, H)",
+            "九点圆圆心（欧拉圆）",
+        ).with(Shape::Point {
+            x: n9[0],
+            y: n9[1],
+            label: "N 九点圆圆心".into(),
+        }));
+        out.push(fact(
+            "欧拉线",
+            "R_{\\text{九点}}",
+            nice(r9),
+            Some(r9),
+            "R_N = R/2",
+            "九点圆半径",
+        ).with(Shape::Circle {
+            cx: n9[0],
+            cy: n9[1],
+            r: r9,
+            label: "九点圆".into(),
+        }));
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -2341,5 +2414,19 @@ mod tests {
         assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9);
         assert!(out.iter().any(|f| f.label.contains("二面角")));
         assert!(out.iter().any(|f| f.label == "α \\perp β"));
+    }
+
+    #[test]
+    fn euler_line_and_nine_point() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.label.contains("O,") && f.value.contains("共线")));
+        let og_gh = fs.iter().find(|f| f.label == "OG:GH").unwrap();
+        assert!((og_gh.num.unwrap() - 2.0).abs() < 1e-6, "OG:GH = {}", og_gh.value);
+        let r9 = fs.iter().find(|f| f.label.contains("九点")).unwrap();
+        assert!((r9.num.unwrap() - 1.25).abs() < 1e-9, "R9 = {}", r9.value); // R=2.5
+        // OI² = R(R-2r) already covered; ensure |OI| present
+        assert!(fs.iter().any(|f| f.label == "|OI|"));
     }
 }

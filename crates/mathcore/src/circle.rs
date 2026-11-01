@@ -473,6 +473,56 @@ pub fn circles_analyze(circles: &[NamedCircle], points: &[NamedPoint]) -> Vec<Fa
             }
         }
     }
+
+    // Descartes: k_4 = k_1+k_2+k_3 ± 2√(Σ k_i k_j) for three mutually tangent circles.
+    {
+        let n = circles.len().min(4);
+        for i in 0..n {
+            for j in i + 1..n {
+                for kidx in j + 1..n {
+                    let (a, b, c) = (&circles[i], &circles[j], &circles[kidx]);
+                    if a.r <= 1e-12 || b.r <= 1e-12 || c.r <= 1e-12 {
+                        continue;
+                    }
+                    let dist = |p: &NamedCircle, q: &NamedCircle| dist2([p.cx, p.cy], [q.cx, q.cy]);
+                    let is_tan = |p: &NamedCircle, q: &NamedCircle| {
+                        let d0 = dist(p, q);
+                        near(d0, (p.r + q.r).abs()) || near(d0, (p.r - q.r).abs())
+                    };
+                    if !(is_tan(a, b) && is_tan(a, c) && is_tan(b, c)) {
+                        continue;
+                    }
+                    let (k1, k2, k3) = (1.0 / a.r, 1.0 / b.r, 1.0 / c.r);
+                    let s = k1 * k2 + k1 * k3 + k2 * k3;
+                    if s < -1e-12 {
+                        continue;
+                    }
+                    let root = 2.0 * s.max(0.0).sqrt();
+                    let g = "笛卡尔圆定理";
+                    let tag = format!("{}{}{}", a.name, b.name, c.name);
+                    for (sign, k4) in [("+", k1 + k2 + k3 + root), ("-", k1 + k2 + k3 - root)] {
+                        if k4.abs() < 1e-12 {
+                            continue;
+                        }
+                        let r4 = 1.0 / k4;
+                        out.push(fact(
+                            g,
+                            &format!("r_{{\\text{{Descartes}}{}}}^{{{}}}", sign, tag),
+                            nice(r4),
+                            Some(r4),
+                            "k_4 = k_1+k_2+k_3 \\pm 2\\sqrt{k_1k_2+k_1k_3+k_2k_3}",
+                            if sign == "+" {
+                                "笛卡尔圆定理（外切／内含解）"
+                            } else {
+                                "笛卡尔圆定理（另一相切解）"
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     out
 }
 
@@ -596,5 +646,23 @@ mod tests {
         assert!((ins - central / 2.0).abs() < 1e-9, "inscribed {ins} vs central {central}");
         // C is on the circle
         assert!(out.iter().any(|x| x.label == "C \\in \\odot O" && x.value.contains("圆上")));
+    }
+
+    #[test]
+    fn descartes_three_unit_circles() {
+        let sq3 = 3f64.sqrt();
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 2.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "C".into(), cx: 1.0, cy: sq3, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        let ds: Vec<_> = out.iter().filter(|f| f.group == "笛卡尔圆定理").collect();
+        assert_eq!(ds.len(), 2, "expected ± Descartes radii, got {:?}", ds.iter().map(|f| &f.label).collect::<Vec<_>>());
+        let nums: Vec<f64> = ds.iter().map(|f| f.num.unwrap()).collect();
+        let expect = [1.0 / (3.0 + 2.0 * sq3), 1.0 / (3.0 - 2.0 * sq3)];
+        for e in expect {
+            assert!(nums.iter().any(|n| (n - e).abs() < 1e-9), "missing {e}, have {nums:?}");
+        }
     }
 }
