@@ -1735,6 +1735,133 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // Isodynamic / isogonic centers X(15), X(16): concurrence of Apollonian circles.
+    // Bary a sin(A±π/3); X(16) degenerates on equilateral (sin(A−π/3)=0).
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let s15 = [((g[0] + pi3).sin()), (g[1] + pi3).sin(), (g[2] + pi3).sin()];
+        let wa = a * s15[0];
+        let wb = b * s15[1];
+        let wc = c * s15[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let p15 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "等动力点",
+                "S_{1}",
+                pt(p15[0], p15[1]),
+                None,
+                "S_1 = \\frac{a\\sin(A+\\pi/3)A+\\cdots}{\\sum}",
+                "第一等动力点 X(15)（等角线中心 / Apollonian）",
+            ).with(Shape::Point {
+                x: p15[0],
+                y: p15[1],
+                label: "S1 等动力".into(),
+            }));
+        }
+        let s16 = [(g[0] - pi3).sin(), (g[1] - pi3).sin(), (g[2] - pi3).sin()];
+        // Equilateral: sin(A−π/3)=0 ⇒ den=0 — skip. One 60° angle (weight 0) is fine.
+        {
+            let wa = a * s16[0];
+            let wb = b * s16[1];
+            let wc = c * s16[2];
+            let den16 = wa + wb + wc;
+            if den16.abs() > 1e-12 {
+                let p16 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den16,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den16,
+                ];
+                out.push(fact(
+                    "等动力点",
+                    "S_{2}",
+                    pt(p16[0], p16[1]),
+                    None,
+                    "S_2 = \\frac{a\\sin(A-\\pi/3)A+\\cdots}{\\sum}",
+                    "第二等动力点 X(16)（等角线中心）",
+                ).with(Shape::Point {
+                    x: p16[0],
+                    y: p16[1],
+                    label: "S2 等动力".into(),
+                }));
+            }
+        }
+        if den.abs() > 1e-12 {
+            out.push(fact(
+                "等动力点",
+                "\\text{Apollonius}",
+                "\\text{三阿氏圆共点}".into(),
+                None,
+                "\\odot A_a\\cap\\odot A_b\\cap\\odot A_c",
+                "阿波罗尼奥斯圆（角平分线直径）交于等动力点",
+            ));
+        }
+    }
+
+    // Steiner point X(99): bary 1/(b²−c²):… on circumcircle ∩ Steiner ellipse.
+    // Undefined for isosceles (denominator zero); skip cleanly.
+    // Tarry X(98) = circumcircle antipode of Steiner (= 2O − St).
+    {
+        let dbc = b * b - c * c;
+        let dca = c * c - a * a;
+        let dab = a * a - b * b;
+        if dbc.abs() > 1e-10 && dca.abs() > 1e-10 && dab.abs() > 1e-10 {
+            let wa = 1.0 / dbc;
+            let wb = 1.0 / dca;
+            let wc = 1.0 / dab;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let st = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let os = dist2(circ, st);
+                if (os - rr).abs() < 1e-4 * (1.0 + rr) {
+                    out.push(fact(
+                        "施泰纳点",
+                        "St",
+                        pt(st[0], st[1]),
+                        None,
+                        "St = \\frac{\\frac{1}{b^2-c^2}A+\\cdots}{\\sum}",
+                        "施泰纳点 X(99)：外接圆与施泰纳椭圆的第四交点",
+                    ).with(Shape::Point {
+                        x: st[0],
+                        y: st[1],
+                        label: "St 施泰纳".into(),
+                    }));
+                    // Tarry = antipode of Steiner on (O)
+                    let ty = [2.0 * circ[0] - st[0], 2.0 * circ[1] - st[1]];
+                    let ot = dist2(circ, ty);
+                    if (ot - rr).abs() < 1e-4 * (1.0 + rr) {
+                        out.push(fact(
+                            "塔里点",
+                            "Ty",
+                            pt(ty[0], ty[1]),
+                            None,
+                            "Ty = 2O - St",
+                            "塔里点 X(98)：施泰纳点在外接圆上的对径点",
+                        ).with(Shape::Point {
+                            x: ty[0],
+                            y: ty[1],
+                            label: "Ty 塔里".into(),
+                        }));
+                        out.push(fact(
+                            "塔里点",
+                            "|O\\,Ty|",
+                            nice(ot),
+                            Some(ot),
+                            "|O\\,Ty| = R",
+                            "塔里点在外接圆上",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -4718,6 +4845,45 @@ mod tests {
         assert_ne!(cl.value, yff.value);
         assert_ne!(cl.value, ex2.value);
         assert_ne!(yff.value, g.value);
+    }
+
+    #[test]
+    fn isodynamic_steiner_tarry() {
+        // Scalene right 3-4-5: S1,S2,St,Ty all present (not isosceles).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let s1 = fs.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1");
+        let s2 = fs.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{2}")).expect("S2");
+        assert_ne!(s1.value, s2.value);
+        assert!(fs.iter().any(|f| f.group == "等动力点" && f.label.contains("Apollonius")));
+        let st = fs.iter().find(|f| f.group == "施泰纳点" && f.label == "St").expect("Steiner");
+        let ty = fs.iter().find(|f| f.group == "塔里点" && f.label == "Ty").expect("Tarry");
+        assert_ne!(st.value, ty.value);
+        let ot = fs.iter().find(|f| f.group == "塔里点" && f.label.contains("O")).expect("|O Ty|");
+        let rr = fs.iter().find(|f| f.group == "外接圆与内切圆" && f.label == "R").expect("R");
+        assert!((ot.num.unwrap() - rr.num.unwrap()).abs() < 1e-6, "Tarry on circumcircle");
+
+        // Isosceles 5-5-6: Steiner/Tarry skipped; isodynamic present.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(5.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "施泰纳点"), "Steiner skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "塔里点"), "Tarry skip with Steiner");
+        assert!(fs2.iter().any(|f| f.group == "等动力点" && f.label.contains("S_{1}")));
+
+        // Equilateral: S2 skipped; S1 coincides with G; Steiner skipped.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "施泰纳点"));
+        assert!(fs3.iter().all(|f| !(f.group == "等动力点" && f.label.contains("S_{2}"))), "S2 skip equilateral");
+        let s1e = fs3.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1 eq");
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_eq!(s1e.value, g.value, "equilateral S1 = G");
     }
 
     #[test]
