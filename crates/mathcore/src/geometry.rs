@@ -3824,6 +3824,146 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     }
 
 
+    
+    // X(50): bary a sin 3A (= sin A sin 3A); pairs with X(49)=a cos 3A.
+    // Equilateral: 3A=180°, sin=0 → all weights 0 → skip.
+    {
+        let wa = a * (3.0 * g[0]).sin();
+        let wb = b * (3.0 * g[1]).sin();
+        let wc = c * (3.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x50 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "三倍角正弦",
+                "X_{50}",
+                pt(x50[0], x50[1]),
+                None,
+                "X(50) = (a\\sin 3A:b\\sin 3B:c\\sin 3C)",
+                "X(50)：三倍角正弦点（与 X(49) 成对；等边时退化）",
+            ).with(Shape::Point {
+                x: x50[0],
+                y: x50[1],
+                label: "X50".into(),
+            }));
+        }
+    }
+
+    // X(61), X(62): isogonal conjugates of the Napoleon centers X(17), X(18).
+    // Trilinear cos(A∓π/3); bary a cos(A∓π/3). Reciprocals of Napoleon trilinears.
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let c61 = [(g[0] - pi3).cos(), (g[1] - pi3).cos(), (g[2] - pi3).cos()];
+        let wa = a * c61[0];
+        let wb = b * c61[1];
+        let wc = c * c61[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x61 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{61}",
+                pt(x61[0], x61[1]),
+                None,
+                "X(61) = \\bigl(a\\cos(A-\\pi/3):\\cdots\\bigr)",
+                "X(61)：第一拿破仑点的等角共轭",
+            ).with(Shape::Point {
+                x: x61[0],
+                y: x61[1],
+                label: "X61".into(),
+            }));
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{61} \\leftrightarrow N_1",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(17)",
+                "X(61) 与第一拿破仑点 X(17) 互为等角共轭",
+            ));
+        }
+        let c62 = [(g[0] + pi3).cos(), (g[1] + pi3).cos(), (g[2] + pi3).cos()];
+        let wa = a * c62[0];
+        let wb = b * c62[1];
+        let wc = c * c62[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x62 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{62}",
+                pt(x62[0], x62[1]),
+                None,
+                "X(62) = \\bigl(a\\cos(A+\\pi/3):\\cdots\\bigr)",
+                "X(62)：第二拿破仑点的等角共轭",
+            ).with(Shape::Point {
+                x: x62[0],
+                y: x62[1],
+                label: "X62".into(),
+            }));
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{62} \\leftrightarrow N_2",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(18)",
+                "X(62) 与第二拿破仑点 X(18) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(64): isogonal conjugate of de Longchamps X(20).
+    // Bary a/(cos A − cos B cos C). Skip when a side-den vanishes or Σweights=0
+    // (right △: X64 is at infinity — Σ = 0).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = ca - cb * cc;
+        let db = cb - cc * ca;
+        let dc = cc - ca * cb;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x64 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "德龙尚等角",
+                    "X_{64}",
+                    pt(x64[0], x64[1]),
+                    None,
+                    "X(64) = \\bigl(a/(\\cos A-\\cos B\\cos C):\\cdots\\bigr)",
+                    "X(64)：德龙尚点的等角共轭",
+                ).with(Shape::Point {
+                    x: x64[0],
+                    y: x64[1],
+                    label: "X64".into(),
+                }));
+                out.push(fact(
+                    "德龙尚等角",
+                    "X_{64} \\leftrightarrow L",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(20)",
+                    "X(64) 与德龙尚点 X(20) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -7438,6 +7578,57 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}"));
         assert!(fs3.iter().any(|f| f.group == "双倍角余弦" && f.label == "X_{47}"));
         assert!(fs3.iter().any(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}"));
+    }
+
+    #[test]
+    fn x50_x61_x62_x64() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x50 = fs.iter().find(|f| f.group == "三倍角正弦" && f.label == "X_{50}").expect("X50");
+        let x49 = fs.iter().find(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}").expect("X49");
+        assert_ne!(x50.value, x49.value);
+        let x61 = fs.iter().find(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}").expect("X61");
+        let n1 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1");
+        assert_ne!(x61.value, n1.value);
+        assert!(fs.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label.contains("N_1") && f.value.contains("等角")));
+        let x62 = fs.iter().find(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}").expect("X62");
+        let n2 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2");
+        assert_ne!(x62.value, n2.value);
+        assert_ne!(x61.value, x62.value);
+        assert!(fs.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label.contains("N_2") && f.value.contains("等角")));
+        let x64 = fs.iter().find(|f| f.group == "德龙尚等角" && f.label == "X_{64}").expect("X64");
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        assert_ne!(x64.value, l.value);
+        assert!(fs.iter().any(|f| f.group == "德龙尚等角" && f.label.contains("L") && f.value.contains("等角")));
+
+        // Equilateral: X50 skipped (sin 180°=0); X61=X62=X64=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert!(fs2.iter().all(|f| f.group != "三倍角正弦"), "X50 skip equilateral");
+        for (grp, lab) in [
+            ("拿破仑等角共轭点", "X_{61}"),
+            ("拿破仑等角共轭点", "X_{62}"),
+            ("德龙尚等角", "X_{64}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X50/X61/X62 present; X64 at infinity (Σweights=0) → skip.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "三倍角正弦" && f.label == "X_{50}"));
+        assert!(fs3.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}"));
+        assert!(fs3.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}"));
+        assert!(fs3.iter().all(|f| f.group != "德龙尚等角"), "X64 skip right (infinity)");
     }
 
     #[test]
