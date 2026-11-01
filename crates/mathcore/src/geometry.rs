@@ -787,6 +787,36 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             r: r9,
             label: "九点圆".into(),
         }));
+        // OH is always a diameter of the circle centred at N through O (and H);
+        // it coincides with the nine-point circle precisely when |OH| = R (right triangles).
+        let oh_len = dist2(circ, orth);
+        out.push(fact(
+            "欧拉线",
+            "|OH| = 2|ON|",
+            nice(oh_len),
+            Some(oh_len),
+            "|OH| = 2|ON| = 2|NH|",
+            "N 平分 OH，故 OH 是以 N 为圆心、半径 |OH|/2 的圆的直径",
+        ));
+        if near(oh_len, rr) {
+            out.push(fact(
+                "欧拉线",
+                "OH\\text{ 九点圆直径}",
+                "\\checkmark".into(),
+                None,
+                "|OH| = R = 2R_N",
+                "直角三角形：欧拉圆（九点圆）以 OH 为直径",
+            ));
+        } else {
+            out.push(fact(
+                "欧拉线",
+                "OH\\text{ 与九点圆}",
+                format!("|OH|/2 = {},\\ R_N = {}", nice(oh_len / 2.0), nice(r9)),
+                None,
+                "|OH|/2 \\ne R/2",
+                "一般三角形 OH 不是九点圆直径（仅当直角时重合）",
+            ));
+        }
     }
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
@@ -1298,6 +1328,161 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             }
         }
     }
+
+    // Simson line: feet from a circumcircle point P onto the three sides are collinear.
+    // Take P = antipode of A on the circumcircle (always on (O)).
+    {
+        let p_sim = [2.0 * circ[0] - pa[0], 2.0 * circ[1] - pa[1]];
+        let foot_line = |p: [f64; 2], q1: [f64; 2], q2: [f64; 2]| -> Option<[f64; 2]> {
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                return None;
+            }
+            let t = ((p[0] - q1[0]) * dx + (p[1] - q1[1]) * dy) / den;
+            Some([q1[0] + t * dx, q1[1] + t * dy])
+        };
+        // feet onto BC, CA, AB
+        let sides = [(pb, pc), (pc, pa), (pa, pb)];
+        let mut feet = [[0.0; 2]; 3];
+        let mut ok = true;
+        for (i, (q1, q2)) in sides.into_iter().enumerate() {
+            if let Some(f) = foot_line(p_sim, q1, q2) {
+                feet[i] = f;
+            } else {
+                ok = false;
+            }
+        }
+        if ok {
+            let cross = (feet[1][0] - feet[0][0]) * (feet[2][1] - feet[0][1])
+                - (feet[1][1] - feet[0][1]) * (feet[2][0] - feet[0][0]);
+            if cross.abs() < 1e-6 * (1.0 + rr) {
+                out.push(fact(
+                    "西姆松线",
+                    "\\text{Simson}",
+                    "\\text{共线}".into(),
+                    None,
+                    "P\\in\\odot(O)\\Rightarrow\\text{三垂足共线}",
+                    "西姆松线：外接圆上一点到三边垂足共线（P 取 A 的对径点）",
+                ));
+                out.push(fact(
+                    "西姆松线",
+                    "P_{\\text{Simson}}",
+                    pt(p_sim[0], p_sim[1]),
+                    None,
+                    "P = 2O - A",
+                    "外接圆上 A 的对径点",
+                ).with(Shape::Point {
+                    x: p_sim[0],
+                    y: p_sim[1],
+                    label: "P Simson".into(),
+                }));
+                for (i, f) in feet.iter().enumerate() {
+                    let side_name = SIDE[i];
+                    out.push(fact(
+                        "西姆松线",
+                        &format!("F_{{{}}}", side_name),
+                        pt(f[0], f[1]),
+                        None,
+                        "",
+                        &format!("P 到边 {} 的垂足", side_name),
+                    ).with(Shape::Point {
+                        x: f[0],
+                        y: f[1],
+                        label: format!("F{}", side_name),
+                    }));
+                }
+                // line through F_a and F_b
+                let (f0, f1) = (feet[0], feet[1]);
+                let la = f1[1] - f0[1];
+                let lb = f0[0] - f1[0];
+                let lc = la * f0[0] + lb * f0[1];
+                if la.hypot(lb) > 1e-12 {
+                    out.push(fact(
+                        "西姆松线",
+                        "l_{\\text{Simson}}",
+                        line_eq_latex(la, lb, lc),
+                        None,
+                        "三垂足所在直线",
+                        "西姆松线方程",
+                    ).with(Shape::Segment {
+                        x1: f0[0],
+                        y1: f0[1],
+                        x2: f1[0],
+                        y2: f1[1],
+                        label: "Simson".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    // Trilinear polar of the incenter I (barycentrics a:b:c): X/a + Y/b + Z/c = 0.
+    {
+        let mut poles: Vec<[f64; 2]> = Vec::new();
+        // Intersection with side opposite vertex i (bary coord of that vertex = 0).
+        for i in 0..3 {
+            let sj = s[(i + 1) % 3];
+            let sk = s[(i + 2) % 3];
+            // On side jk: α_i = 0, β_j + β_k = 1, β_j/sj + β_k/sk = 0.
+            if (sj - sk).abs() < 1e-12 {
+                continue; // polar ∥ this side
+            }
+            let bj = sj / (sj - sk);
+            let bk = 1.0 - bj;
+            let pj = v[(i + 1) % 3];
+            let pk = v[(i + 2) % 3];
+            let pt_i = [bj * pj[0] + bk * pk[0], bj * pj[1] + bk * pk[1]];
+            if pt_i[0].is_finite() && pt_i[1].is_finite() {
+                poles.push(pt_i);
+            }
+        }
+        out.push(fact(
+            "三线极线",
+            "\\tau(I)",
+            "\\frac{X}{a}+\\frac{Y}{b}+\\frac{Z}{c}=0".into(),
+            None,
+            "I=(a:b:c)_{\\text{bary}}",
+            "内心的三线极线（重心坐标方程）",
+        ));
+        if poles.len() >= 2 {
+            let (p0, p1) = (poles[0], poles[1]);
+            let la = p1[1] - p0[1];
+            let lb = p0[0] - p1[0];
+            let lc = la * p0[0] + lb * p0[1];
+            if la.hypot(lb) > 1e-12 {
+                out.push(fact(
+                    "三线极线",
+                    "l_{\\tau(I)}",
+                    line_eq_latex(la, lb, lc),
+                    None,
+                    "\\frac{X}{a}+\\frac{Y}{b}+\\frac{Z}{c}=0",
+                    "内心三线极线的直角坐标方程",
+                ).with(Shape::Segment {
+                    x1: p0[0],
+                    y1: p0[1],
+                    x2: p1[0],
+                    y2: p1[1],
+                    label: "τ(I)".into(),
+                }));
+            }
+            for (k, pp) in poles.iter().take(3).enumerate() {
+                out.push(fact(
+                    "三线极线",
+                    &format!("Q_{{{}}}", k),
+                    pt(pp[0], pp[1]),
+                    None,
+                    "",
+                    "三线极线与边的交点",
+                ).with(Shape::Point {
+                    x: pp[0],
+                    y: pp[1],
+                    label: format!("Q{}", k),
+                }));
+            }
+        }
+    }
     out
 }
 
@@ -1694,6 +1879,64 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
             let dpt = pts[3].1;
             let vol = dot3(sub3(dpt, a), nrm).abs() / 6.0;
             out.push(fact("体积", "V_{\\text{四面体}}", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
+            // Cayley–Menger: volume from the six edge lengths alone.
+            {
+                let p0 = pts[0].1;
+                let p1 = pts[1].1;
+                let p2 = pts[2].1;
+                let p3 = pts[3].1;
+                let d12 = len3(sub3(p1, p0));
+                let d13 = len3(sub3(p2, p0));
+                let d14 = len3(sub3(p3, p0));
+                let d23 = len3(sub3(p2, p1));
+                let d24 = len3(sub3(p3, p1));
+                let d34 = len3(sub3(p3, p2));
+                let s = |x: f64| x * x;
+                let mut m = [
+                    [0.0, 1.0, 1.0, 1.0, 1.0],
+                    [1.0, 0.0, s(d12), s(d13), s(d14)],
+                    [1.0, s(d12), 0.0, s(d23), s(d24)],
+                    [1.0, s(d13), s(d23), 0.0, s(d34)],
+                    [1.0, s(d14), s(d24), s(d34), 0.0],
+                ];
+                // Gaussian elimination → det
+                let mut det = 1.0_f64;
+                for i in 0..5 {
+                    let mut piv = i;
+                    for r in (i + 1)..5 {
+                        if m[r][i].abs() > m[piv][i].abs() {
+                            piv = r;
+                        }
+                    }
+                    if m[piv][i].abs() < 1e-18 {
+                        det = 0.0;
+                        break;
+                    }
+                    if piv != i {
+                        m.swap(piv, i);
+                        det = -det;
+                    }
+                    det *= m[i][i];
+                    for r in (i + 1)..5 {
+                        let f = m[r][i] / m[i][i];
+                        for c in i..5 {
+                            m[r][c] -= f * m[i][c];
+                        }
+                    }
+                }
+                let v_cm2 = det.abs() / 288.0;
+                if v_cm2 >= 0.0 {
+                    let v_cm = v_cm2.sqrt();
+                    out.push(fact(
+                        "体积",
+                        "V_{\\text{Cayley--Menger}}",
+                        nice(v_cm),
+                        Some(v_cm),
+                        "288V^2 = |\\det M_5|",
+                        "凯莱–门杰行列式：由六棱长求四面体体积",
+                    ));
+                }
+            }
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
@@ -2919,6 +3162,8 @@ mod tests {
         let out = points_analyze(&pts);
         let v = out.iter().find(|f| f.label.contains("四面体")).expect("tetra volume");
         assert!((v.num.unwrap() - 1.0 / 6.0).abs() < 1e-9, "V = {}", v.value);
+        let cm = out.iter().find(|f| f.label.contains("Cayley")).expect("Cayley-Menger");
+        assert!((cm.num.unwrap() - 1.0 / 6.0).abs() < 1e-9, "V_CM = {}", cm.value);
     }
 
     #[test]
@@ -2946,6 +3191,13 @@ mod tests {
         assert!((r9.num.unwrap() - 1.25).abs() < 1e-9, "R9 = {}", r9.value); // R=2.5
         // OI² = R(R-2r) already covered; ensure |OI| present
         assert!(fs.iter().any(|f| f.label == "|OI|"));
+        // 3-4-5 is right: OH is nine-point diameter
+        assert!(
+            fs.iter().any(|f| f.label.contains("九点圆直径")),
+            "OH nine-point diameter fact missing for right triangle"
+        );
+        let oh2on = fs.iter().find(|f| f.label == "|OH| = 2|ON|").expect("OH=2ON");
+        assert!((oh2on.num.unwrap() - 2.5).abs() < 1e-9);
     }
 
     #[test]
@@ -3079,6 +3331,25 @@ mod tests {
         );
         let ms = fs.iter().find(|f| f.group == "莫利定理" && f.label == "|M_0M_1|").unwrap();
         assert!(ms.num.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn simson_and_trilinear_polar() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(
+            fs.iter().any(|f| f.group == "西姆松线" && f.value.contains("共线")),
+            "Simson collinear missing"
+        );
+        assert!(fs.iter().any(|f| f.group == "西姆松线" && f.label.contains("Simson")));
+        assert_eq!(fs.iter().filter(|f| f.group == "西姆松线" && f.label.starts_with("F_")).count(), 3);
+        assert!(
+            fs.iter().any(|f| f.group == "三线极线" && f.label.contains("tau")),
+            "trilinear polar of I missing"
+        );
+        assert!(fs.iter().any(|f| f.group == "三线极线" && f.label.contains("l_")));
     }
 
 }
