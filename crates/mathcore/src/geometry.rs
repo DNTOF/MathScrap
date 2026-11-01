@@ -2917,6 +2917,130 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // Grinberg X(37): crosspoint of I and G; bary a(b+c). Complement of Moses X(75).
+    // X(81): isogonal of Grinberg; bary a/(b+c).
+    // X(42): crosspoint of I and K (Lemoine); bary a²(b+c).
+    {
+        let wa = a * (b + c);
+        let wb = b * (c + a);
+        let wc = c * (a + b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let gr = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "格林伯格点",
+                "Gr",
+                pt(gr[0], gr[1]),
+                None,
+                "Gr = \\frac{a(b+c)A+b(c+a)B+c(a+b)C}{\\sum}",
+                "格林伯格点 X(37)：内心与重心的截线交点（摩西点的补点）",
+            ).with(Shape::Point {
+                x: gr[0],
+                y: gr[1],
+                label: "Gr 格林伯格".into(),
+            }));
+            // Complement of Moses: Mo = bc:ca:ab → complement has bary a(b+c) = Gr.
+            let mwa = b * c;
+            let mwb = c * a;
+            let mwc = a * b;
+            let mden = mwa + mwb + mwc;
+            if mden > 1e-12 {
+                let mo = [
+                    (mwa * pa[0] + mwb * pb[0] + mwc * pc[0]) / mden,
+                    (mwa * pa[1] + mwb * pb[1] + mwc * pc[1]) / mden,
+                ];
+                // Complement map: P ↦ 3G − 2P? Kimberling complement of P with bary x:y:z
+                // is (y+z):(z+x):(x+y). For Mo=bc:ca:ab, complement = (ca+ab):(ab+bc):(bc+ca)
+                // = a(b+c):b(c+a):c(a+b) = Gr. Verify Cartesian: midpoint? Actually
+                // complement C(P) satisfies G divides P C(P) with PG:G C(P) = 2:1 toward C(P)?
+                // Standard: complement of P is the point Q such that G = (2P+Q)/3? No —
+                // In ETC, complement of P is anticomplement of P mapped... 
+                // Vectorially often Q = 3G − 2P? Let's check: if Q = 3G-2P then G = (2P+Q)/3 means G divides PQ with PG:GQ = 1:2? 
+                // Actually Kimberling: the complement of P is the image under the homothety h(G,−1/2).
+                // So Q − G = (−1/2)(P − G) ⇒ Q = G − (1/2)(P−G) = (3G − P)/2? 
+                // Homothety h(G,k): Q = G + k(P−G).
+                // Complement = h(G, −1/2): Q = G − (1/2)(P−G) = (3/2)G − (1/2)P = (3G−P)/2.
+                // Anticomplement = h(G, −2): Q = 3G − 2P.
+                // ETC: X(37) = complement of X(75). So Gr = (3G − Mo)/2.
+                let q = [
+                    (3.0 * centroid[0] - mo[0]) / 2.0,
+                    (3.0 * centroid[1] - mo[1]) / 2.0,
+                ];
+                if dist2(q, gr) < 1e-5 * (1.0 + dist2(gr, centroid)) {
+                    out.push(fact(
+                        "格林伯格点",
+                        "Gr = \\text{complement}(Mo)",
+                        "\\checkmark".into(),
+                        None,
+                        "Gr = \\tfrac{3G - Mo}{2}",
+                        "格林伯格点是摩西点关于重心的补点（位似比 −1/2）",
+                    ));
+                }
+            }
+        }
+        // X(81) isogonal of Grinberg
+        {
+            let wa = a / (b + c);
+            let wb = b / (c + a);
+            let wc = c / (a + b);
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x81 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "格林伯格等角共轭点",
+                    "X_{81}",
+                    pt(x81[0], x81[1]),
+                    None,
+                    "X(81) = \\bigl(a/(b+c):\\cdots\\bigr)",
+                    "X(81)：格林伯格点的等角共轭",
+                ).with(Shape::Point {
+                    x: x81[0],
+                    y: x81[1],
+                    label: "X81".into(),
+                }));
+                out.push(fact(
+                    "格林伯格等角共轭点",
+                    "X_{81} \\leftrightarrow Gr",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(37)",
+                    "X(81) 与格林伯格点 X(37) 互为等角共轭",
+                ));
+            }
+        }
+        // X(42) crosspoint of I and K
+        {
+            let wa = a * a * (b + c);
+            let wb = b * b * (c + a);
+            let wc = c * c * (a + b);
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x42 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "内心勒莫恩截点",
+                    "X_{42}",
+                    pt(x42[0], x42[1]),
+                    None,
+                    "X(42) = \\bigl(a^2(b+c):\\cdots\\bigr)",
+                    "X(42)：内心与勒莫恩点的截线交点",
+                ).with(Shape::Point {
+                    x: x42[0],
+                    y: x42[1],
+                    label: "X42".into(),
+                }));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -6215,6 +6339,46 @@ mod tests {
         assert_eq!(x12e.value, g.value);
         assert_eq!(x60e.value, g.value);
         assert!(fs3.iter().all(|f| f.group != "费尔巴哈等角共轭点"), "X59 skip equilateral");
+    }
+
+    #[test]
+    fn grinberg_x42_x81() {
+        // Scalene 6-7-8: Gr, X81, X42 distinct; complement & isogonal notes.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let gr = fs.iter().find(|f| f.group == "格林伯格点" && f.label == "Gr").expect("Gr");
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(gr.value, mo.value);
+        assert_ne!(gr.value, g.value);
+        assert_ne!(gr.value, i.value);
+        assert!(fs.iter().any(|f| f.group == "格林伯格点" && f.label.contains("complement")));
+        let x81 = fs.iter().find(|f| f.group == "格林伯格等角共轭点" && f.label == "X_{81}").expect("X81");
+        assert_ne!(x81.value, gr.value);
+        assert!(fs.iter().any(|f| f.group == "格林伯格等角共轭点" && f.value.contains("等角")));
+        let x42 = fs.iter().find(|f| f.group == "内心勒莫恩截点" && f.label == "X_{42}").expect("X42");
+        let kpt = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        assert_ne!(x42.value, kpt.value);
+        assert_ne!(x42.value, gr.value);
+        assert_ne!(x42.value, x81.value);
+
+        // Equilateral: all = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("格林伯格点", "Gr"),
+            ("格林伯格等角共轭点", "X_{81}"),
+            ("内心勒莫恩截点", "X_{42}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
     }
 
     #[test]
