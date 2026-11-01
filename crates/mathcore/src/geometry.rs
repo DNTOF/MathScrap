@@ -817,6 +817,143 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 "一般三角形 OH 不是九点圆直径（仅当直角时重合）",
             ));
         }
+
+        // Feuerbach: nine-point circle tangent to incircle (internally) and excircles (externally).
+        {
+            let ni = (r9 - r).abs();
+            out.push(fact(
+                "费尔巴哈定理",
+                "|NI|",
+                nice(ni),
+                Some(ni),
+                "|NI| = R/2 - r",
+                "九点圆与内切圆内切（费尔巴哈）",
+            ).with(Shape::Segment {
+                x1: n9[0],
+                y1: n9[1],
+                x2: inc[0],
+                y2: inc[1],
+                label: "NI".into(),
+            }));
+            // verify from coordinates
+            let ni_coord = dist2(n9, inc);
+            if (ni_coord - ni).abs() < 1e-5 * (1.0 + ni) {
+                out.push(fact(
+                    "费尔巴哈定理",
+                    "\\text{内切}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N,I) = R_N - r",
+                    "九点圆与内切圆相切",
+                ));
+            }
+            for i in 0..3 {
+                let ri = area / (p - s[i]);
+                // excenter I_i opposite vertex i: (-a_i V_i + a_j V_j + a_k V_k) / (-a_i + a_j + a_k)
+                let (ai, aj, ak) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+                let den = -ai + aj + ak;
+                if den.abs() < 1e-12 {
+                    continue;
+                }
+                let ia = [
+                    (-ai * v[i][0] + aj * v[(i + 1) % 3][0] + ak * v[(i + 2) % 3][0]) / den,
+                    (-ai * v[i][1] + aj * v[(i + 1) % 3][1] + ak * v[(i + 2) % 3][1]) / den,
+                ];
+                let nia = r9 + ri;
+                let nia_coord = dist2(n9, ia);
+                out.push(fact(
+                    "费尔巴哈定理",
+                    &format!("|NI_{}|", SIDE[i]),
+                    nice(nia),
+                    Some(nia),
+                    &format!("|NI_{s}| = R/2 + r_{s}", s = SIDE[i]),
+                    "九点圆与旁切圆外切（费尔巴哈）",
+                ));
+                if (nia_coord - nia).abs() < 1e-5 * (1.0 + nia) {
+                    out.push(fact(
+                        "费尔巴哈定理",
+                        &format!("I_{}", SIDE[i]),
+                        pt(ia[0], ia[1]),
+                        None,
+                        "",
+                        "旁心（与九点圆外切）",
+                    ).with(Shape::Point {
+                        x: ia[0],
+                        y: ia[1],
+                        label: format!("I{}", SIDE[i]),
+                    }));
+                }
+            }
+        }
+    }
+
+    // Spieker center: incenter of the medial triangle = perimeter centroid.
+    {
+        let den = 2.0 * (a + b + c);
+        let sp = [
+            ((b + c) * pa[0] + (c + a) * pb[0] + (a + b) * pc[0]) / den,
+            ((b + c) * pa[1] + (c + a) * pb[1] + (a + b) * pc[1]) / den,
+        ];
+        out.push(fact(
+            "斯皮克中心",
+            "Sp",
+            pt(sp[0], sp[1]),
+            None,
+            "Sp = \\frac{(b+c)A+(c+a)B+(a+b)C}{2(a+b+c)}",
+            "斯皮克中心：周界重心（中点三角形的内心）",
+        ).with(Shape::Point {
+            x: sp[0],
+            y: sp[1],
+            label: "Sp 斯皮克".into(),
+        }));
+    }
+
+    // Nagel point: concurrence of vertex-to-excircle-contact cevians; bary (s−a:s−b:s−c).
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if p > 1e-12 {
+            let na = [
+                (sa * pa[0] + sb * pb[0] + sc * pc[0]) / p,
+                (sa * pa[1] + sb * pb[1] + sc * pc[1]) / p,
+            ];
+            out.push(fact(
+                "奈格尔点",
+                "Na",
+                pt(na[0], na[1]),
+                None,
+                "Na = \\frac{(s-a)A+(s-b)B+(s-c)C}{s}",
+                "奈格尔点：顶点与对旁切圆切点的连线交点",
+            ).with(Shape::Point {
+                x: na[0],
+                y: na[1],
+                label: "Na 奈格尔".into(),
+            }));
+            // Nagel line: I, G, Na collinear with IG:GNa = 1:2
+            let ig = dist2(inc, centroid);
+            let gna = dist2(centroid, na);
+            let cross = (centroid[0] - inc[0]) * (na[1] - inc[1]) - (centroid[1] - inc[1]) * (na[0] - inc[0]);
+            if cross.abs() < 1e-6 * (1.0 + ig) * (1.0 + gna) && ig > 1e-12 {
+                let ratio = gna / ig;
+                out.push(fact(
+                    "奈格尔点",
+                    "I,\\ G,\\ Na",
+                    "\\text{共线}".into(),
+                    None,
+                    "\\vec{INa} = 3\\vec{IG}",
+                    "奈格尔线：内心、重心、奈格尔点共线",
+                ));
+                out.push(fact(
+                    "奈格尔点",
+                    "IG:GNa",
+                    format!("1:{}", nice(ratio)),
+                    Some(ratio),
+                    "IG:GNa = 1:2",
+                    "重心按 1:2 分 INa",
+                ));
+            }
+        }
     }
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
@@ -3556,6 +3693,29 @@ mod tests {
         );
         let oh2on = fs.iter().find(|f| f.label == "|OH| = 2|ON|").expect("OH=2ON");
         assert!((oh2on.num.unwrap() - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn feuerbach_spieker_nagel() {
+        // 3-4-5: R=2.5, r=1 → |NI|=R/2−r=0.25; r_a=2,r_b=3,r_c=6 → |NI_*|=R/2+r_*.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ni = fs.iter().find(|f| f.group == "费尔巴哈定理" && f.label == "|NI|").expect("|NI|");
+        assert!((ni.num.unwrap() - 0.25).abs() < 1e-9, "|NI|={}", ni.value);
+        assert!(fs.iter().any(|f| f.group == "费尔巴哈定理" && f.label.contains("内切")));
+        let nia = fs.iter().find(|f| f.label == "|NI_a|").expect("|NI_a|");
+        let nib = fs.iter().find(|f| f.label == "|NI_b|").expect("|NI_b|");
+        let nic = fs.iter().find(|f| f.label == "|NI_c|").expect("|NI_c|");
+        assert!((nia.num.unwrap() - 3.25).abs() < 1e-9, "|NI_a|={}", nia.value);
+        assert!((nib.num.unwrap() - 4.25).abs() < 1e-9, "|NI_b|={}", nib.value);
+        assert!((nic.num.unwrap() - 7.25).abs() < 1e-9, "|NI_c|={}", nic.value);
+        assert!(fs.iter().any(|f| f.group == "斯皮克中心" && f.label == "Sp"));
+        assert!(fs.iter().any(|f| f.group == "奈格尔点" && f.label == "Na"));
+        let ig = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "IG:GNa").expect("IG:GNa");
+        assert!((ig.num.unwrap() - 2.0).abs() < 1e-6, "IG:GNa={}", ig.value);
+        assert!(fs.iter().any(|f| f.group == "奈格尔点" && f.value.contains("共线")));
     }
 
     #[test]
