@@ -1862,6 +1862,165 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // Napoleon centers X(17), X(18): concurrence of lines to centroids of
+    // outward/inward equilateral triangles on the sides (distinct from Napoleon theorem).
+    {
+        let pi6 = std::f64::consts::PI / 6.0;
+        // X(17) outer: bary a csc(A+π/6); skip if sin(A+π/6)≈0 (e.g. angle ≈ 150°).
+        let s17 = [(g[0] + pi6).sin(), (g[1] + pi6).sin(), (g[2] + pi6).sin()];
+        if s17.iter().all(|&s| s.abs() > 1e-9) {
+            let wa = a / s17[0];
+            let wb = b / s17[1];
+            let wc = c / s17[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let n1 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "拿破仑中心",
+                    "N_1",
+                    pt(n1[0], n1[1]),
+                    None,
+                    "N_1 = \\frac{a\\csc(A+\\pi/6)A+\\cdots}{\\sum}",
+                    "第一拿破仑点 X(17)：外接等边三角形重心连线交点",
+                ).with(Shape::Point {
+                    x: n1[0],
+                    y: n1[1],
+                    label: "N1 拿破仑".into(),
+                }));
+            }
+        }
+        // X(18) inner: bary a csc(A−π/6); skip if sin(A−π/6)≈0 (angle ≈ 30°).
+        let s18 = [(g[0] - pi6).sin(), (g[1] - pi6).sin(), (g[2] - pi6).sin()];
+        if s18.iter().all(|&s| s.abs() > 1e-9) {
+            let wa = a / s18[0];
+            let wb = b / s18[1];
+            let wc = c / s18[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let n2 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "拿破仑中心",
+                    "N_2",
+                    pt(n2[0], n2[1]),
+                    None,
+                    "N_2 = \\frac{a\\csc(A-\\pi/6)A+\\cdots}{\\sum}",
+                    "第二拿破仑点 X(18)：内接等边三角形重心连线交点",
+                ).with(Shape::Point {
+                    x: n2[0],
+                    y: n2[1],
+                    label: "N2 拿破仑".into(),
+                }));
+            }
+        }
+    }
+
+    // Parry point X(111): bary a²/(2a²−b²−c²); on circumcircle.
+    // Degenerate when 2a²=b²+c² for any side (e.g. equilateral).
+    {
+        let da = 2.0 * a * a - b * b - c * c;
+        let db = 2.0 * b * b - c * c - a * a;
+        let dc = 2.0 * c * c - a * a - b * b;
+        if da.abs() > 1e-10 && db.abs() > 1e-10 && dc.abs() > 1e-10 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let py = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "帕里点",
+                    "Py",
+                    pt(py[0], py[1]),
+                    None,
+                    "Py = \\frac{\\frac{a^2}{2a^2-b^2-c^2}A+\\cdots}{\\sum}",
+                    "帕里点 X(111)：Λ(G,K)（等边时退化）",
+                ).with(Shape::Point {
+                    x: py[0],
+                    y: py[1],
+                    label: "Py 帕里".into(),
+                }));
+                let op = dist2(circ, py);
+                if (op - rr).abs() < 1e-4 * (1.0 + rr) {
+                    out.push(fact(
+                        "帕里点",
+                        "|O\\,Py|",
+                        nice(op),
+                        Some(op),
+                        "|O\\,Py| = R",
+                        "帕里点在外接圆上",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Vecten points: perspectors of outer/inner square-center triangles.
+    // X(485) outer: bary a sec(A−π/4); skip if cos(A−π/4)≈0 (angle ≈ 135°).
+    // X(486) inner: bary a sec(A+π/4); skip if cos(A+π/4)≈0 (angle ≈ 45°).
+    {
+        let pi4 = std::f64::consts::FRAC_PI_4;
+        let c_out = [(g[0] - pi4).cos(), (g[1] - pi4).cos(), (g[2] - pi4).cos()];
+        if c_out.iter().all(|&c| c.abs() > 1e-9) {
+            let wa = a / c_out[0];
+            let wb = b / c_out[1];
+            let wc = c / c_out[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let vo = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "韦克滕点",
+                    "V_{\\text{out}}",
+                    pt(vo[0], vo[1]),
+                    None,
+                    "V_{\\text{out}} = \\frac{a\\sec(A-\\pi/4)A+\\cdots}{\\sum}",
+                    "外韦克滕点 X(485)：外侧正方形中心三角形的透视中心",
+                ).with(Shape::Point {
+                    x: vo[0],
+                    y: vo[1],
+                    label: "Vout 韦克滕".into(),
+                }));
+            }
+        }
+        let c_in = [(g[0] + pi4).cos(), (g[1] + pi4).cos(), (g[2] + pi4).cos()];
+        if c_in.iter().all(|&c| c.abs() > 1e-9) {
+            let wa = a / c_in[0];
+            let wb = b / c_in[1];
+            let wc = c / c_in[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let vi = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "韦克滕点",
+                    "V_{\\text{in}}",
+                    pt(vi[0], vi[1]),
+                    None,
+                    "V_{\\text{in}} = \\frac{a\\sec(A+\\pi/4)A+\\cdots}{\\sum}",
+                    "内韦克滕点 X(486)：内侧正方形中心三角形的透视中心",
+                ).with(Shape::Point {
+                    x: vi[0],
+                    y: vi[1],
+                    label: "Vin 韦克滕".into(),
+                }));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -4884,6 +5043,48 @@ mod tests {
         let s1e = fs3.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1 eq");
         let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
         assert_eq!(s1e.value, g.value, "equilateral S1 = G");
+    }
+
+    #[test]
+    fn napoleon_parry_vecten() {
+        // Scalene 3-4-5: all present (no 30°/45°/135°/150°; not equilateral).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let n1 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1");
+        let n2 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2");
+        assert_ne!(n1.value, n2.value);
+        let py = fs.iter().find(|f| f.group == "帕里点" && f.label == "Py").expect("Parry");
+        let op = fs.iter().find(|f| f.group == "帕里点" && f.label.contains("O")).expect("|O Py|");
+        let rr = fs.iter().find(|f| f.group == "外接圆与内切圆" && f.label == "R").expect("R");
+        assert!((op.num.unwrap() - rr.num.unwrap()).abs() < 1e-6, "Parry on circumcircle");
+        let vout = fs.iter().find(|f| f.group == "韦克滕点" && f.label.contains("out")).expect("Vout");
+        let vin = fs.iter().find(|f| f.group == "韦克滕点" && f.label.contains("in")).expect("Vin");
+        assert_ne!(vout.value, vin.value);
+        assert_ne!(py.value, n1.value);
+
+        // Equilateral: Parry skipped; Napoleon + Vecten present; N1=N2=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "帕里点"), "Parry skip equilateral");
+        let n1e = fs2.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1 eq");
+        let n2e = fs2.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2 eq");
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_eq!(n1e.value, g.value);
+        assert_eq!(n2e.value, g.value);
+        assert!(fs2.iter().any(|f| f.group == "韦克滕点" && f.label.contains("out")));
+
+        // Isosceles right 1-1-√2 ≈ has 45°: inner Vecten skipped; outer ok; Parry ok.
+        let k3 = TriangleKnown { a: Some(1.0), b: Some(1.0), c: Some(2f64.sqrt()), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| !(f.group == "韦克滕点" && f.label.contains("in"))), "Vin skip 45°");
+        assert!(fs3.iter().any(|f| f.group == "韦克滕点" && f.label.contains("out")), "Vout on isos right");
+        assert!(fs3.iter().any(|f| f.group == "帕里点" && f.label == "Py"));
     }
 
     #[test]

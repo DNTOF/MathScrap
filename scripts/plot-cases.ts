@@ -47,7 +47,7 @@ export const cases: [string, string, Expect][] = [
   ['直线过两点', 'y = kx + b, 过(1, 3), 过(2, 5)', { solve: { k: 2, b: 1 } }],
   // ---- triangles / coordinate geometry ----
   ['解三角形 SAS', '△ABC: a = 5, b = 7, C = 60°', { dim: 2, facts: ['\\sqrt{39}'], minFacts: 10 }],
-  ['解三角形 SSS', '△ABC: a=3, b=4, c=5', { dim: 2, facts: ['90', 'S_{\\text{海伦}}', '|OI|', 'r_a=', 'AF_{c}', '\\Pi_{\\text{Ceva}}', '\\Pi_{\\text{Menelaus}}', '\\text{Stewart}_{m_', 'ID_{a}', '\\mathcal{A}_', 'OG:GH', 'R_{\\text{九点}}', '|NI|', '|NI_a|', 'Sp', 'Na', 'IG:GNa', 'Ge=', 'K=', '\\omega', '\\Omega', 'L=', 'Mi', 'Sc', 'Be=', 'H_a', 'X_a', 'r_{\\text{Sp}}', 'T_a', 'S_{\\text{Steiner}}', 'M_a', 'Ex=', 'S_{1}', 'St=', 'Ty='], minFacts: 78 }],
+  ['解三角形 SSS', '△ABC: a=3, b=4, c=5', { dim: 2, facts: ['90', 'S_{\\text{海伦}}', '|OI|', 'r_a=', 'AF_{c}', '\\Pi_{\\text{Ceva}}', '\\Pi_{\\text{Menelaus}}', '\\text{Stewart}_{m_', 'ID_{a}', '\\mathcal{A}_', 'OG:GH', 'R_{\\text{九点}}', '|NI|', '|NI_a|', 'Sp', 'Na', 'IG:GNa', 'Ge=', 'K=', '\\omega', '\\Omega', 'L=', 'Mi', 'Sc', 'Be=', 'H_a', 'X_a', 'r_{\\text{Sp}}', 'T_a', 'S_{\\text{Steiner}}', 'M_a', 'Ex=', 'S_{1}', 'St=', 'Ty=', 'N_1', 'Py', 'V_{\\text{out}}'], minFacts: 84 }],
   ['欧拉反射点（锐角）', '△ABC: a=6, b=7, c=8', { dim: 2, facts: ['E_r', 'E_r \\in (O)', 'Ko', 'Cl', 'Yff'], minFacts: 8 }],
   ['解三角形 SSA 两解', '△ABC: a = 6, b = 8, A = 40°', { dim: 2 }],
   ['坐标 + 垂直', 'A(0,0), B(4,0), C(1,t)\nAC ⊥ BC', { dim: 2, solve: { t: Math.sqrt(3) }, inView: [[0, 0], [4, 0]] }],
