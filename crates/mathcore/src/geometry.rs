@@ -3607,6 +3607,117 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(24): perspector of ABC and the orthic-of-orthic triangle.
+    // Bary tan A cos 2A = tan A − sin 2A; skip right/obtuse (tan undefined / sign issues).
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let acute = cosines.iter().all(|&c| c > 1e-9)
+            && g.iter().all(|&ang| ang > 1e-9 && ang < std::f64::consts::FRAC_PI_2 - 1e-9);
+        if acute {
+            let wa = g[0].tan() - (2.0 * g[0]).sin();
+            let wb = g[1].tan() - (2.0 * g[1]).sin();
+            let wc = g[2].tan() - (2.0 * g[2]).sin();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x24 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "二重垂足透视",
+                    "X_{24}",
+                    pt(x24[0], x24[1]),
+                    None,
+                    "X(24) = (\\tan A\\cos 2A:\\cdots) = (\\tan A-\\sin 2A:\\cdots)",
+                    "X(24)：ABC 与二重垂足三角形的透视中心（锐角）",
+                ).with(Shape::Point {
+                    x: x24[0],
+                    y: x24[1],
+                    label: "X24".into(),
+                }));
+            }
+        }
+    }
+
+    // X(43): X(6)-Ceva conjugate of I; bary a(ab+ac−bc).
+    {
+        let wa = a * (a * b + a * c - b * c);
+        let wb = b * (b * c + b * a - c * a);
+        let wc = c * (c * a + c * b - a * b);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x43 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "勒莫恩Ceva",
+                "X_{43}",
+                pt(x43[0], x43[1]),
+                None,
+                "X(43) = \\bigl(a(ab+ac-bc):\\cdots\\bigr)",
+                "X(43)：勒莫恩点对内心的 Ceva 共轭",
+            ).with(Shape::Point {
+                x: x43[0],
+                y: x43[1],
+                label: "X43".into(),
+            }));
+        }
+    }
+
+    // X(44): X(6)-line conjugate of I; bary a(b+c−2a). Skip equilateral (all weights 0).
+    {
+        let wa = a * (b + c - 2.0 * a);
+        let wb = b * (c + a - 2.0 * b);
+        let wc = c * (a + b - 2.0 * c);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x44 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "勒莫恩线共轭",
+                "X_{44}",
+                pt(x44[0], x44[1]),
+                None,
+                "X(44) = \\bigl(a(b+c-2a):\\cdots\\bigr)",
+                "X(44)：勒莫恩点对内心的线共轭（等边时退化）",
+            ).with(Shape::Point {
+                x: x44[0],
+                y: x44[1],
+                label: "X44".into(),
+            }));
+        }
+    }
+
+    // X(63): isogonal conjugate of Clawson X(19); bary cos A : cos B : cos C.
+    // Always finite (Σ cos = 1+r/R > 0); equals G on equilateral.
+    {
+        let wa = g[0].cos();
+        let wb = g[1].cos();
+        let wc = g[2].cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x63 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "克劳森等角",
+                "X_{63}",
+                pt(x63[0], x63[1]),
+                None,
+                "X(63) = (\\cos A:\\cos B:\\cos C)",
+                "X(63)：克劳森点的等角共轭（亦为 X(48) 的截线伴点）",
+            ).with(Shape::Point {
+                x: x63[0],
+                y: x63[1],
+                label: "X63".into(),
+            }));
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -7114,6 +7225,53 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "远点" && f.label == "X_{23}"));
         assert!(fs3.iter().any(|f| f.group == "OI调和点" && f.label == "X_{35}"));
         assert!(fs3.iter().any(|f| f.group == "截线交点" && f.label == "X_{38}"));
+    }
+
+    #[test]
+    fn x24_x43_x44_x63() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x24 = fs.iter().find(|f| f.group == "二重垂足透视" && f.label == "X_{24}").expect("X24");
+        let x43 = fs.iter().find(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}").expect("X43");
+        let x44 = fs.iter().find(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}").expect("X44");
+        let x63 = fs.iter().find(|f| f.group == "克劳森等角" && f.label == "X_{63}").expect("X63");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(x24.value, g.value);
+        assert_ne!(x24.value, o.value);
+        assert_ne!(x43.value, i.value);
+        assert_ne!(x43.value, x44.value);
+        assert_ne!(x63.value, o.value); // cos A ≠ a² cos A
+        assert_ne!(x63.value, g.value);
+        assert_ne!(x44.value, x63.value);
+
+        // Equilateral: X24 present (=G); X44 skipped; X43=X63=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x24e = fs2.iter().find(|f| f.group == "二重垂足透视" && f.label == "X_{24}").unwrap();
+        assert_eq!(x24e.value, g2.value);
+        assert!(fs2.iter().all(|f| f.group != "勒莫恩线共轭"), "X44 skip equilateral");
+        let x43e = fs2.iter().find(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}").unwrap();
+        let x63e = fs2.iter().find(|f| f.group == "克劳森等角" && f.label == "X_{63}").unwrap();
+        assert_eq!(x43e.value, g2.value);
+        assert_eq!(x63e.value, g2.value);
+
+        // Right 3-4-5: X24 skipped (tan∞); X43/X44/X63 present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "二重垂足透视"), "X24 skip right");
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}"));
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}"));
+        assert!(fs3.iter().any(|f| f.group == "克劳森等角" && f.label == "X_{63}"));
     }
 
     #[test]
