@@ -105,6 +105,8 @@ export const cases: [string, string, Expect][] = [
   ['平行四边形法则', '𝐚 = (3, 4); 𝐛 = (1, 0)', { dim: 2, kinds: ['vector', 'vector'], facts: ['|a+b|^2 + |a-b|^2'] }],
   ['托勒密与婆罗摩笈多', 'A(0,0), B(4,0), C(4,3), D(0,3)', { dim: 2, facts: ['\\text{共圆}', 'AC \\cdot BD', 'S_{\\text{Brahmagupta}}'], minFacts: 4 }],
   ['拿破仑定理', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['\\text{Napoleon}', '|G_aG_b|'], minFacts: 3 }],
+  ['欧拉OH²与卡诺', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['|OH|^2', '9R^2', 'R+r', 'H \\leftrightarrow O'], minFacts: 6 }],
+  ['莫利定理', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['\\text{Morley}', '|M_0M_1|'], minFacts: 3 }],
   ['空间螺旋线', 'r(t) = (cos(t), sin(t), t/3)', { dim: 3 }],
   ['空间三点', 'P(1,2,3), Q(0,1,-1), R(2,0,1)', { dim: 3 }],
 ]
