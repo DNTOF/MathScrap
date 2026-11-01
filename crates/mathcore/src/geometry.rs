@@ -3041,6 +3041,148 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(65): orthocenter of the intouch triangle; isogonal of Schiffler X(21).
+    // Bary a(b+c)/(b+c−a). Also perspector of ABC and the extangents triangle.
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a * (b + c) / sa;
+            let wb = b * (c + a) / sb;
+            let wc = c * (a + b) / sc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x65 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "接触垂心",
+                    "X_{65}",
+                    pt(x65[0], x65[1]),
+                    None,
+                    "X(65) = \\bigl(a(b+c)/(b+c-a):\\cdots\\bigr)",
+                    "X(65)：接触三角形的垂心（席弗勒点的等角共轭）",
+                ).with(Shape::Point {
+                    x: x65[0],
+                    y: x65[1],
+                    label: "X65 接触垂心".into(),
+                }));
+                // Geometric: orthocenter of intouch feet X_a,X_b,X_c.
+                let s_a = p - a;
+                let s_b = p - b;
+                let s_c = p - c;
+                if s_a > 1e-12 && s_b > 1e-12 && s_c > 1e-12 {
+                    let xa = section_point(pb, pc, s_b, s_c);
+                    let xb = section_point(pc, pa, s_c, s_a);
+                    let xc = section_point(pa, pb, s_a, s_b);
+                    if let Some((o_in, _)) = circum2(xa, xb, xc) {
+                        let h_in = [
+                            xa[0] + xb[0] + xc[0] - 2.0 * o_in[0],
+                            xa[1] + xb[1] + xc[1] - 2.0 * o_in[1],
+                        ];
+                        if dist2(h_in, x65) < 1e-4 * (1.0 + dist2(circ, orth)) {
+                            out.push(fact(
+                                "接触垂心",
+                                "H(X_a X_b X_c) = X_{65}",
+                                "\\checkmark".into(),
+                                None,
+                                "H_{\\text{intouch}} = X(65)",
+                                "接触三角形的垂心与 X(65) 重合",
+                            ));
+                        }
+                    }
+                }
+                out.push(fact(
+                    "接触垂心",
+                    "X_{65} \\leftrightarrow Sc",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(21)",
+                    "X(65) 与席弗勒点 X(21) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(76): 3rd Brocard point; bary 1/a²; isotomic conjugate of Lemoine K = X(6).
+    {
+        let wa = 1.0 / (a * a);
+        let wb = 1.0 / (b * b);
+        let wc = 1.0 / (c * c);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x76 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "第三布罗卡点",
+                "X_{76}",
+                pt(x76[0], x76[1]),
+                None,
+                "X(76) = \\bigl(1/a^2:1/b^2:1/c^2\\bigr)",
+                "第三布罗卡点 X(76)：勒莫恩点的等截共轭",
+            ).with(Shape::Point {
+                x: x76[0],
+                y: x76[1],
+                label: "X76 布罗卡".into(),
+            }));
+            out.push(fact(
+                "第三布罗卡点",
+                "X_{76} \\leftrightarrow K",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }X(6)",
+                "X(76) 与勒莫恩点 X(6) 互为等截共轭",
+            ));
+        }
+    }
+
+    // X(86): cevapoint of I and G; isogonal of X(42); isotomic of Spieker.
+    // Bary 1/(b+c).
+    {
+        let wa = 1.0 / (b + c);
+        let wb = 1.0 / (c + a);
+        let wc = 1.0 / (a + b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x86 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "内心重心截点",
+                "X_{86}",
+                pt(x86[0], x86[1]),
+                None,
+                "X(86) = \\bigl(1/(b+c):\\cdots\\bigr)",
+                "X(86)：内心与重心的截点（X(42) 的等角共轭；斯皮克的等截共轭）",
+            ).with(Shape::Point {
+                x: x86[0],
+                y: x86[1],
+                label: "X86".into(),
+            }));
+            out.push(fact(
+                "内心重心截点",
+                "X_{86} \\leftrightarrow X_{42}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(42)",
+                "X(86) 与 X(42) 互为等角共轭",
+            ));
+            out.push(fact(
+                "内心重心截点",
+                "X_{86} \\leftrightarrow Sp",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }X(10)",
+                "X(86) 与斯皮克中心 X(10) 互为等截共轭",
+            ));
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -6378,6 +6520,48 @@ mod tests {
         ] {
             let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
             assert_eq!(p.value, g2.value, "{lab}");
+        }
+    }
+
+    #[test]
+    fn x65_intouch_orthocenter_x76_x86() {
+        // Scalene 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x65 = fs.iter().find(|f| f.group == "接触垂心" && f.label == "X_{65}").expect("X65");
+        assert!(fs.iter().any(|f| f.group == "接触垂心" && f.label.contains("H(X_a")));
+        assert!(fs.iter().any(|f| f.group == "接触垂心" && f.value.contains("等角")));
+        let sc = fs.iter().find(|f| f.group == "席弗勒点" && f.label == "Sc").expect("Sc");
+        assert_ne!(x65.value, sc.value);
+        let x76 = fs.iter().find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}").expect("X76");
+        let kpt = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        assert_ne!(x76.value, kpt.value);
+        assert!(fs.iter().any(|f| f.group == "第三布罗卡点" && f.value.contains("等截")));
+        let x86 = fs.iter().find(|f| f.group == "内心重心截点" && f.label == "X_{86}").expect("X86");
+        let x42 = fs.iter().find(|f| f.group == "内心勒莫恩截点" && f.label == "X_{42}").expect("X42");
+        let sp = fs.iter().find(|f| f.group == "斯皮克中心" && f.label == "Sp").expect("Sp");
+        assert_ne!(x86.value, x42.value);
+        assert_ne!(x86.value, sp.value);
+        assert!(fs.iter().any(|f| f.group == "内心重心截点" && f.label.contains("42") && f.value.contains("等角")));
+        assert!(fs.iter().any(|f| f.group == "内心重心截点" && f.label.contains("Sp") && f.value.contains("等截")));
+        assert_ne!(x65.value, x76.value);
+        assert_ne!(x76.value, x86.value);
+
+        // Equilateral: all = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("接触垂心", "X_{65}"),
+            ("第三布罗卡点", "X_{76}"),
+            ("内心重心截点", "X_{86}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g.value, "{lab}");
         }
     }
 
