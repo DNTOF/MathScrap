@@ -3964,6 +3964,86 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(79), X(80): isogonal conjugates of X(35) and X(36).
+    // Trilinears 1/(1±2 cos A); bary a/(1±2 cos A).
+    // X(79) blows up when an angle is 120°; X(80) when an angle is 60° (equilateral).
+    {
+        let d79 = [
+            1.0 + 2.0 * g[0].cos(),
+            1.0 + 2.0 * g[1].cos(),
+            1.0 + 2.0 * g[2].cos(),
+        ];
+        if d79.iter().all(|d| d.abs() > 1e-9) {
+            let wa = a / d79[0];
+            let wb = b / d79[1];
+            let wc = c / d79[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x79 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "OI伴点等角",
+                    "X_{79}",
+                    pt(x79[0], x79[1]),
+                    None,
+                    "X(79) = \\bigl(a/(1+2\\cos A):\\cdots\\bigr)",
+                    "X(79)：X(35) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x79[0],
+                    y: x79[1],
+                    label: "X79".into(),
+                }));
+                out.push(fact(
+                    "OI伴点等角",
+                    "X_{79} \\leftrightarrow X_{35}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(35)",
+                    "X(79) 与 X(35) 互为等角共轭",
+                ));
+            }
+        }
+        let d80 = [
+            1.0 - 2.0 * g[0].cos(),
+            1.0 - 2.0 * g[1].cos(),
+            1.0 - 2.0 * g[2].cos(),
+        ];
+        if d80.iter().all(|d| d.abs() > 1e-9) {
+            let wa = a / d80[0];
+            let wb = b / d80[1];
+            let wc = c / d80[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x80 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "反演内心等角",
+                    "X_{80}",
+                    pt(x80[0], x80[1]),
+                    None,
+                    "X(80) = \\bigl(a/(1-2\\cos A):\\cdots\\bigr)",
+                    "X(80)：X(36) 的等角共轭（有 60° 角时退化）",
+                ).with(Shape::Point {
+                    x: x80[0],
+                    y: x80[1],
+                    label: "X80".into(),
+                }));
+                out.push(fact(
+                    "反演内心等角",
+                    "X_{80} \\leftrightarrow X_{36}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(36)",
+                    "X(80) 与反演内心 X(36) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -7629,6 +7709,39 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}"));
         assert!(fs3.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}"));
         assert!(fs3.iter().all(|f| f.group != "德龙尚等角"), "X64 skip right (infinity)");
+    }
+
+    #[test]
+    fn x79_x80_isogonals_of_x35_x36() {
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x79 = fs.iter().find(|f| f.group == "OI伴点等角" && f.label == "X_{79}").expect("X79");
+        let x35 = fs.iter().find(|f| f.group == "OI调和点" && f.label == "X_{35}").expect("X35");
+        assert_ne!(x79.value, x35.value);
+        assert!(fs.iter().any(|f| f.group == "OI伴点等角" && f.label.contains("35") && f.value.contains("等角")));
+        let x80 = fs.iter().find(|f| f.group == "反演内心等角" && f.label == "X_{80}").expect("X80");
+        let x36 = fs.iter().find(|f| f.group == "反演内心" && f.label == "X_{36}").expect("X36");
+        assert_ne!(x80.value, x36.value);
+        assert_ne!(x79.value, x80.value);
+        assert!(fs.iter().any(|f| f.group == "反演内心等角" && f.label.contains("36") && f.value.contains("等角")));
+        assert_eq!(fs.iter().filter(|f| f.label == "X_{63}").count(), 1);
+
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        assert!(r2.cases[0].facts.iter().any(|f| f.label == "X_{79}"));
+        assert!(r2.cases[0].facts.iter().any(|f| f.label == "X_{80}"));
+
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x79e = fs3.iter().find(|f| f.label == "X_{79}").unwrap();
+        assert_eq!(x79e.value, g.value);
+        assert!(fs3.iter().all(|f| f.group != "反演内心等角"), "X80 skip equilateral");
     }
 
     #[test]
