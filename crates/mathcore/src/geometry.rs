@@ -1484,6 +1484,152 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // Extouch (excircle-contact / Nagel) triangle: A-excircle touches BC at T_a, etc.
+    // BT_a = s−c, CT_a = s−b; perspector is the Nagel point (dual of the intouch △).
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            // A-excircle on BC: BT:TC = (s−c):(s−b)
+            let ta = section_point(pb, pc, sc, sb);
+            let tb = section_point(pc, pa, sa, sc);
+            let tc = section_point(pa, pb, sb, sa);
+            let pts = [(ta, "a"), (tb, "b"), (tc, "c")];
+            for (q, lab) in pts {
+                out.push(fact(
+                    "旁切接触三角形",
+                    &format!("T_{}", lab),
+                    pt(q[0], q[1]),
+                    None,
+                    &format!("T_{s}\\text{{ on side }}{s}", s = lab),
+                    "旁切圆与边的切点（旁切接触 / 奈格尔三角形顶点）",
+                ).with(Shape::Point {
+                    x: q[0],
+                    y: q[1],
+                    label: format!("T{} 旁切点", lab),
+                }));
+            }
+            // Midpoint of intouch X_a and extouch T_a is the midpoint of BC (isotomic).
+            let xa = section_point(pb, pc, sb, sc);
+            let mid_xt = [(xa[0] + ta[0]) / 2.0, (xa[1] + ta[1]) / 2.0];
+            let mid_bc = [(pb[0] + pc[0]) / 2.0, (pb[1] + pc[1]) / 2.0];
+            if dist2(mid_xt, mid_bc) < 1e-5 * (1.0 + a) {
+                out.push(fact(
+                    "旁切接触三角形",
+                    "X_a T_a",
+                    "\\text{以 BC 中点为中点}".into(),
+                    None,
+                    "\\text{mid}(X_a,T_a)=\\text{mid}(B,C)",
+                    "内切切点与旁切切点关于边中点等截对称",
+                ));
+            }
+            // Perspector Na: A, T_a, Na collinear.
+            let na = [
+                (sa * pa[0] + sb * pb[0] + sc * pc[0]) / p,
+                (sa * pa[1] + sb * pb[1] + sc * pc[1]) / p,
+            ];
+            let cross = (ta[0] - pa[0]) * (na[1] - pa[1]) - (ta[1] - pa[1]) * (na[0] - pa[0]);
+            if cross.abs() < 1e-5 * (1.0 + dist2(pa, ta)) * (1.0 + dist2(pa, na)) {
+                out.push(fact(
+                    "旁切接触三角形",
+                    "A, T_a, Na",
+                    "\\text{共线}".into(),
+                    None,
+                    "A T_a \\ni Na",
+                    "旁切接触三角形与原三角形的透视中心为奈格尔点",
+                ));
+            }
+        }
+    }
+
+    // Steiner inellipse: unique inscribed ellipse tangent at the side midpoints; center G.
+    // Area = π S / (3 √3); coincides with the incircle on equilateral triangles.
+    {
+        let ma = [(pb[0] + pc[0]) / 2.0, (pb[1] + pc[1]) / 2.0];
+        let mb = [(pc[0] + pa[0]) / 2.0, (pc[1] + pa[1]) / 2.0];
+        let mc = [(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0];
+        for (q, lab) in [(ma, "a"), (mb, "b"), (mc, "c")] {
+            out.push(fact(
+                "施泰纳内接椭圆",
+                &format!("M_{}", lab),
+                pt(q[0], q[1]),
+                None,
+                &format!("M_{s} = \\text{{mid}}", s = lab),
+                "施泰纳内接椭圆在各边中点处与边相切",
+            ).with(Shape::Point {
+                x: q[0],
+                y: q[1],
+                label: format!("M{} 中点切", lab),
+            }));
+        }
+        let steiner_area = std::f64::consts::PI * area / (3.0 * 3.0f64.sqrt());
+        out.push(fact(
+            "施泰纳内接椭圆",
+            "S_{\\text{Steiner}}",
+            nice(steiner_area),
+            Some(steiner_area),
+            "S_{\\text{Steiner}} = \\frac{\\pi S}{3\\sqrt{3}}",
+            "施泰纳内接椭圆：面积最大的内接椭圆，中心为重心 G",
+        ).with(Shape::Point {
+            x: centroid[0],
+            y: centroid[1],
+            label: "Steiner@G".into(),
+        }));
+        // Equilateral: Steiner = incircle ⇒ area = π r².
+        if (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9 {
+            let circ_area = std::f64::consts::PI * r * r;
+            if (steiner_area - circ_area).abs() < 1e-5 * (1.0 + circ_area) {
+                out.push(fact(
+                    "施泰纳内接椭圆",
+                    "=\\pi r^2",
+                    nice(circ_area),
+                    Some(circ_area),
+                    "\\text{equilateral: Steiner = incircle}",
+                    "等边时施泰纳内接椭圆与内切圆重合",
+                ));
+            }
+        }
+    }
+
+    // Mandart inellipse: inscribed ellipse tangent at the extouch points; center = Mittenpunkt.
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        let wa = a * sa;
+        let wb = b * sb;
+        let wc = c * sc;
+        let den = wa + wb + wc;
+        if den > 1e-12 && sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let mi = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "曼达特内接椭圆",
+                "\\text{center}",
+                pt(mi[0], mi[1]),
+                None,
+                "\\text{center} = \\text{Mi}",
+                "曼达特内接椭圆：在旁切切点处与边相切，中心为米滕点",
+            ).with(Shape::Point {
+                x: mi[0],
+                y: mi[1],
+                label: "Mandart@Mi".into(),
+            }));
+            out.push(fact(
+                "曼达特内接椭圆",
+                "T_*",
+                "\\text{切于旁切切点}".into(),
+                None,
+                "\\text{tangent at }T_a,T_b,T_c",
+                "与旁切接触三角形的三顶点处相切",
+            ));
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -1552,6 +1698,16 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 Some(ger),
                 "\\frac{s-b}{s-c}\\cdot\\frac{s-c}{s-a}\\cdot\\frac{s-a}{s-b} = 1",
                 "塞瓦定理：内切圆切点连线交于格尔巩点",
+            ));
+            // Nagel / extouch: BD = s−c, DC = s−b (swap), product still 1.
+            let nag = (tc / tb) * (ta / tc) * (tb / ta);
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{旁切}}",
+                nice(nag),
+                Some(nag),
+                "\\frac{s-c}{s-b}\\cdot\\frac{s-a}{s-c}\\cdot\\frac{s-b}{s-a} = 1",
+                "塞瓦定理：旁切圆切点连线交于奈格尔点",
             ));
         }
     }
@@ -4397,6 +4553,35 @@ mod tests {
         // r = Δ/s; for 6-7-8, s=10.5, Δ=sqrt(10.5·4.5·3.5·2.5)=21*sqrt(3)/4? 
         // r_Sp = r/2 > 0
         assert!(rsp2.num.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn extouch_steiner_mandart() {
+        // 3-4-5: extouch T_*; X_a/T_a midpoint = mid BC; A–T_a–Na; Steiner area; Mandart@Mi
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(["T_a", "T_b", "T_c"].iter().all(|lab| fs.iter().any(|f| f.group == "旁切接触三角形" && f.label == *lab)));
+        assert!(fs.iter().any(|f| f.group == "旁切接触三角形" && f.label.contains("X_a")));
+        assert!(fs.iter().any(|f| f.group == "旁切接触三角形" && f.value.contains("共线")));
+        let st = fs.iter().find(|f| f.group == "施泰纳内接椭圆" && f.label.contains("Steiner")).expect("Steiner area");
+        let expect = std::f64::consts::PI * 6.0 / (3.0 * 3.0f64.sqrt());
+        assert!((st.num.unwrap() - expect).abs() < 1e-9, "Steiner={} vs {}", st.value, expect);
+        assert!(["M_a", "M_b", "M_c"].iter().all(|lab| fs.iter().any(|f| f.group == "施泰纳内接椭圆" && f.label == *lab)));
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        let man = fs.iter().find(|f| f.group == "曼达特内接椭圆" && f.label.contains("center")).expect("Mandart");
+        assert_eq!(man.value, mi.value, "Mandart center should equal Mittenpunkt");
+        assert!(fs.iter().any(|f| f.group == "曼达特内接椭圆" && f.label.contains("T_")));
+        let nag_ceva = fs.iter().find(|f| f.group == "塞瓦与梅涅劳斯" && f.label.contains("旁切")).expect("Nagel Ceva");
+        assert!((nag_ceva.num.unwrap() - 1.0).abs() < 1e-9);
+
+        // Equilateral: Steiner = incircle area π r²
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "施泰纳内接椭圆" && f.label.contains("pi r")));
     }
 
     #[test]
