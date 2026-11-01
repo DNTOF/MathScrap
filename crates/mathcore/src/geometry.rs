@@ -7044,13 +7044,14 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
-    // X(140)–X(150): Euler/medial complements, anticomplements of Ge/Na, and
+    // X(140)–X(153): Euler/medial complements, anticomplements of Ge/Na, and
     // reflections of de Longchamps X(20) in classical circumcircle points.
     // X(140)=mid(O,N)=complement(X(5)); X(141)=complement(K), bary b²+c²:…;
     // X(142)=mid(Ge,Mi)=complement(X(9)); X(143)=mid(N,X(52))=X(5)-of-orthic;
     // X(144)=anticomplement(Ge); X(145)=anticomplement(Na);
     // X(146)=2·X(110)−X(20); X(147)=2·X(99)−X(20); X(148)=2·X(98)−X(20);
-    // X(149)=2·X(104)−X(20); X(150)=2·X(103)−X(20).
+    // X(149)=2·X(104)−X(20); X(150)=2·X(103)−X(20);
+    // X(151)=2·X(109)−X(20); X(152)=2·X(101)−X(20); X(153)=2·X(100)−X(20).
     {
         let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
         // X(140) = midpoint(O, N) = complement of X(5); on Euler line. Always.
@@ -7355,8 +7356,178 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     label: "X150".into(),
                 }));
             }
+
+            // X(151) = reflection of X(20) in X(109) = X(102)-of-anticomplementary.
+            let x109_xy = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x109_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X109反射",
+                    "X_{151}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(151) = 2\\,X(109) - X(20) = X(102)\\text{-of-anticomplementary}",
+                    "X(151)：德龙尚点关于 X(109) 的反射（反补三角形的 X(102)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X151".into(),
+                }));
+            }
+
+            // X(152) = reflection of X(20) in X(101) = X(103)-of-anticomplementary.
+            let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x101_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X101反射",
+                    "X_{152}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(152) = 2\\,X(101) - X(20) = X(103)\\text{-of-anticomplementary}",
+                    "X(152)：德龙尚点关于 X(101) 的反射（反补三角形的 X(103)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X152".into(),
+                }));
+            }
+
+            // X(153) = reflection of X(20) in X(100) = X(104)-of-anticomplementary.
+            let x100_xy = out.iter().rev().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x100_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X100反射",
+                    "X_{153}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(153) = 2\\,X(100) - X(20) = X(104)\\text{-of-anticomplementary}",
+                    "X(153)：德龙尚点关于 X(100) 的反射（反补三角形的 X(104)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X153".into(),
+                }));
+            }
         }
     }
+
+    // X(154)–X(156): tangential / orthic eigencenter family.
+    // X(154)=X(3)-Ceva conjugate of X(6)=X(2)-of-tangential;
+    //   bary a³(cos A − cos B cos C).
+    // X(155)=eigencenter of orthic; bary a cos A (cos²B+cos²C−cos²A);
+    //   = reflection of X(68) in X(5) when acute.
+    // X(156)=X(5)-of-tangential = midpoint(X(26), X(155)).
+    {
+        let ca = [g[0].cos(), g[1].cos(), g[2].cos()];
+        // Right △: X(154)/X(155) bary sums vanish (point at infinity) — skip.
+        let rightish = ca[0].abs() < 1e-9 || ca[1].abs() < 1e-9 || ca[2].abs() < 1e-9;
+        // X(154)
+        {
+            let wa = a * a * a * (ca[0] - ca[1] * ca[2]);
+            let wb = b * b * b * (ca[1] - ca[2] * ca[0]);
+            let wc = c * c * c * (ca[2] - ca[0] * ca[1]);
+            let den = wa + wb + wc;
+            if !rightish && den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "切线重心",
+                    "X_{154}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(154) = \\bigl(a^3(\\cos A-\\cos B\\cos C):\\cdots\\bigr) = X(2)\\text{-of-tangential}",
+                    "X(154)：切线三角形的重心（X(3)-Ceva 共轭于 X(6)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X154".into(),
+                }));
+            }
+        }
+        // X(155)
+        let mut x155_xy: Option<[f64; 2]> = None;
+        {
+            let wa = a * ca[0] * (ca[1] * ca[1] + ca[2] * ca[2] - ca[0] * ca[0]);
+            let wb = b * ca[1] * (ca[2] * ca[2] + ca[0] * ca[0] - ca[1] * ca[1]);
+            let wc = c * ca[2] * (ca[0] * ca[0] + ca[1] * ca[1] - ca[2] * ca[2]);
+            let den = wa + wb + wc;
+            if !rightish && den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                x155_xy = Some(xy);
+                out.push(fact(
+                    "垂足特征心",
+                    "X_{155}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(155) = \\bigl(a\\cos A(\\cos^2 B+\\cos^2 C-\\cos^2 A):\\cdots\\bigr)",
+                    "X(155)：垂足三角形的特征中心（切线三角形的垂心）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X155".into(),
+                }));
+                // Cross-check: reflection of X(68) in nine-point center N=X(5).
+                let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+                let x68_xy = out.iter().rev().find(|f| f.group == "普拉索洛夫点" && f.label == "X_{68}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((qx, qy)) = x68_xy {
+                    let rx = 2.0 * n9[0] - qx;
+                    let ry = 2.0 * n9[1] - qy;
+                    if (rx - xy[0]).abs() < 1e-5 && (ry - xy[1]).abs() < 1e-5 {
+                        out.push(fact(
+                            "垂足特征心",
+                            "X_{155}=2N-X_{68}",
+                            "\\checkmark".into(),
+                            None,
+                            "X(155) = 2\\,X(5) - X(68)",
+                            "X(155) 为普拉索洛夫点关于九点圆心的反射",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(156) = mid(X(26), X(155)) = X(5)-of-tangential.
+        if let Some(x155) = x155_xy {
+            let x26_xy = out.iter().rev().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x26_xy {
+                let xy = [(qx + x155[0]) / 2.0, (qy + x155[1]) / 2.0];
+                out.push(fact(
+                    "切线九点心",
+                    "X_{156}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(156) = \\mathrm{mid}(X(26),X(155)) = X(5)\\text{-of-tangential}",
+                    "X(156)：切线三角形的九点圆心（X(26) 与 X(155) 的中点）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X156".into(),
+                }));
+            }
+        }
+    }
+
 
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
@@ -12002,7 +12173,7 @@ mod tests {
 
 
     #[test]
-    fn x140_to_x150_complements_anticomplements_reflections() {
+    fn x140_to_x156_complements_reflections_tangential() {
         // Scalene acute 6-7-8: all eleven present with geometric cross-checks.
         let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
         let r = triangle_solve(&k);
@@ -12070,6 +12241,28 @@ mod tests {
         check_ref(ty, x148, "X148");
         check_ref(x104, x149, "X149");
         check_ref(x103, x150, "X150");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x101 = fs.iter().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").expect("X101");
+        let x100 = fs.iter().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").expect("X100");
+        let x151 = fs.iter().find(|f| f.group == "德龙尚X109反射" && f.label == "X_{151}").expect("X151");
+        let x152 = fs.iter().find(|f| f.group == "德龙尚X101反射" && f.label == "X_{152}").expect("X152");
+        let x153 = fs.iter().find(|f| f.group == "德龙尚X100反射" && f.label == "X_{153}").expect("X153");
+        check_ref(x109, x151, "X151");
+        check_ref(x101, x152, "X152");
+        check_ref(x100, x153, "X153");
+        let x154 = fs.iter().find(|f| f.group == "切线重心" && f.label == "X_{154}").expect("X154");
+        let x155 = fs.iter().find(|f| f.group == "垂足特征心" && f.label == "X_{155}").expect("X155");
+        let x156 = fs.iter().find(|f| f.group == "切线九点心" && f.label == "X_{156}").expect("X156");
+        let x26 = fs.iter().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").expect("X26");
+        let x68 = fs.iter().find(|f| f.group == "普拉索洛夫点" && f.label == "X_{68}").expect("X68");
+        let (p26x, p26y) = ptxy(x26);
+        let (p155x, p155y) = ptxy(x155);
+        let (p156x, p156y) = ptxy(x156);
+        assert!(((p26x + p155x) / 2.0 - p156x).abs() < 1e-5 && ((p26y + p155y) / 2.0 - p156y).abs() < 1e-5, "X156 != mid(X26,X155)");
+        let (p68x, p68y) = ptxy(x68);
+        assert!((2.0 * nx - p68x - p155x).abs() < 1e-5 && (2.0 * ny - p68y - p155y).abs() < 1e-5, "X155 != 2N-X68");
+        assert!(fs.iter().any(|f| f.group == "垂足特征心" && f.label.contains("2N")));
+        let _ = x154; // presence is the check; bary finite on acute scalene
 
         // Isosceles 5-5-6: X140–X145 remain; Steiner/Tarry/X110/X104 family skip → reflections skip.
         let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
@@ -12091,6 +12284,14 @@ mod tests {
             fs2.iter().any(|f| f.group == "德龙尚X104反射"),
             fs2.iter().any(|f| f.group == "德龙尚X103反射"),
         );
+        // X100/X101/X109 skip on isos → X151–X153 skip; X154/X155 still finite.
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X109反射"), "X151 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X101反射"), "X152 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X100反射"), "X153 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "切线重心" && f.label == "X_{154}"));
+        assert!(fs2.iter().any(|f| f.group == "垂足特征心" && f.label == "X_{155}"));
+        // X156 needs X26; may be present on isos acute.
+        let _ = fs2.iter().any(|f| f.group == "切线九点心");
 
         // Equilateral: X140–X145 collapse toward G/O; reflections of circumcircle points skip.
         let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
@@ -12107,6 +12308,12 @@ mod tests {
         assert!(fs3.iter().all(|f| f.group != "德龙尚塔里反射"), "X148 skip equilateral");
         assert!(fs3.iter().all(|f| f.group != "德龙尚X104反射"), "X149 skip equilateral");
         assert!(fs3.iter().all(|f| f.group != "德龙尚X103反射"), "X150 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X109反射"), "X151 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X101反射"), "X152 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X100反射"), "X153 skip equilateral");
+        // X154/X155 bary finite on equilateral (→ G); X26 may skip on equilateral.
+        assert!(fs3.iter().any(|f| f.group == "切线重心" && f.label == "X_{154}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足特征心" && f.label == "X_{155}"));
 
         // Right 3-4-5: X140/141/142/144/145; X143 skips (no X52); X110 may via bary.
         let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
@@ -12123,8 +12330,14 @@ mod tests {
         let _ = (
             fs4.iter().any(|f| f.group == "德龙尚X110反射"),
             fs4.iter().any(|f| f.group == "德龙尚施泰纳反射"),
-            fs4.iter().any(|f| f.group == "德龙尚塔里反射"),
+                        fs4.iter().any(|f| f.group == "德龙尚塔里反射"),
+            fs4.iter().any(|f| f.group == "德龙尚X109反射"),
+            fs4.iter().any(|f| f.group == "德龙尚X101反射"),
+            fs4.iter().any(|f| f.group == "德龙尚X100反射"),
         );
+        assert!(fs4.iter().all(|f| f.group != "切线重心"), "X154 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足特征心"), "X155 skip right");
+        assert!(fs4.iter().all(|f| f.group != "切线九点心"), "X156 skip right");
     }
 
         #[test]
