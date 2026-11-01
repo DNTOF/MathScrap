@@ -19,6 +19,7 @@ import { Composer, insertSnippet } from '@/input/Composer'
 import { MathPalette } from '@/input/MathPalette'
 import { ShortcutHints } from '@/input/ShortcutHints'
 import { pageGroups } from '@/math/page'
+import { summarizeCard } from '@/math/scene'
 import { parseCard } from '@/math/statements'
 import { clusterStrokes, mockRecognizer, OCR_ACCEPT } from '@/ocr/recognizer'
 import { PlotButton } from '@/plot/PlotButton'
@@ -258,7 +259,9 @@ export default function App() {
         strokes: keep ? d.strokes.map((s) => (ids.has(s.id) ? { ...s, recognized: true } : s)) : d.strokes.filter((s) => !ids.has(s.id)),
         cards: [...d.cards, card],
       }))
-      setPlot((p) => (p.open ? { ...p, focusId: card.id } : { open: true, details: false, full: false, focusId: card.id }))
+      if (summarizeCard(card.text).plottable) {
+        setPlot((p) => (p.open ? { ...p, focusId: card.id } : { open: true, details: false, full: false, focusId: card.id }))
+      }
       return card
     },
     [commit],

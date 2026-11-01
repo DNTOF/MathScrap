@@ -27,9 +27,11 @@ export function pageGroups(cards: Card[]): PageGroups {
     if (!card.text.trim()) continue
     const summary = summarizeCard(card.text)
     const condition = !summary.kinds.some((k) => k !== 'constraint')
-    const dim: 2 | 3 = condition ? last : summary.dim
-    if (!condition) last = dim
-    if (!condition && summary.kinds.length) count[dim]++
+    // A summation or integral is ink on the page. It does not open a coordinate system.
+    const notationOnly = summary.kinds.length > 0 && summary.kinds.every((k) => k === 'notation')
+    const dim: 2 | 3 = condition || notationOnly ? last : summary.dim
+    if (!condition && !notationOnly) last = dim
+    if (!condition && !notationOnly && summary.kinds.length) count[dim]++
     entries.push({ card, summary, dim, condition })
   }
   return { entries, count }
