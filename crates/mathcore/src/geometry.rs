@@ -7766,6 +7766,299 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(160)–X(162): fill tangential gaps; then classical X(168)/X(169)/X(171)–X(173).
+    // X(160)=X(37)-of-tangential (acute): bary a·f with
+    //   f=a[(b²+c²)sin 2A+(c²−a²)sin 2B+(b²−a²)sin 2C]  (ETC: sin 2A, not sin²A).
+    // X(161)=X(63)-of-tangential (acute): bary a·f; skip right (Σw=0); with
+    //   f=a[(a²+b²+c²)sin²(2A)+(c²−b²−a²)sin²(2B)+(b²−c²−a²)sin²(2C)].
+    // X(162)=cevapoint of X(108),X(109): bary a/(sin 2B−sin 2C); skip isos/right (denom 0; right ⇒ sin 2A=sin 2B).
+    // X(168)=X(9)-of-excentral (mittenpunkt): trilinear b/(1−sin(B/2))+c/(1−sin(C/2))−a/(1−sin(A/2)).
+    // X(169)=X(85)-Ceva conjugate of X(1): bary a·(a³−a²(b+c)+a(b²+c²)−(b−c)²(b+c)).
+    // X(171)={X(2),X(31)}-harmonic of X(238): bary a³+abc; on OI.
+    // X(172)=trilinear product X(6)·X(171): bary a⁴+bc a².
+    // X(173)=congruent isoscelizers: bary a(cos(B/2)+cos(C/2)−cos(A/2)).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let s2a = (2.0 * g[0]).sin();
+        let s2b = (2.0 * g[1]).sin();
+        let s2c = (2.0 * g[2]).sin();
+        // X(160)
+        {
+            let fa = a * ((b2 + c2) * s2a + (c2 - a2) * s2b + (b2 - a2) * s2c);
+            let fb = b * ((c2 + a2) * s2b + (a2 - b2) * s2c + (c2 - b2) * s2a);
+            let fc = c * ((a2 + b2) * s2c + (b2 - c2) * s2a + (a2 - c2) * s2b);
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "切线格林伯格",
+                        "X_{160}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(160) = X(37)\\text{-of-tangential (acute)};\\ f=a[(b^2+c^2)\\sin 2A+(c^2-a^2)\\sin 2B+(b^2-a^2)\\sin 2C]",
+                        "X(160)：切线三角形的格林伯格点（锐角时）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X160".into(),
+                    }));
+                }
+            }
+        }
+        // X(161): skip right (Σweights → 0 when one angle is 90°).
+        let rightish = g[0].cos().abs() < 1e-9 || g[1].cos().abs() < 1e-9 || g[2].cos().abs() < 1e-9;
+        if !rightish {
+            let ss2a = s2a * s2a;
+            let ss2b = s2b * s2b;
+            let ss2c = s2c * s2c;
+            let s2 = a2 + b2 + c2;
+            let fa = a * (s2 * ss2a + (c2 - b2 - a2) * ss2b + (b2 - c2 - a2) * ss2c);
+            let fb = b * (s2 * ss2b + (a2 - c2 - b2) * ss2c + (c2 - a2 - b2) * ss2a);
+            let fc = c * (s2 * ss2c + (b2 - a2 - c2) * ss2a + (a2 - b2 - c2) * ss2b);
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "切线X63",
+                        "X_{161}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(161) = X(63)\\text{-of-tangential (acute)};\\ f=a[(a^2+b^2+c^2)\\sin^2 2A+\\cdots]",
+                        "X(161)：切线三角形的 X(63)（锐角时）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X161".into(),
+                    }));
+                }
+            }
+        }
+        // X(162): skip isosceles / when sin 2B ≈ sin 2C.
+        {
+            let da = s2b - s2c;
+            let db = s2c - s2a;
+            let dc = s2a - s2b;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = a / da;
+                let wb = b / db;
+                let wc = c / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "X108X109截点",
+                            "X_{162}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(162) = \\bigl(a/(\\sin 2B-\\sin 2C):\\cdots\\bigr) = \\text{cevapoint of }X(108),X(109)",
+                            "X(162)：X(108) 与 X(109) 的截点",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X162".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(168) mittenpunkt of excentral
+        {
+            let s_ha = (g[0] / 2.0).sin();
+            let s_hb = (g[1] / 2.0).sin();
+            let s_hc = (g[2] / 2.0).sin();
+            let d_a = 1.0 - s_ha;
+            let d_b = 1.0 - s_hb;
+            let d_c = 1.0 - s_hc;
+            if d_a.abs() > 1e-12 && d_b.abs() > 1e-12 && d_c.abs() > 1e-12 {
+                let fa = b / d_b + c / d_c - a / d_a;
+                let fb = c / d_c + a / d_a - b / d_b;
+                let fc = a / d_a + b / d_b - c / d_c;
+                let wa = a * fa;
+                let wb = b * fb;
+                let wc = c * fc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "旁心米滕",
+                            "X_{168}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(168) = X(9)\\text{-of-excentral};\\ f=b/(1-\\sin\\tfrac{B}{2})+c/(1-\\sin\\tfrac{C}{2})-a/(1-\\sin\\tfrac{A}{2})",
+                            "X(168)：旁心三角形的米滕点",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X168".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(169): X(85)-Ceva conjugate of I; polynomial trilinear × a.
+        {
+            let t169 = |aa: f64, bb: f64, cc: f64| -> f64 {
+                aa * aa * aa - aa * aa * (bb + cc) + aa * (bb * bb + cc * cc) - (bb - cc) * (bb - cc) * (bb + cc)
+            };
+            let fa = t169(a, b, c);
+            let fb = t169(b, c, a);
+            let fc = t169(c, a, b);
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "X85截共轭I",
+                        "X_{169}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(169) = X(85)\\text{-Ceva conjugate of }X(1);\\ a^3-a^2(b+c)+a(b^2+c^2)-(b-c)^2(b+c)",
+                        "X(169)：X(85) 关于内心的截共轭",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X169".into(),
+                    }));
+                }
+            }
+        }
+        // X(171) / X(172) / X(173)
+        {
+            let abc = a * b * c;
+            let wa = a * a * a + abc;
+            let wb = b * b * b + abc;
+            let wc = c * c * c + abc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "调和X238",
+                    "X_{171}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(171) = (a^3+abc:b^3+abc:c^3+abc) = \\{X(2),X(31)\\}\\text{-harmonic of }X(238)",
+                    "X(171)：{X(2),X(31)} 关于 X(238) 的调和共轭（在 OI 上）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X171".into(),
+                }));
+                // Cross-check collinear with O,I (lines 1,3).
+                let i_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "I").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((ix, iy)) = i_xy {
+                    let ox = circ[0];
+                    let oy = circ[1];
+                    let cross = (ix - ox) * (xy[1] - oy) - (iy - oy) * (xy[0] - ox);
+                    let scale = ((ix - ox).hypot(iy - oy) + (xy[0] - ox).hypot(xy[1] - oy)).max(1.0);
+                    if cross.abs() < 1e-5 * scale {
+                        out.push(fact(
+                            "调和X238",
+                            "X_{171}\\in OI",
+                            "\\checkmark".into(),
+                            None,
+                            "X(171)\\in OI",
+                            "X(171) 在 OI 线上",
+                        ));
+                    }
+                }
+            }
+            // X(172)
+            {
+                let wa = a2 * a2 + b * c * a2;
+                let wb = b2 * b2 + c * a * b2;
+                let wc = c2 * c2 + a * b * c2;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "对称中线X171积",
+                        "X_{172}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(172) = (a^4+bca^2:\\cdots) = X(6)\\cdot X(171)\\text{ (trilinear)}",
+                        "X(172)：对称中线点与 X(171) 的三线积",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X172".into(),
+                    }));
+                }
+            }
+            // X(173)
+            {
+                let ha = g[0] / 2.0;
+                let hb = g[1] / 2.0;
+                let hc = g[2] / 2.0;
+                let fa = hb.cos() + hc.cos() - ha.cos();
+                let fb = hc.cos() + ha.cos() - hb.cos();
+                let fc = ha.cos() + hb.cos() - hc.cos();
+                let wa = a * fa;
+                let wb = b * fb;
+                let wc = c * fc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "等腰等化器",
+                            "X_{173}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(173) = \\bigl(a(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2}-\\cos\\tfrac{A}{2}):\\cdots\\bigr)",
+                            "X(173)：全等等腰等化器点（Yff）",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X173".into(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -12650,6 +12943,91 @@ mod tests {
             fs4.iter().any(|f| f.group == "切线对称中线"),
             fs4.iter().any(|f| f.group == "切线米滕"),
         );
+    }
+
+    #[test]
+    fn x160_to_x173_tangential_gaps_classical() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8: all centers finite.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x160 = fs.iter().find(|f| f.group == "切线格林伯格" && f.label == "X_{160}").expect("X160");
+        let x161 = fs.iter().find(|f| f.group == "切线X63" && f.label == "X_{161}").expect("X161");
+        let x162 = fs.iter().find(|f| f.group == "X108X109截点" && f.label == "X_{162}").expect("X162");
+        let x168 = fs.iter().find(|f| f.group == "旁心米滕" && f.label == "X_{168}").expect("X168");
+        let x169 = fs.iter().find(|f| f.group == "X85截共轭I" && f.label == "X_{169}").expect("X169");
+        let x171 = fs.iter().find(|f| f.group == "调和X238" && f.label == "X_{171}").expect("X171");
+        let x172 = fs.iter().find(|f| f.group == "对称中线X171积" && f.label == "X_{172}").expect("X172");
+        let x173 = fs.iter().find(|f| f.group == "等腰等化器" && f.label == "X_{173}").expect("X173");
+        assert!(fs.iter().any(|f| f.group == "调和X238" && f.label.contains("OI")));
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let (ix, iy) = ptxy(i);
+        let (ox, oy) = ptxy(o);
+        let (p171x, p171y) = ptxy(x171);
+        let cross = (ix - ox) * (p171y - oy) - (iy - oy) * (p171x - ox);
+        assert!(cross.abs() < 1e-5, "X171 not on OI: cross={}", cross);
+        // Numeric spot-check vs ETC side formula for X162 / X171.
+        let (p162x, p162y) = ptxy(x162);
+        assert!((p162x - 3.4398888116747757).abs() < 1e-6 && (p162y - 5.032994341492612).abs() < 1e-6, "X162 xy {:?}", (p162x, p162y));
+        let (p171nx, p171ny) = ptxy(x171);
+        assert!((p171nx - 4.575757575757576).abs() < 1e-6 && (p171ny - 2.073415326757506).abs() < 1e-6, "X171 xy {:?}", (p171nx, p171ny));
+        let _ = (x160, x161, x168, x169, x172, x173);
+
+        // Isosceles 5-5-6: X162 skips; others remain.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "X108X109截点"), "X162 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "切线格林伯格" && f.label == "X_{160}"));
+        assert!(fs2.iter().any(|f| f.group == "切线X63" && f.label == "X_{161}"));
+        assert!(fs2.iter().any(|f| f.group == "旁心米滕" && f.label == "X_{168}"));
+        assert!(fs2.iter().any(|f| f.group == "X85截共轭I" && f.label == "X_{169}"));
+        assert!(fs2.iter().any(|f| f.group == "调和X238" && f.label == "X_{171}"));
+        assert!(fs2.iter().any(|f| f.group == "对称中线X171积" && f.label == "X_{172}"));
+        assert!(fs2.iter().any(|f| f.group == "等腰等化器" && f.label == "X_{173}"));
+
+        // Equilateral: X162 skips; X160/161/168/169/171/172/173 = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "X108X109截点"), "X162 skip equilateral");
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g3);
+        for (grp, lab) in [
+            ("切线格林伯格", "X_{160}"),
+            ("切线X63", "X_{161}"),
+            ("旁心米滕", "X_{168}"),
+            ("X85截共轭I", "X_{169}"),
+            ("调和X238", "X_{171}"),
+            ("对称中线X171积", "X_{172}"),
+            ("等腰等化器", "X_{173}"),
+        ] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx).abs() < 1e-5 && (y - gy).abs() < 1e-5, "equilateral {} != G", lab);
+        }
+
+        // Right 3-4-5: X161/X162 skip; X160/168/169/171–173 finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "切线格林伯格" && f.label == "X_{160}"));
+        assert!(fs4.iter().all(|f| f.group != "切线X63"), "X161 skip right");
+        assert!(fs4.iter().all(|f| f.group != "X108X109截点"), "X162 skip right");
+        assert!(fs4.iter().any(|f| f.group == "旁心米滕" && f.label == "X_{168}"));
+        assert!(fs4.iter().any(|f| f.group == "X85截共轭I" && f.label == "X_{169}"));
+        assert!(fs4.iter().any(|f| f.group == "调和X238" && f.label == "X_{171}"));
+        assert!(fs4.iter().any(|f| f.group == "对称中线X171积" && f.label == "X_{172}"));
+        assert!(fs4.iter().any(|f| f.group == "等腰等化器" && f.label == "X_{173}"));
     }
 
     #[test]
