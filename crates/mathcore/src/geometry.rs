@@ -2767,6 +2767,156 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(12): harmonic conjugate of Feuerbach X(11) w.r.t. I,N (etc.); bary a(1+cos(B−C)).
+    // X(59): isogonal of Feuerbach X(11); bary a/(1−cos(B−C)); skip isosceles (den=0).
+    // X(60): isogonal of X(12); bary a/(1+cos(B−C)).
+    {
+        let c_bc = (g[1] - g[2]).cos();
+        let c_ca = (g[2] - g[0]).cos();
+        let c_ab = (g[0] - g[1]).cos();
+        // X(12)
+        {
+            let wa = a * (1.0 + c_bc);
+            let wb = b * (1.0 + c_ca);
+            let wc = c * (1.0 + c_ab);
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x12 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "费尔巴哈调和共轭点",
+                    "X_{12}",
+                    pt(x12[0], x12[1]),
+                    None,
+                    "X(12) = \\bigl(a(1+\\cos(B-C)):\\cdots\\bigr)",
+                    "X(12)：费尔巴哈点的调和共轭（九点圆与旁切圆切点三角形透视中心）",
+                ).with(Shape::Point {
+                    x: x12[0],
+                    y: x12[1],
+                    label: "X12".into(),
+                }));
+            }
+        }
+        // X(60) = isogonal of X(12)
+        {
+            let da = 1.0 + c_bc;
+            let db = 1.0 + c_ca;
+            let dc = 1.0 + c_ab;
+            if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+                let wa = a / da;
+                let wb = b / db;
+                let wc = c / dc;
+                let den = wa + wb + wc;
+                if den > 1e-12 {
+                    let x60 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "X12等角共轭点",
+                        "X_{60}",
+                        pt(x60[0], x60[1]),
+                        None,
+                        "X(60) = \\bigl(a/(1+\\cos(B-C)):\\cdots\\bigr)",
+                        "X(60)：X(12) 的等角共轭",
+                    ).with(Shape::Point {
+                        x: x60[0],
+                        y: x60[1],
+                        label: "X60".into(),
+                    }));
+                    out.push(fact(
+                        "X12等角共轭点",
+                        "X_{60} \\leftrightarrow X_{12}",
+                        "\\text{等角共轭}".into(),
+                        None,
+                        "\\text{isogonal of }X(12)",
+                        "X(60) 与 X(12) 互为等角共轭",
+                    ));
+                }
+            }
+        }
+        // X(59) = isogonal of Feuerbach Fe X(11)
+        {
+            let da = 1.0 - c_bc;
+            let db = 1.0 - c_ca;
+            let dc = 1.0 - c_ab;
+            if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+                let wa = a / da;
+                let wb = b / db;
+                let wc = c / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let x59 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "费尔巴哈等角共轭点",
+                        "X_{59}",
+                        pt(x59[0], x59[1]),
+                        None,
+                        "X(59) = \\bigl(a/(1-\\cos(B-C)):\\cdots\\bigr)",
+                        "X(59)：费尔巴哈点的等角共轭",
+                    ).with(Shape::Point {
+                        x: x59[0],
+                        y: x59[1],
+                        label: "X59".into(),
+                    }));
+                    // Cross-check vs isogonal of geometric Fe when available.
+                    let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+                    let r9 = rr / 2.0;
+                    let den_f = r9 - r;
+                    let ni_len = dist2(n9, inc);
+                    if den_f.abs() > 1e-9 && ni_len > 1e-9 {
+                        let fe = [
+                            (r9 * inc[0] - r * n9[0]) / den_f,
+                            (r9 * inc[1] - r * n9[1]) / den_f,
+                        ];
+                        if (dist2(n9, fe) - r9).abs() < 1e-4 * (1.0 + r9)
+                            && (dist2(inc, fe) - r).abs() < 1e-4 * (1.0 + r)
+                        {
+                            let area2 = |p: [f64; 2], q: [f64; 2], r: [f64; 2]| {
+                                (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+                            };
+                            let aa = area2(fe, pb, pc);
+                            let bb = area2(pa, fe, pc);
+                            let cc_ = area2(pa, pb, fe);
+                            let ssum = aa + bb + cc_;
+                            if ssum.abs() > 1e-12
+                                && aa.abs() > 1e-14
+                                && bb.abs() > 1e-14
+                                && cc_.abs() > 1e-14
+                            {
+                                let wa = (a * a) / aa;
+                                let wb = (b * b) / bb;
+                                let wc = (c * c) / cc_;
+                                let den2 = wa + wb + wc;
+                                if den2.abs() > 1e-12 {
+                                    let iso = [
+                                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den2,
+                                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den2,
+                                    ];
+                                    if dist2(iso, x59) < 1e-4 * (1.0 + dist2(circ, orth)) {
+                                        out.push(fact(
+                                            "费尔巴哈等角共轭点",
+                                            "X_{59} \\leftrightarrow Fe",
+                                            "\\text{等角共轭}".into(),
+                                            None,
+                                            "\\text{isogonal of }X(11)",
+                                            "X(59) 与费尔巴哈点 X(11) 互为等角共轭",
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -6025,6 +6175,46 @@ mod tests {
             let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {lab}"));
             assert_eq!(p.value, g.value, "{lab} should = G");
         }
+    }
+
+    #[test]
+    fn x12_x59_x60_feuerbach_isogonals() {
+        // Scalene 6-7-8: X12, X59, X60 distinct; isogonal notes; Fe present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x12 = fs.iter().find(|f| f.group == "费尔巴哈调和共轭点" && f.label == "X_{12}").expect("X12");
+        let x59 = fs.iter().find(|f| f.group == "费尔巴哈等角共轭点" && f.label == "X_{59}").expect("X59");
+        let x60 = fs.iter().find(|f| f.group == "X12等角共轭点" && f.label == "X_{60}").expect("X60");
+        let fe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").expect("Fe");
+        assert_ne!(x12.value, x59.value);
+        assert_ne!(x12.value, x60.value);
+        assert_ne!(x59.value, x60.value);
+        assert_ne!(x59.value, fe.value);
+        assert!(fs.iter().any(|f| f.group == "费尔巴哈等角共轭点" && f.value.contains("等角")));
+        assert!(fs.iter().any(|f| f.group == "X12等角共轭点" && f.value.contains("等角")));
+
+        // Isosceles non-eq 5-5-6: X59 skipped (B=C); X12 & X60 present.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "费尔巴哈调和共轭点" && f.label == "X_{12}"));
+        assert!(fs2.iter().any(|f| f.group == "X12等角共轭点" && f.label == "X_{60}"));
+        assert!(fs2.iter().all(|f| f.group != "费尔巴哈等角共轭点"), "X59 skip isosceles");
+
+        // Equilateral: X12=X60=G; X59 skipped.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x12e = fs3.iter().find(|f| f.group == "费尔巴哈调和共轭点" && f.label == "X_{12}").unwrap();
+        let x60e = fs3.iter().find(|f| f.group == "X12等角共轭点" && f.label == "X_{60}").unwrap();
+        assert_eq!(x12e.value, g.value);
+        assert_eq!(x60e.value, g.value);
+        assert!(fs3.iter().all(|f| f.group != "费尔巴哈等角共轭点"), "X59 skip equilateral");
     }
 
     #[test]
