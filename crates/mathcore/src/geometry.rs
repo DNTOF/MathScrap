@@ -1840,6 +1840,59 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
     } else {
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}{}边形}}", if convex { "凸" } else { "凹" }, n), None, "", "内角和 (n-2)·180°"));
     }
+
+    // Desargues quick check: pts[0..3] vs pts[3..6] as △ABC, △A′B′C′.
+    if pts.len() >= 6 {
+        let (a, b, c) = (pts[0].1, pts[1].1, pts[2].1);
+        let (ap, bp, cp) = (pts[3].1, pts[4].1, pts[5].1);
+        let (na, nb, nc) = (&pts[0].0, &pts[1].0, &pts[2].0);
+        let (nap, nbp, ncp) = (&pts[3].0, &pts[4].0, &pts[5].0);
+        if let Some(s) = line_line_isect2(a, ap, b, bp) {
+            if collinear2(s, c, cp) {
+                out.push(fact(
+                    "德萨格定理",
+                    "\\text{Desargues}",
+                    "\\text{透视}".into(),
+                    None,
+                    &format!("{na}{nap},{nb}{nbp},{nc}{ncp}\\ \\text{{共点}}"),
+                    "两三角形对应顶点连线共点 ⇒ 对应边交点共线",
+                ).with(Shape::Point {
+                    x: s[0],
+                    y: s[1],
+                    label: "S Desargues".into(),
+                }));
+                out.push(fact(
+                    "德萨格定理",
+                    "S",
+                    pt(s[0], s[1]),
+                    None,
+                    "AA'\\cap BB'\\cap CC'",
+                    "透视中心",
+                ));
+                let x = line_line_isect2(b, c, bp, cp);
+                let y = line_line_isect2(c, a, cp, ap);
+                let z = line_line_isect2(a, b, ap, bp);
+                if let (Some(x), Some(y), Some(z)) = (x, y, z) {
+                    if collinear2(x, y, z) {
+                        out.push(fact(
+                            "德萨格定理",
+                            "\\text{透视轴}",
+                            "\\text{共线}".into(),
+                            None,
+                            "BC\\cap B'C',\\ CA\\cap C'A',\\ AB\\cap A'B'",
+                            "对应边交点共线（德萨格透视轴）",
+                        ).with(Shape::Segment {
+                            x1: x[0],
+                            y1: x[1],
+                            x2: y[0],
+                            y2: y[1],
+                            label: "Desargues轴".into(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
     out
 }
 
@@ -2204,6 +2257,63 @@ fn line_isect(p: &NamedLine, q: &NamedLine) -> Option<[f64; 2]> {
     Some([(p.c * q.b - p.b * q.c) / det, (p.a * q.c - p.c * q.a) / det])
 }
 
+
+/// Circumcenter and radius of △ABC; None if collinear.
+fn circum2(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> Option<([f64; 2], f64)> {
+    let d = 2.0 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if d.abs() < 1e-14 {
+        return None;
+    }
+    let sq = |q: [f64; 2]| q[0] * q[0] + q[1] * q[1];
+    let ux = (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d;
+    let uy = (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d;
+    let o = [ux, uy];
+    let r = dist2(o, a);
+    if r < 1e-14 || !r.is_finite() {
+        return None;
+    }
+    Some((o, r))
+}
+
+fn collinear2(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> bool {
+    let cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    cross.abs() < 1e-8 * (1.0 + dist2(a, b) * dist2(a, c))
+}
+
+/// Second intersection of two circles, skipping `avoid` (the shared vertex).
+fn circles_second_isect(
+    o1: [f64; 2],
+    r1: f64,
+    o2: [f64; 2],
+    r2: f64,
+    avoid: [f64; 2],
+) -> Option<[f64; 2]> {
+    let dx = o2[0] - o1[0];
+    let dy = o2[1] - o1[1];
+    let d = dx.hypot(dy);
+    if d < 1e-12 || d > r1 + r2 + 1e-9 || d < (r1 - r2).abs() - 1e-9 {
+        return None;
+    }
+    let a = (r1 * r1 - r2 * r2 + d * d) / (2.0 * d);
+    let h2 = r1 * r1 - a * a;
+    if h2 < -1e-9 {
+        return None;
+    }
+    let h = h2.max(0.0).sqrt();
+    let px = o1[0] + a * dx / d;
+    let py = o1[1] + a * dy / d;
+    let mx = -dy * h / d;
+    let my = dx * h / d;
+    let p_a = [px + mx, py + my];
+    let p_b = [px - mx, py - my];
+    let da = dist2(p_a, avoid);
+    let db = dist2(p_b, avoid);
+    if da < 1e-6 && db < 1e-6 {
+        return None;
+    }
+    Some(if da >= db { p_a } else { p_b })
+}
+
 pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
     let mut out = Vec::new();
     for l in ls {
@@ -2376,6 +2486,94 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
                 let value = if near(k1, k2) { nice(k1) } else { format!("{} \\approx {}", nice(k1), nice(k2)) };
                 let (pn, qn, sn, tn) = (ls[i].name.clone(), ls[j].name.clone(), ls[s].name.clone(), ls[t].name.clone());
                 out.push(fact("相似三角形", &format!("\\text{{相似比}}_{{{}}}", pn), value, Some(k1), &format!("\\frac{{|X({sn} \\cap {pn})|}}{{|X({sn} \\cap {qn})|}} = \\frac{{|X({tn} \\cap {pn})|}}{{|X({tn} \\cap {qn})|}} = {}", nice(k1)), "平行于三角形一边的直线截其他两边，所得三角形与原三角形相似（X = 两截线的交点）"));
+            }
+        }
+    }
+
+    // Miquel point of a complete quadrilateral (4 lines, 6 vertices).
+    if ls.len() >= 4 {
+        let n = ls.len().min(6);
+        'miquel: for i0 in 0..n {
+            for i1 in (i0 + 1)..n {
+                for i2 in (i1 + 1)..n {
+                    for i3 in (i2 + 1)..n {
+                        let idx = [i0, i1, i2, i3];
+                        let mut ok_pairs = true;
+                        for a in 0..4 {
+                            for b in (a + 1)..4 {
+                                if line_isect(&ls[idx[a]], &ls[idx[b]]).is_none() {
+                                    ok_pairs = false;
+                                }
+                            }
+                        }
+                        if !ok_pairs {
+                            continue;
+                        }
+                        let tri = |a: usize, b: usize, c: usize| -> Option<[[f64; 2]; 3]> {
+                            Some([
+                                line_isect(&ls[idx[a]], &ls[idx[b]])?,
+                                line_isect(&ls[idx[b]], &ls[idx[c]])?,
+                                line_isect(&ls[idx[c]], &ls[idx[a]])?,
+                            ])
+                        };
+                        let (Some(t012), Some(t013), Some(t023), Some(t123)) =
+                            (tri(0, 1, 2), tri(0, 1, 3), tri(0, 2, 3), tri(1, 2, 3))
+                        else {
+                            continue;
+                        };
+                        if collinear2(t012[0], t012[1], t012[2])
+                            || collinear2(t013[0], t013[1], t013[2])
+                            || collinear2(t023[0], t023[1], t023[2])
+                            || collinear2(t123[0], t123[1], t123[2])
+                        {
+                            continue;
+                        }
+                        let (Some((o1, r1)), Some((o2, r2))) =
+                            (circum2(t012[0], t012[1], t012[2]), circum2(t013[0], t013[1], t013[2]))
+                        else {
+                            continue;
+                        };
+                        let shared = line_isect(&ls[idx[0]], &ls[idx[1]]).unwrap();
+                        let Some(m) = circles_second_isect(o1, r1, o2, r2, shared) else {
+                            continue;
+                        };
+                        let (Some((o3, r3)), Some((o4, r4))) =
+                            (circum2(t023[0], t023[1], t023[2]), circum2(t123[0], t123[1], t123[2]))
+                        else {
+                            continue;
+                        };
+                        if (dist2(m, o3) - r3).abs() > 1e-5 * (1.0 + r3)
+                            || (dist2(m, o4) - r4).abs() > 1e-5 * (1.0 + r4)
+                        {
+                            continue;
+                        }
+                        let names = format!(
+                            "{},{},{},{}",
+                            ls[idx[0]].name, ls[idx[1]].name, ls[idx[2]].name, ls[idx[3]].name
+                        );
+                        out.push(fact(
+                            "米克尔点",
+                            "\\text{Miquel}",
+                            pt(m[0], m[1]),
+                            None,
+                            "\\odot(L_iL_jL_k)\\ \\text{共点}",
+                            &format!("完全四线形 {{{names}}} 的四个三点形外接圆交于米克尔点"),
+                        ).with(Shape::Point {
+                            x: m[0],
+                            y: m[1],
+                            label: "Miquel".into(),
+                        }));
+                        out.push(fact(
+                            "米克尔点",
+                            "M",
+                            pt(m[0], m[1]),
+                            None,
+                            "",
+                            "米克尔点坐标",
+                        ));
+                        break 'miquel;
+                    }
+                }
             }
         }
     }
@@ -3350,6 +3548,47 @@ mod tests {
             "trilinear polar of I missing"
         );
         assert!(fs.iter().any(|f| f.group == "三线极线" && f.label.contains("l_")));
+    }
+
+    #[test]
+    fn miquel_complete_quadrilateral() {
+        // y=0, x=0, x+y=2, x-y=1 — four lines, six vertices, general position
+        let ls = vec![
+            NamedLine { name: "l".into(), a: 0.0, b: 1.0, c: 0.0 },
+            NamedLine { name: "m".into(), a: 1.0, b: 0.0, c: 0.0 },
+            NamedLine { name: "n".into(), a: 1.0, b: 1.0, c: 2.0 },
+            NamedLine { name: "p".into(), a: 1.0, b: -1.0, c: 1.0 },
+        ];
+        let out = lines_analyze(&ls, &[]);
+        assert!(
+            out.iter().any(|f| f.group == "米克尔点" && f.label.contains("Miquel")),
+            "Miquel missing: {:?}",
+            out.iter().map(|f| (&f.group, &f.label)).collect::<Vec<_>>()
+        );
+        assert!(out.iter().any(|f| f.group == "米克尔点" && f.label == "M"));
+    }
+
+    #[test]
+    fn desargues_perspective_triangles() {
+        // S=O; A,B,C and scaled A',B',C' with distinct factors → perspective + axis
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![2.0, 1.0] },
+            NamedPoint { name: "B".into(), p: vec![-1.0, 2.0] },
+            NamedPoint { name: "C".into(), p: vec![-2.0, -3.0] },
+            NamedPoint { name: "A'".into(), p: vec![4.0, 2.0] },
+            NamedPoint { name: "B'".into(), p: vec![-3.0, 6.0] },
+            NamedPoint { name: "C'".into(), p: vec![-1.0, -1.5] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(
+            out.iter().any(|f| f.group == "德萨格定理" && f.value.contains("透视")),
+            "Desargues perspective missing"
+        );
+        assert!(out.iter().any(|f| f.group == "德萨格定理" && f.label == "S"));
+        assert!(
+            out.iter().any(|f| f.group == "德萨格定理" && f.label.contains("透视轴")),
+            "Desargues axis missing"
+        );
     }
 
 }
