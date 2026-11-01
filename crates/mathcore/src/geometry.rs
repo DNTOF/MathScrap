@@ -5936,6 +5936,186 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // X(115): center of the Kiepert hyperbola; bary (b²−c²)².
+    // On the nine-point circle; = midpoint(H, Tarry X(98)). Skip equilateral (all zero).
+    {
+        let da = b * b - c * c;
+        let db = c * c - a * a;
+        let dc = a * a - b * b;
+        let wa = da * da;
+        let wb = db * db;
+        let wc = dc * dc;
+        let den = wa + wb + wc;
+        if den > 1e-18 {
+            let x115 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "基伯特双曲心",
+                "X_{115}",
+                pt(x115[0], x115[1]),
+                None,
+                "X(115) = \\bigl((b^2-c^2)^2:\\cdots\\bigr)",
+                "X(115)：基伯特双曲线的中心（九点圆上）",
+            ).with(Shape::Point {
+                x: x115[0],
+                y: x115[1],
+                label: "X115".into(),
+            }));
+            // Cross-check: midpoint(H, Tarry) when Tarry present.
+            let ty_xy = out.iter().rev().find(|f| f.group == "塔里点" && f.label == "Ty").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((tx, ty)) = ty_xy {
+                let mx = (orth[0] + tx) / 2.0;
+                let my = (orth[1] + ty) / 2.0;
+                if (mx - x115[0]).abs() < 1e-5 && (my - x115[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "基伯特双曲心",
+                        "X_{115}=\\mathrm{mid}(H,Ty)",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(115) = \\text{midpoint}(H, X(98))",
+                        "X(115) 为垂心与塔里点的中点",
+                    ));
+                }
+            }
+
+            // X(114): Kiepert antipode = nine-point antipode of X(115) = midpoint(H, Steiner).
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let x114 = [2.0 * n9[0] - x115[0], 2.0 * n9[1] - x115[1]];
+            out.push(fact(
+                "基伯特对径",
+                "X_{114}",
+                pt(x114[0], x114[1]),
+                None,
+                "X(114) = 2N - X(115) = \\text{midpoint}(H, X(99))",
+                "X(114)：基伯特双曲心在九点圆上的对径点",
+            ).with(Shape::Point {
+                x: x114[0],
+                y: x114[1],
+                label: "X114".into(),
+            }));
+            out.push(fact(
+                "基伯特对径",
+                "X_{114}=2N-X_{115}",
+                "\\text{九点圆对径}".into(),
+                None,
+                "X(114) = 2N - X(115)",
+                "X(114) 与 X(115) 互为九点圆对径点",
+            ));
+            let st_xy = out.iter().rev().find(|f| f.group == "施泰纳点" && f.label == "St").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((sx, sy)) = st_xy {
+                let mx = (orth[0] + sx) / 2.0;
+                let my = (orth[1] + sy) / 2.0;
+                if (mx - x114[0]).abs() < 1e-5 && (my - x114[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "基伯特对径",
+                        "X_{114}=\\mathrm{mid}(H,St)",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(114) = \\text{midpoint}(H, X(99))",
+                        "X(114) 为垂心与施泰纳点的中点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(125): center of the Jerabek hyperbola; bary (sin 2A) sin²(B−C).
+    // On the nine-point circle; = midpoint(H, X(74)); complement of Euler reflection X(110).
+    // Skip equilateral (all sin(B−C)=0).
+    {
+        let sa = (2.0 * g[0]).sin() * (g[1] - g[2]).sin().powi(2);
+        let sb = (2.0 * g[1]).sin() * (g[2] - g[0]).sin().powi(2);
+        let sc = (2.0 * g[2]).sin() * (g[0] - g[1]).sin().powi(2);
+        let den = sa + sb + sc;
+        if den.abs() > 1e-12 {
+            let x125 = [
+                (sa * pa[0] + sb * pb[0] + sc * pc[0]) / den,
+                (sa * pa[1] + sb * pb[1] + sc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "耶拉贝克双曲心",
+                "X_{125}",
+                pt(x125[0], x125[1]),
+                None,
+                "X(125) = \\bigl(\\sin 2A\\,\\sin^2(B-C):\\cdots\\bigr)",
+                "X(125)：耶拉贝克双曲线的中心（九点圆上）",
+            ).with(Shape::Point {
+                x: x125[0],
+                y: x125[1],
+                label: "X125".into(),
+            }));
+            let x74_xy = out.iter().rev().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((px, py)) = x74_xy {
+                let mx = (orth[0] + px) / 2.0;
+                let my = (orth[1] + py) / 2.0;
+                if (mx - x125[0]).abs() < 1e-5 && (my - x125[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "耶拉贝克双曲心",
+                        "X_{125}=\\mathrm{mid}(H,X_{74})",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(125) = \\text{midpoint}(H, X(74))",
+                        "X(125) 为垂心与 X(74) 的中点",
+                    ));
+                }
+            }
+
+            // X(113): Jerabek antipode = nine-point antipode of X(125) = midpoint(H, Euler reflection).
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let x113 = [2.0 * n9[0] - x125[0], 2.0 * n9[1] - x125[1]];
+            out.push(fact(
+                "耶拉贝克对径",
+                "X_{113}",
+                pt(x113[0], x113[1]),
+                None,
+                "X(113) = 2N - X(125) = \\text{midpoint}(H, X(110))",
+                "X(113)：耶拉贝克双曲心在九点圆上的对径点",
+            ).with(Shape::Point {
+                x: x113[0],
+                y: x113[1],
+                label: "X113".into(),
+            }));
+            out.push(fact(
+                "耶拉贝克对径",
+                "X_{113}=2N-X_{125}",
+                "\\text{九点圆对径}".into(),
+                None,
+                "X(113) = 2N - X(125)",
+                "X(113) 与 X(125) 互为九点圆对径点",
+            ));
+            let er_xy = out.iter().rev().find(|f| f.group == "欧拉反射点" && f.label == "E_r").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((ex, ey)) = er_xy {
+                let mx = (orth[0] + ex) / 2.0;
+                let my = (orth[1] + ey) / 2.0;
+                if (mx - x113[0]).abs() < 1e-5 && (my - x113[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "耶拉贝克对径",
+                        "X_{113}=\\mathrm{mid}(H,E_r)",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(113) = \\text{midpoint}(H, X(110))",
+                        "X(113) 为垂心与欧拉反射点的中点",
+                    ));
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -10189,6 +10369,90 @@ mod tests {
         assert!(fs3.iter().all(|f| f.group != "费尔巴哈九点对径"));
     }
 
+
+    #[test]
+    fn x113_x114_x115_x125() {
+        // Scalene acute 6-7-9: all four present; NPC antipodes and H-midpoints hold.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x115 = fs.iter().find(|f| f.group == "基伯特双曲心" && f.label == "X_{115}").expect("X115");
+        let x114 = fs.iter().find(|f| f.group == "基伯特对径" && f.label == "X_{114}").expect("X114");
+        let x125 = fs.iter().find(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}").expect("X125");
+        let x113 = fs.iter().find(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}").expect("X113");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let st = fs.iter().find(|f| f.group == "施泰纳点" && f.label == "St").expect("St");
+        let ty = fs.iter().find(|f| f.group == "塔里点" && f.label == "Ty").expect("Ty");
+        let x74 = fs.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74");
+        let er = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "E_r").expect("Er");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x115.value, x114.value);
+        assert_ne!(x125.value, x113.value);
+        assert_ne!(x115.value, x125.value);
+        assert_ne!(x115.value, g.value);
+        assert_ne!(x125.value, g.value);
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let (hx, hy) = ptxy(h);
+        let (nx, ny) = ptxy(n);
+        let (a5, b5) = ptxy(x115);
+        let (a4, b4) = ptxy(x114);
+        let (a25, b25) = ptxy(x125);
+        let (a13, b13) = ptxy(x113);
+        let (sx, sy) = ptxy(st);
+        let (tx, tyy) = ptxy(ty);
+        let (p74x, p74y) = ptxy(x74);
+        let (ex, ey) = ptxy(er);
+        // X114 = 2N - X115; X113 = 2N - X125
+        assert!(((a4 + a5) / 2.0 - nx).abs() < 1e-6 && ((b4 + b5) / 2.0 - ny).abs() < 1e-6, "X114 not NPC antipode of X115");
+        assert!(((a13 + a25) / 2.0 - nx).abs() < 1e-6 && ((b13 + b25) / 2.0 - ny).abs() < 1e-6, "X113 not NPC antipode of X125");
+        // Midpoints with H
+        assert!(((hx + tx) / 2.0 - a5).abs() < 1e-6 && ((hy + tyy) / 2.0 - b5).abs() < 1e-6, "X115 mid(H,Ty)");
+        assert!(((hx + sx) / 2.0 - a4).abs() < 1e-6 && ((hy + sy) / 2.0 - b4).abs() < 1e-6, "X114 mid(H,St)");
+        assert!(((hx + p74x) / 2.0 - a25).abs() < 1e-6 && ((hy + p74y) / 2.0 - b25).abs() < 1e-6, "X125 mid(H,X74)");
+        assert!(((hx + ex) / 2.0 - a13).abs() < 1e-6 && ((hy + ey) / 2.0 - b13).abs() < 1e-6, "X113 mid(H,Er)");
+        assert!(fs.iter().any(|f| f.group == "基伯特对径" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "耶拉贝克对径" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "基伯特双曲心" && f.label.contains("mid")));
+        assert!(fs.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label.contains("mid")));
+
+        // Isosceles non-eq 5-5-6: X115/X125/X114/X113 still via bary (Steiner/Tarry/Er may skip).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "基伯特双曲心" && f.label == "X_{115}"), "X115 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "基伯特对径" && f.label == "X_{114}"), "X114 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}"), "X125 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}"), "X113 on isosceles");
+        // Steiner/Tarry skipped on isosceles → no mid(H,St/Ty) cross-facts required.
+        assert!(fs2.iter().all(|f| f.group != "施泰纳点"), "St skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "塔里点"), "Ty skip isosceles");
+
+        // Equilateral: all four skipped (bary weights vanish).
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "基伯特双曲心"), "X115 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "基伯特对径"), "X114 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "耶拉贝克双曲心"), "X125 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "耶拉贝克对径"), "X113 skip equilateral");
+
+        // Right 3-4-5: X115/X114/X125/X113 present (bary OK); Er may skip.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "基伯特双曲心" && f.label == "X_{115}"));
+        assert!(fs4.iter().any(|f| f.group == "基伯特对径" && f.label == "X_{114}"));
+        assert!(fs4.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}"));
+        assert!(fs4.iter().any(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}"));
+    }
 
     #[test]
     fn british_flag_on_rectangle() {
