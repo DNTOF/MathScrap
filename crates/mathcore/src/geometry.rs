@@ -1154,7 +1154,8 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
-    // de Longchamps point L: reflection of H over O (so O midpoint of LH); on Euler line.
+    // de Longchamps X(20): reflection of H over O (so O midpoint of LH); on Euler line.
+    // Trilinear cos A − cos B cos C; bary a(cos A − cos B cos C).
     {
         let longch = [2.0 * circ[0] - orth[0], 2.0 * circ[1] - orth[1]];
         out.push(fact(
@@ -1162,12 +1163,12 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             "L",
             pt(longch[0], longch[1]),
             None,
-            "L = 2O - H",
-            "德龙尚点：垂心关于外心的对称点",
+            "X(20) = L = 2O - H",
+            "德龙尚点 X(20)：垂心关于外心的对称点",
         ).with(Shape::Point {
             x: longch[0],
             y: longch[1],
-            label: "L 德龙尚".into(),
+            label: "L=X20 德龙尚".into(),
         }));
         let mid = [(longch[0] + orth[0]) / 2.0, (longch[1] + orth[1]) / 2.0];
         if dist2(mid, circ) < 1e-6 * (1.0 + dist2(circ, orth)) {
@@ -1179,6 +1180,30 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 "\\overrightarrow{OL} = -\\overrightarrow{OH}",
                 "外心是 LH 的中点（欧拉线上）",
             ));
+        }
+        // Bary cross-check: a(cos A − cos B cos C)
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let wa = a * (ca - cb * cc);
+        let wb = b * (cb - cc * ca);
+        let wc = c * (cc - ca * cb);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let xb = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            if dist2(xb, longch) < 1e-4 * (1.0 + rr) {
+                out.push(fact(
+                    "德龙尚点",
+                    "X_{20}",
+                    pt(xb[0], xb[1]),
+                    None,
+                    "X(20) = \\bigl(a(\\cos A-\\cos B\\cos C):\\cdots\\bigr)",
+                    "X(20) 重心坐标与 L=2O−H 一致",
+                ));
+            }
         }
     }
 
@@ -1227,12 +1252,12 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     "Sc",
                     pt(sf[0], sf[1]),
                     None,
-                    "\\text{Euler}(\\triangle ABC)\\cap\\text{Euler}(\\triangle IBC)",
-                    "席弗勒点：内心三角形与原三角形欧拉线的交点",
+                    "X(21) = \\text{Euler}(\\triangle ABC)\\cap\\text{Euler}(\\triangle IBC)",
+                    "席弗勒点 X(21)：内心三角形与原三角形欧拉线的交点",
                 ).with(Shape::Point {
                     x: sf[0],
                     y: sf[1],
-                    label: "Sc 席弗勒".into(),
+                    label: "Sc=X21 席弗勒".into(),
                 }));
                 if let Some((o_ica, _)) = circum2(inc, pc, pa) {
                     let g_ica = [
@@ -1530,7 +1555,7 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         ));
     }
 
-    // Kosnita point: A O_a ∩ B O_b ∩ C O_c with O_a = circumcenter of △OBC.
+    // Kosnita X(54): A O_a ∩ B O_b ∩ C O_c with O_a = circumcenter of △OBC.
     // Skip when △OAB / OBC / OCA is degenerate (e.g. right △ with O on a side).
     {
         let oa = circum2(circ, pb, pc);
@@ -1548,12 +1573,12 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                         "Ko",
                         pt(ko[0], ko[1]),
                         None,
-                        "AO_a \\cap BO_b \\cap CO_c",
-                        "科斯尼塔点：A 与 △OBC 外心等连线的交点",
+                        "X(54) = AO_a \\cap BO_b \\cap CO_c",
+                        "科斯尼塔点 X(54)：A 与 △OBC 外心等连线的交点",
                     ).with(Shape::Point {
                         x: ko[0],
                         y: ko[1],
-                        label: "Ko 科斯尼塔".into(),
+                        label: "Ko=X54 科斯尼塔".into(),
                     }));
                 }
             }
@@ -3424,6 +3449,160 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 x: x48[0],
                 y: x48[1],
                 label: "X48".into(),
+            }));
+        }
+    }
+
+
+    // X(23) Far-out point: circumcircle-inverse of the centroid; skip equilateral (G=O).
+    // Trilinear a(b⁴+c⁴−a⁴−b²c²); bary a²(b⁴+c⁴−a⁴−b²c²). On Euler line.
+    {
+        let og2 = {
+            let dx = centroid[0] - circ[0];
+            let dy = centroid[1] - circ[1];
+            dx * dx + dy * dy
+        };
+        if og2 > 1e-12 {
+            let scale = (rr * rr) / og2;
+            let x23 = [
+                circ[0] + scale * (centroid[0] - circ[0]),
+                circ[1] + scale * (centroid[1] - circ[1]),
+            ];
+            // Bary a²(b⁴+c⁴−a⁴−b²c²)
+            let a2 = a * a;
+            let b2 = b * b;
+            let c2 = c * c;
+            let a4 = a2 * a2;
+            let b4 = b2 * b2;
+            let c4 = c2 * c2;
+            let wa = a2 * (b4 + c4 - a4 - b2 * c2);
+            let wb = b2 * (c4 + a4 - b4 - c2 * a2);
+            let wc = c2 * (a4 + b4 - c4 - a2 * b2);
+            let den = wa + wb + wc;
+            let x23u = if den.abs() > 1e-12 {
+                let xb = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if dist2(xb, x23) < 1e-4 * (1.0 + rr) {
+                    xb
+                } else {
+                    x23
+                }
+            } else {
+                x23
+            };
+            out.push(fact(
+                "远点",
+                "X_{23}",
+                pt(x23u[0], x23u[1]),
+                None,
+                "X(23) = O + R^2(G-O)/|OG|^2",
+                "远点 X(23)：重心关于外接圆的反演点",
+            ).with(Shape::Point {
+                x: x23u[0],
+                y: x23u[1],
+                label: "X23 远点".into(),
+            }));
+            // |OX23| · |OG| = R²
+            let d_ox = dist2(circ, x23u);
+            let d_og = og2.sqrt();
+            if d_og > 1e-12 {
+                let prod = d_ox * d_og;
+                if (prod - rr * rr).abs() < 1e-4 * (1.0 + rr * rr) {
+                    out.push(fact(
+                        "远点",
+                        "|OX_{23}|\\cdot|OG|",
+                        nice(rr * rr),
+                        Some(rr * rr),
+                        "|OX_{23}|\\cdot|OG| = R^2",
+                        "反演定义：乘积等于外接圆半径平方",
+                    ));
+                }
+            }
+            // Collinear O, G, X23 (Euler)
+            let cross = (centroid[0] - circ[0]) * (x23u[1] - circ[1])
+                - (centroid[1] - circ[1]) * (x23u[0] - circ[0]);
+            if cross.abs() < 1e-5 * (1.0 + og2) * (1.0 + dist2(circ, x23u)) {
+                out.push(fact(
+                    "远点",
+                    "O,\\ G,\\ X_{23}",
+                    "\\text{共线}".into(),
+                    None,
+                    "X(23)\\in\\text{Euler}",
+                    "远点在欧拉线上",
+                ));
+            }
+        }
+    }
+
+    // X(35): bary sin A + sin 2A; on OI (companion of circum-inverse X(36)=sin A−sin 2A).
+    {
+        let wa = g[0].sin() + (2.0 * g[0]).sin();
+        let wb = g[1].sin() + (2.0 * g[1]).sin();
+        let wc = g[2].sin() + (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x35 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            let di = dist2(x35, inc);
+            let do_ = dist2(x35, circ);
+            if di > 1e-10 || do_ > 1e-10 {
+                out.push(fact(
+                    "OI调和点",
+                    "X_{35}",
+                    pt(x35[0], x35[1]),
+                    None,
+                    "X(35) = (\\sin A+\\sin 2A:\\cdots)",
+                    "X(35)：与 X(36) 成对的 OI 线上点",
+                ).with(Shape::Point {
+                    x: x35[0],
+                    y: x35[1],
+                    label: "X35".into(),
+                }));
+                let cross = (inc[0] - circ[0]) * (x35[1] - circ[1])
+                    - (inc[1] - circ[1]) * (x35[0] - circ[0]);
+                let oi2 = dist2(circ, inc);
+                if oi2 > 1e-12
+                    && cross.abs() < 1e-5 * (1.0 + oi2) * (1.0 + dist2(circ, x35))
+                {
+                    out.push(fact(
+                        "OI调和点",
+                        "O,\\ I,\\ X_{35}",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(35)\\in OI",
+                        "X(35) 在 OI 线上",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(38): bary a(b²+c²); crosspoint of I and Moses X(75).
+    {
+        let wa = a * (b * b + c * c);
+        let wb = b * (c * c + a * a);
+        let wc = c * (a * a + b * b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x38 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "截线交点",
+                "X_{38}",
+                pt(x38[0], x38[1]),
+                None,
+                "X(38) = \\bigl(a(b^2+c^2):\\cdots\\bigr)",
+                "X(38)：内心与摩西点的截线交点",
+            ).with(Shape::Point {
+                x: x38[0],
+                y: x38[1],
+                label: "X38".into(),
             }));
         }
     }
@@ -6888,6 +7067,53 @@ mod tests {
         let x48e = fs2.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").unwrap();
         assert_eq!(x41e.value, g.value);
         assert_eq!(x48e.value, g.value);
+    }
+
+    #[test]
+    fn x20_x23_farout_x35_x38() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        assert!(fs.iter().any(|f| f.group == "德龙尚点" && f.label == "X_{20}"), "X20 bary");
+        let x23 = fs.iter().find(|f| f.group == "远点" && f.label == "X_{23}").expect("X23");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        assert_ne!(x23.value, g.value);
+        assert_ne!(x23.value, o.value);
+        assert_ne!(x23.value, l.value);
+        assert!(fs.iter().any(|f| f.group == "远点" && f.label.contains("OX")));
+        assert!(fs.iter().any(|f| f.group == "远点" && f.value.contains("共线")));
+        let x35 = fs.iter().find(|f| f.group == "OI调和点" && f.label == "X_{35}").expect("X35");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(x35.value, i.value);
+        assert_ne!(x35.value, o.value);
+        assert!(fs.iter().any(|f| f.group == "OI调和点" && f.value.contains("共线")));
+        let x38 = fs.iter().find(|f| f.group == "截线交点" && f.label == "X_{38}").expect("X38");
+        assert_ne!(x38.value, x35.value);
+        assert_ne!(x38.value, x23.value);
+
+        // Equilateral: X23 skipped (G=O); X38 = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "远点"), "X23 skip equilateral");
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x38e = fs2.iter().find(|f| f.group == "截线交点" && f.label == "X_{38}").unwrap();
+        assert_eq!(x38e.value, g2.value);
+
+        // Right 3-4-5: X20/X23/X35/X38 still present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "德龙尚点" && f.label == "L"));
+        assert!(fs3.iter().any(|f| f.group == "远点" && f.label == "X_{23}"));
+        assert!(fs3.iter().any(|f| f.group == "OI调和点" && f.label == "X_{35}"));
+        assert!(fs3.iter().any(|f| f.group == "截线交点" && f.label == "X_{38}"));
     }
 
     #[test]
