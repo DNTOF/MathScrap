@@ -2458,7 +2458,175 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
-    // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
+    // X(55)/X(56): internal/external centers of similitude of circumcircle (O) and incircle (I).
+    // X(55) = (r O + R I)/(R+r) divides OI internally in R:r; bary a²(b+c−a).
+    // X(56) = (R I − r O)/(R−r) divides OI externally in R:r; bary a²/(b+c−a).
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let sum_rr = rr + r;
+            if sum_rr > 1e-12 {
+                let s55 = [
+                    (r * circ[0] + rr * inc[0]) / sum_rr,
+                    (r * circ[1] + rr * inc[1]) / sum_rr,
+                ];
+                // Cross-check bary a²(b+c−a)
+                let wa = a * a * sa;
+                let wb = b * b * sb;
+                let wc = c * c * sc;
+                let den = wa + wb + wc;
+                if den > 1e-12 {
+                    let s55b = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    let s55u = if dist2(s55, s55b) < 1e-5 * (1.0 + dist2(circ, inc)) {
+                        s55
+                    } else {
+                        s55b
+                    };
+                    out.push(fact(
+                        "相似中心",
+                        "S_{+}",
+                        pt(s55u[0], s55u[1]),
+                        None,
+                        "S_{+} = \\dfrac{r\\,O + R\\,I}{R+r}",
+                        "内相似中心 X(55)：外接圆与内切圆的内相似中心",
+                    ).with(Shape::Point {
+                        x: s55u[0],
+                        y: s55u[1],
+                        label: "S+ X55".into(),
+                    }));
+                    let d_o = dist2(s55u, circ);
+                    let d_i = dist2(s55u, inc);
+                    if d_i > 1e-12 {
+                        let ratio = d_o / d_i;
+                        let expect = rr / r;
+                        if (ratio - expect).abs() < 1e-4 * (1.0 + expect) {
+                            out.push(fact(
+                                "相似中心",
+                                "OS_{+}:S_{+}I",
+                                format!("{}:{}", nice(rr), nice(r)),
+                                Some(expect),
+                                "OS_{+}:S_{+}I = R:r",
+                                "内相似中心按 R:r 内分 OI",
+                            ));
+                        }
+                    }
+                }
+            }
+            let diff_rr = rr - r;
+            if diff_rr > 1e-12 {
+                let s56 = [
+                    (-r * circ[0] + rr * inc[0]) / diff_rr,
+                    (-r * circ[1] + rr * inc[1]) / diff_rr,
+                ];
+                let wa = (a * a) / sa;
+                let wb = (b * b) / sb;
+                let wc = (c * c) / sc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let s56b = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    let s56u = if dist2(s56, s56b) < 1e-5 * (1.0 + dist2(circ, inc)) {
+                        s56
+                    } else {
+                        s56b
+                    };
+                    out.push(fact(
+                        "相似中心",
+                        "S_{-}",
+                        pt(s56u[0], s56u[1]),
+                        None,
+                        "S_{-} = \\dfrac{R\\,I - r\\,O}{R-r}",
+                        "外相似中心 X(56)：外接圆与内切圆的外相似中心",
+                    ).with(Shape::Point {
+                        x: s56u[0],
+                        y: s56u[1],
+                        label: "S- X56".into(),
+                    }));
+                    // O, I, S+, S− collinear on the OI line
+                    let cross = (inc[0] - circ[0]) * (s56u[1] - circ[1])
+                        - (inc[1] - circ[1]) * (s56u[0] - circ[0]);
+                    let scale = (1.0 + dist2(circ, inc)) * (1.0 + dist2(circ, s56u));
+                    if cross.abs() < 1e-5 * scale {
+                        out.push(fact(
+                            "相似中心",
+                            "O,\\ I,\\ S_{+},\\ S_{-}",
+                            "\\text{共线}".into(),
+                            None,
+                            "S_{\\pm}\\in OI",
+                            "内/外相似中心均在 OI 线上（互为关于 O,I 的调和共轭）",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(30) Euler infinity point: Euler line ∩ line at infinity (direction of OH).
+    // Emit unit direction when |OH| is non-degenerate; bary sum of g(a,b,c) is 0.
+    {
+        let ohx = orth[0] - circ[0];
+        let ohy = orth[1] - circ[1];
+        let oh_len = (ohx * ohx + ohy * ohy).sqrt();
+        if oh_len > 1e-9 {
+            let ux = ohx / oh_len;
+            let uy = ohy / oh_len;
+            out.push(fact(
+                "欧拉无穷远点",
+                "X_{30}",
+                format!("({}, {})", nice(ux), nice(uy)),
+                None,
+                "X(30) = \\text{Euler}\\cap\\ell_{\\infty}",
+                "欧拉无穷远点：欧拉线与无穷远直线的交点（方向向量）",
+            ));
+            out.push(fact(
+                "欧拉无穷远点",
+                "\\overrightarrow{OH}/|OH|",
+                format!("({}, {})", nice(ux), nice(uy)),
+                None,
+                "\\parallel\\overrightarrow{OH}",
+                "欧拉线方向单位向量（X(30) 的仿射代表）",
+            ));
+            // Bary g = 2a⁴ − (b²−c²)² − a²(b²+c²); homogeneous sum ≈ 0 at infinity.
+            let g_a = {
+                let a2 = a * a;
+                let b2 = b * b;
+                let c2 = c * c;
+                2.0 * a2 * a2 - (b2 - c2) * (b2 - c2) - a2 * (b2 + c2)
+            };
+            let g_b = {
+                let a2 = b * b;
+                let b2 = c * c;
+                let c2 = a * a;
+                2.0 * a2 * a2 - (b2 - c2) * (b2 - c2) - a2 * (b2 + c2)
+            };
+            let g_c = {
+                let a2 = c * c;
+                let b2 = a * a;
+                let c2 = b * b;
+                2.0 * a2 * a2 - (b2 - c2) * (b2 - c2) - a2 * (b2 + c2)
+            };
+            let gsum = g_a + g_b + g_c;
+            if gsum.abs() < 1e-6 * (1.0 + g_a.abs() + g_b.abs() + g_c.abs()) {
+                out.push(fact(
+                    "欧拉无穷远点",
+                    "\\sum g(a,b,c)",
+                    "0".into(),
+                    Some(0.0),
+                    "g=2a^4-(b^2-c^2)^2-a^2(b^2+c^2)",
+                    "X(30) 重心坐标之和为 0（无穷远点判据）",
+                ));
+            }
+        }
+    }
+
+        // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
         // Medians: each ratio = 1.
@@ -5646,6 +5814,38 @@ mod tests {
         assert_eq!(moe.value, g.value);
         let x25e = fs3.iter().find(|f| f.group == "垂足切线同调中心" && f.label.contains("25")).unwrap();
         assert_eq!(x25e.value, g.value);
+    }
+
+    #[test]
+    fn similitude_centers_euler_infinity() {
+        // 3-4-5: R=2.5, r=1; S+ divides OI in 2.5:1; S− on OI; X30 direction || OH.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let sp = fs.iter().find(|f| f.group == "相似中心" && f.label == "S_{+}").expect("S+");
+        let sm = fs.iter().find(|f| f.group == "相似中心" && f.label == "S_{-}").expect("S-");
+        assert_ne!(sp.value, sm.value);
+        let ratio = fs.iter().find(|f| f.group == "相似中心" && f.label.contains("OS")).expect("ratio");
+        assert!((ratio.num.unwrap() - 2.5).abs() < 1e-6, "R/r={}", ratio.num.unwrap());
+        assert!(fs.iter().any(|f| f.group == "相似中心" && f.value.contains("共线")));
+        let x30 = fs.iter().find(|f| f.group == "欧拉无穷远点" && f.label.contains("30")).expect("X30");
+        assert!(fs.iter().any(|f| f.group == "欧拉无穷远点" && f.label.contains("OH")));
+        assert!(fs.iter().any(|f| f.group == "欧拉无穷远点" && f.label.contains("g") && f.value == "0"));
+        // Direction nonzero
+        assert!(x30.value.contains("("));
+
+        // Equilateral: S+=S−=O=I=G; X30 skipped (|OH|=0).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let spe = fs2.iter().find(|f| f.group == "相似中心" && f.label == "S_{+}").expect("S+ eq");
+        let sme = fs2.iter().find(|f| f.group == "相似中心" && f.label == "S_{-}").expect("S- eq");
+        assert_eq!(spe.value, g.value);
+        assert_eq!(sme.value, g.value);
+        assert!(fs2.iter().all(|f| f.group != "欧拉无穷远点"), "X30 skip equilateral");
     }
 
     #[test]
