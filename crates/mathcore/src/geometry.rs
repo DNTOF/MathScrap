@@ -2626,7 +2626,148 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
-        // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
+    // X(57): isogonal conjugate of Mittenpunkt X(9); perspector of intouch & excentral.
+    // Bary a/(b+c−a) = a/(2(s−a)).
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a / sa;
+            let wb = b / sb;
+            let wc = c / sc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x57 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "米滕等角共轭点",
+                    "X_{57}",
+                    pt(x57[0], x57[1]),
+                    None,
+                    "X(57) = \\bigl(a/(b+c-a):\\cdots\\bigr)",
+                    "X(57)：米滕点的等角共轭（接触△与旁心△的透视中心）",
+                ).with(Shape::Point {
+                    x: x57[0],
+                    y: x57[1],
+                    label: "X57".into(),
+                }));
+                out.push(fact(
+                    "米滕等角共轭点",
+                    "X_{57} \\leftrightarrow Mi",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(9)",
+                    "X(57) 与米滕点 X(9) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(58): isogonal conjugate of Spieker X(10); bary a²/(b+c).
+    {
+        let wa = (a * a) / (b + c);
+        let wb = (b * b) / (c + a);
+        let wc = (c * c) / (a + b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x58 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "斯皮克等角共轭点",
+                "X_{58}",
+                pt(x58[0], x58[1]),
+                None,
+                "X(58) = \\bigl(a^2/(b+c):\\cdots\\bigr)",
+                "X(58)：斯皮克中心的等角共轭",
+            ).with(Shape::Point {
+                x: x58[0],
+                y: x58[1],
+                label: "X58".into(),
+            }));
+            out.push(fact(
+                "斯皮克等角共轭点",
+                "X_{58} \\leftrightarrow Sp",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(10)",
+                "X(58) 与斯皮克中心 X(10) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(84): isogonal conjugate of Bevan X(40); perspector of hexyl triangle.
+    // Bary a / (cos B + cos C − cos A − 1); skip when any denominator ≈ 0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc - ca - 1.0;
+        let db = cc + ca - cb - 1.0;
+        let dc = ca + cb - cc - 1.0;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x84 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "己基透视中心",
+                    "X_{84}",
+                    pt(x84[0], x84[1]),
+                    None,
+                    "X(84) = \\bigl(a/(\\cos B+\\cos C-\\cos A-1):\\cdots\\bigr)",
+                    "X(84)：贝万点的等角共轭（己基三角形透视中心）",
+                ).with(Shape::Point {
+                    x: x84[0],
+                    y: x84[1],
+                    label: "X84".into(),
+                }));
+                // Cross-check: isogonal of Be=2O−I via bary of Be then a²/x.
+                let be = [2.0 * circ[0] - inc[0], 2.0 * circ[1] - inc[1]];
+                // signed areas for bary of Be
+                let area2 = |p: [f64; 2], q: [f64; 2], r: [f64; 2]| {
+                    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+                };
+                let aa = area2(be, pb, pc);
+                let bb = area2(pa, be, pc);
+                let cc_ = area2(pa, pb, be);
+                let ssum = aa + bb + cc_;
+                if ssum.abs() > 1e-12 && aa.abs() > 1e-14 && bb.abs() > 1e-14 && cc_.abs() > 1e-14 {
+                    let wa = (a * a) / aa;
+                    let wb = (b * b) / bb;
+                    let wc = (c * c) / cc_;
+                    let den2 = wa + wb + wc;
+                    if den2.abs() > 1e-12 {
+                        let iso = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den2,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den2,
+                        ];
+                        if dist2(iso, x84) < 1e-4 * (1.0 + dist2(circ, orth)) {
+                            out.push(fact(
+                                "己基透视中心",
+                                "X_{84} \\leftrightarrow Be",
+                                "\\text{等角共轭}".into(),
+                                None,
+                                "\\text{isogonal of }X(40)",
+                                "X(84) 与贝万点 X(40) 互为等角共轭",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
         // Medians: each ratio = 1.
@@ -5846,6 +5987,44 @@ mod tests {
         assert_eq!(spe.value, g.value);
         assert_eq!(sme.value, g.value);
         assert!(fs2.iter().all(|f| f.group != "欧拉无穷远点"), "X30 skip equilateral");
+    }
+
+    #[test]
+    fn x57_x58_x84_isogonals() {
+        // Scalene 6-7-8: X57≠Mi, X58≠Sp, X84≠Be; isogonal notes present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x57 = fs.iter().find(|f| f.group == "米滕等角共轭点" && f.label == "X_{57}").expect("X57");
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        assert_ne!(x57.value, mi.value);
+        assert!(fs.iter().any(|f| f.group == "米滕等角共轭点" && f.value.contains("等角")));
+        let x58 = fs.iter().find(|f| f.group == "斯皮克等角共轭点" && f.label == "X_{58}").expect("X58");
+        let sp = fs.iter().find(|f| f.group == "斯皮克中心" && f.label == "Sp").expect("Sp");
+        assert_ne!(x58.value, sp.value);
+        assert!(fs.iter().any(|f| f.group == "斯皮克等角共轭点" && f.value.contains("等角")));
+        let x84 = fs.iter().find(|f| f.group == "己基透视中心" && f.label == "X_{84}").expect("X84");
+        let be = fs.iter().find(|f| f.group == "贝万点" && f.label == "Be").expect("Be");
+        assert_ne!(x84.value, be.value);
+        assert!(fs.iter().any(|f| f.group == "己基透视中心" && f.value.contains("等角")));
+        assert_ne!(x57.value, x58.value);
+        assert_ne!(x58.value, x84.value);
+
+        // Equilateral: all collapse to G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("米滕等角共轭点", "X_{57}"),
+            ("斯皮克等角共轭点", "X_{58}"),
+            ("己基透视中心", "X_{84}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {lab}"));
+            assert_eq!(p.value, g.value, "{lab} should = G");
+        }
     }
 
     #[test]
