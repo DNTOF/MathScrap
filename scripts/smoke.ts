@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { initSync } from '../src/wasm/pkg/mathcore.js'
 import { analyze, summarizeCard, type Analysis } from '../src/math/scene'
 import { pageGroups } from '../src/math/page'
-import { parseCard, statementLatex } from '../src/math/statements'
+import { parseCard } from '../src/math/statements'
 import { SAMPLES } from '../src/board/samples'
 import { buildFigure2d, buildFigure3d, initialRanges, type Ranges } from '../src/plot/figure'
 import { cases } from './plot-cases'
@@ -243,15 +243,22 @@ for (const text of sumTexts) {
 }
 const sigma = parseCard('sigma')
 const sigmaView = summarizeCard('sigma')
-const sigmaPage = pageGroups([{ id: 'sigma', x: 0, y: 0, text: 'sigma' }])
+const sigmaPage = pageGroups([{ id: 'sg', x: 0, y: 0, text: 'sigma' }])
+const sigmaGlyph = parseCard('σ')
 const ySigma = parseCard('y = sigma')
-if (sigma.length !== 1 || sigma[0]?.kind !== 'notation' || statementLatex(sigma[0]) !== '\\sigma' || sigmaView.plottable || sigmaPage.count[2] !== 0 || sigmaPage.count[3] !== 0) {
+const sigmaBad =
+  sigma.length !== 1 ||
+  sigma[0]?.kind !== 'notation' ||
+  sigmaView.lines[0]?.latex !== '\\sigma' ||
+  sigmaView.plottable ||
+  sigmaPage.count[2] !== 0 ||
+  sigmaPage.count[3] !== 0 ||
+  sigmaGlyph[0]?.kind !== 'notation' ||
+  ySigma[0]?.kind !== 'curve'
+if (sigmaBad) {
   failed++
-  console.log('FAIL  lone sigma was plotted or was not the letter', sigma, sigmaView, sigmaPage.count)
-} else if (!ySigma.some((s) => s.kind === 'curve')) {
-  failed++
-  console.log('FAIL  y = sigma should stay a curve', ySigma)
-} else console.log('ok    sigma is a letter, y = sigma is a curve')
+  console.log('FAIL  isolated sigma should be the symbol, not a graph', sigma, sigmaView.lines, sigmaPage.count, ySigma[0])
+} else console.log('ok    isolated sigma is \\\\sigma')
 
 console.log(`\n${cases.length - failed}/${cases.length} formula cases · ${pages.length - pageFailed}/${pages.length} shared-sheet cases passed`)
 process.exit(failed + pageFailed ? 1 : 0)

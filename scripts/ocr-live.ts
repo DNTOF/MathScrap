@@ -17,7 +17,7 @@ import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { preprocessStrokes } from '../src/ocr/comer/preprocess.ts'
 import { classifyInk } from '../src/ocr/gate.ts'
 import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
-import { arrowLetter, inkFixtures, pointPair, proseNote, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
+import { arrowLetter, inkFixtures, isolatedSigma, pointPair, proseNote, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
 import { vocabFromJson } from '../src/ocr/comer/source.ts'
 
 const ort = await import('onnxruntime-web/wasm')
@@ -71,6 +71,11 @@ for (const sample of [
   assert.ok((hits[0]?.confidence ?? 0) >= OCR_ACCEPT, `${sample.name} confidence ${hits[0]?.confidence}`)
   assert.ok(!hits.some((h) => /\\vec\{/.test(h.text)), `${sample.name} became a vector`)
 }
+const sigmaHits = await recognizeStrokes(isolatedSigma(), encoder, decoder, vocab, 2)
+console.log('sigma', sigmaHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
+assert.equal(sigmaHits[0]?.text, 'sigma', sigmaHits.map((h) => h.text).join(' | '))
+assert.ok((sigmaHits[0]?.confidence ?? 0) >= OCR_ACCEPT, `isolated sigma confidence ${sigmaHits[0]?.confidence}`)
+assert.ok(!sigmaHits.some((h) => /\\vec\{|^[A-Z]\(/.test(h.text)), 'isolated sigma became a vector or point')
 const pointHits = await recognizeStrokes(pointPair(), encoder, decoder, vocab, 2)
 console.log('point', pointHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
 assert.match(pointHits[0]?.text ?? '', /^A\(2, 2\)$/)

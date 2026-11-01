@@ -39,7 +39,7 @@ const NAMED: Record<string, string> = {
 /**
  * CoMER tokens → the ASCII this sheet already parses.
  * `a ^ { 2 } = b` becomes `a^2 = b`. `\vec{a}` stays an arrowed letter.
- * `\sum_{i=1}^{n} i` keeps braced LaTeX (including a `\limits` the model inserts).
+ * `\sum_{i=1}^{n} i` keeps braced LaTeX (including a `\limits` the model inserts) so KaTeX can show it.
  * `\sigma` / `\pi` / `\theta` become the names the sheet already parses.
  * A component tuple is kept only when the model actually emitted parentheses.
  */

@@ -21,6 +21,7 @@ export function mathCues(strokes: InkStroke[]): string[] {
   if (hasSuperscript(strokes)) cues.push('superscript')
   if (hasParen(strokes)) cues.push('paren')
   if (hasSumLike(strokes)) cues.push('sum')
+  if (looksLikeIsolatedSigma(strokes)) cues.push('sigma')
   return cues
 }
 
@@ -50,6 +51,7 @@ export function looksLikeProse(strokes: InkStroke[]): boolean {
 /**
  * Tall Σ-shaped stroke with optional limit ticks: treat as math even without "=".
  * A single tall bowl with small marks above and below on the right is the usual handwritten sum.
+ * Σ alone, or Σ with at least one limit, counts as a formula cue.
  */
 function hasSumLike(strokes: InkStroke[]): boolean {
   const boxes = strokes.filter((s) => s.points.length >= 4).map((s) => ({ s, b: bounds(s.points) }))
@@ -59,6 +61,51 @@ function hasSumLike(strokes: InkStroke[]): boolean {
   const topRight = others.some(({ b }) => b.cy < sigma.b.y0 + sigma.b.h * 0.35 && b.cx > sigma.b.cx - 4 && b.h < sigma.b.h * 0.55)
   const botRight = others.some(({ b }) => b.cy > sigma.b.y0 + sigma.b.h * 0.55 && b.cx > sigma.b.cx - 4 && b.h < sigma.b.h * 0.55)
   return others.length === 0 || topRight || botRight
+}
+
+/**
+ * One open curl whose rightmost point is an endpoint and whose leftmost point
+ * sits in the bowl. That is a lowercase σ, not a tall Σ (several horizontal
+ * reversals) and not a closed θ / o. Native code can read this without a DOM.
+ */
+export function looksLikeIsolatedSigma(strokes: InkStroke[]): boolean {
+  const drawn = strokes.filter((s) => s.points.length >= 2)
+  if (drawn.length !== 1) return false
+  const pts = drawn[0].points
+  if (pts.length < 6) return false
+  const b = bounds(pts)
+  if (b.w < 12 || b.h < 12) return false
+  if (b.h > b.w * 1.35 && b.h > 28) return false
+  if (b.w > b.h * 2.4) return false
+  const start = pts[0]
+  const end = pts[pts.length - 1]
+  const chord = Math.hypot(end.x - start.x, end.y - start.y)
+  let path = 0
+  let flips = 0
+  let prev = 0
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i - 1].x
+    const dy = pts[i].y - pts[i - 1].y
+    path += Math.hypot(dx, dy)
+    if (Math.abs(dx) < 1.5) continue
+    const sign = Math.sign(dx)
+    if (prev !== 0 && sign !== prev) flips++
+    prev = sign
+  }
+  // Σ zigzags more than once. A sigma turns from the bowl back toward its tail once.
+  if (flips !== 1) return false
+  if (chord < Math.max(8, Math.min(b.w, b.h) * 0.28)) return false
+  if (path < chord * 1.55) return false
+  let right = pts[0]
+  let left = pts[0]
+  for (const p of pts) {
+    if (p.x > right.x) right = p
+    if (p.x < left.x) left = p
+  }
+  const near = (a: StrokePoint, c: StrokePoint) => Math.hypot(a.x - c.x, a.y - c.y) < Math.max(6, b.w * 0.2)
+  if (!near(right, start) && !near(right, end)) return false
+  if (near(left, start) || near(left, end)) return false
+  return true
 }
 
 function hasEquals(strokes: InkStroke[]): boolean {
