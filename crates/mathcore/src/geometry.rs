@@ -514,6 +514,9 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     let rr = a / (2.0 * g[0].sin());
     let r = area / p;
     out.push(fact("面积与周长", "S", nice(area), Some(area), "S = \\frac12 ab\\sin C", "面积公式"));
+    // Heron: same area from three sides — useful when the student only wrote SSS.
+    let heron = (p * (p - a) * (p - b) * (p - c)).max(0.0).sqrt();
+    out.push(fact("面积与周长", "S_{\\text{海伦}}", nice(heron), Some(heron), "S = \\sqrt{p(p-a)(p-b)(p-c)}", "海伦公式"));
     out.push(fact("面积与周长", "C_{\\triangle}", nice(per), Some(per), "a + b + c", "周长"));
 
     let [na, nb, nc] = names;
@@ -564,12 +567,449 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             (y * v[(i + 1) % 3][1] + z * v[(i + 2) % 3][1]) / (y + z),
         ];
         out.push(fact("角平分线", &format!("t_{}", SIDE[i]), nice(t), Some(t), &format!("t_{s} = \\frac{{2{u}{w}\\cos\\frac{{{T}}}{{2}}}}{{{u} + {w}}}", s = SIDE[i], u = SIDE[(i + 1) % 3], w = SIDE[(i + 2) % 3], T = ANG[i]), "角平分线长公式").with(Shape::Segment { x1: v[i][0], y1: v[i][1], x2: foot[0], y2: foot[1], label: format!("t_{}", SIDE[i]) }));
+        // 角平分线定理: foot F on the opposite side splits it as the adjacent sides.
+        let (u, w) = ((i + 1) % 3, (i + 2) % 3);
+        let d_u = dist2(v[u], foot);
+        let d_w = dist2(foot, v[w]);
+        if d_w > 1e-12 {
+            let ratio = d_u / d_w;
+            out.push(fact(
+                "角平分线",
+                &format!("\\frac{{|{nu}F_{{{s}}}|}}{{|F_{{{s}}}{nw}|}}", s = SIDE[i], nu = names[u], nw = names[w]),
+                nice(ratio),
+                Some(ratio),
+                &format!("\\frac{{{w}}}{{{u}}}", u = SIDE[u], w = SIDE[w]),
+                "角平分线定理：分对边成邻边比",
+            ));
+        }
     }
 
     out.push(fact("特殊点", "G", pt(centroid[0], centroid[1]), None, "G = \\frac{A + B + C}{3}", "重心（中线交点）").with(Shape::Point { x: centroid[0], y: centroid[1], label: "G 重心".into() }));
     out.push(fact("特殊点", "O", pt(circ[0], circ[1]), None, "|OA| = |OB| = |OC|", "外心（中垂线交点）").with(Shape::Point { x: circ[0], y: circ[1], label: "O 外心".into() }));
     out.push(fact("特殊点", "I", pt(inc[0], inc[1]), None, "I = \\frac{aA + bB + cC}{a + b + c}", "内心（角平分线交点）").with(Shape::Point { x: inc[0], y: inc[1], label: "I 内心".into() }));
     out.push(fact("特殊点", "H", pt(orth[0], orth[1]), None, "\\vec{OH} = \\vec{OA} + \\vec{OB} + \\vec{OC}", "垂心（高线交点）").with(Shape::Point { x: orth[0], y: orth[1], label: "H 垂心".into() }));
+
+    // Excircle radii; Euler OI² = R(R − 2r); OH from the orthocenter / circumcenter.
+    for i in 0..3 {
+        let ri = area / (p - s[i]);
+        out.push(fact(
+            "外接圆与内切圆",
+            &format!("r_{}", SIDE[i]),
+            nice(ri),
+            Some(ri),
+            &format!("r_{s} = \\frac{{S}}{{p - {s}}}", s = SIDE[i]),
+            "旁切圆半径",
+        ));
+    }
+    let oi = dist2(circ, inc);
+    out.push(fact(
+        "特殊点",
+        "|OI|",
+        nice(oi),
+        Some(oi),
+        "|OI|^2 = R(R - 2r)",
+        "欧拉公式（外心与内心的距离）",
+    ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: inc[0], y2: inc[1], label: "OI".into() }));
+    let oh = dist2(circ, orth);
+    out.push(fact(
+        "特殊点",
+        "|OH|",
+        nice(oh),
+        Some(oh),
+        "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+        "外心与垂心的距离",
+    ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
+
+    // Euler line: O, G, H collinear with OG:GH = 1:2 (and |OH| = 3|OG|).
+    // Note: |OI|^2 = R(R−2r) is the Euler distance formula for the incenter (already above);
+    // it is not |OH|^2.
+    {
+        let og = dist2(circ, centroid);
+        let gh = dist2(centroid, orth);
+        let cross = (centroid[0] - circ[0]) * (orth[1] - circ[1]) - (centroid[1] - circ[1]) * (orth[0] - circ[0]);
+        let scale = (1.0 + og) * (1.0 + oh);
+        if cross.abs() < 1e-6 * scale {
+            out.push(fact(
+                "欧拉线",
+                "O,\\ G,\\ H",
+                "\\text{共线}".into(),
+                None,
+                "\\vec{OH} = 3\\vec{OG}",
+                "欧拉线：外心、重心、垂心共线",
+            ));
+            if og > 1e-12 {
+                let ratio = gh / og;
+                out.push(fact(
+                    "欧拉线",
+                    "OG:GH",
+                    format!("1:{}", nice(ratio)),
+                    Some(ratio),
+                    "OG:GH = 1:2",
+                    "重心按 1:2 分 OH",
+                ));
+                out.push(fact(
+                    "欧拉线",
+                    "|OG|",
+                    nice(og),
+                    Some(og),
+                    "|OH| = 3|OG|",
+                    "欧拉线上的线段",
+                ).with(Shape::Segment {
+                    x1: circ[0],
+                    y1: circ[1],
+                    x2: centroid[0],
+                    y2: centroid[1],
+                    label: "OG".into(),
+                }));
+            }
+        }
+        // Nine-point circle: center N = midpoint of OH, radius R/2.
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        out.push(fact(
+            "欧拉线",
+            "N",
+            pt(n9[0], n9[1]),
+            None,
+            "N = \\text{中点}(O, H)",
+            "九点圆圆心（欧拉圆）",
+        ).with(Shape::Point {
+            x: n9[0],
+            y: n9[1],
+            label: "N 九点圆圆心".into(),
+        }));
+        out.push(fact(
+            "欧拉线",
+            "R_{\\text{九点}}",
+            nice(r9),
+            Some(r9),
+            "R_N = R/2",
+            "九点圆半径",
+        ).with(Shape::Circle {
+            cx: n9[0],
+            cy: n9[1],
+            r: r9,
+            label: "九点圆".into(),
+        }));
+    }
+
+    // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
+    // Emit the classical families that are always concurrent from three sides alone.
+    {
+        // Medians: each ratio = 1.
+        out.push(fact(
+            "塞瓦与梅涅劳斯",
+            "\\Pi_{\\text{Ceva}}^{\\text{中线}}",
+            "1".into(),
+            Some(1.0),
+            "\\frac{BD}{DC}\\cdot\\frac{CE}{EA}\\cdot\\frac{AF}{FB} = 1\\cdot 1\\cdot 1",
+            "塞瓦定理：三中线交于重心",
+        ));
+        // Angle bisectors: BD/DC = c/b, CE/EA = a/c, AF/FB = b/a.
+        let bis = (c / b) * (a / c) * (b / a);
+        out.push(fact(
+            "塞瓦与梅涅劳斯",
+            "\\Pi_{\\text{Ceva}}^{\\text{角平分线}}",
+            nice(bis),
+            Some(bis),
+            &format!(
+                "\\frac{{c}}{{b}}\\cdot\\frac{{a}}{{c}}\\cdot\\frac{{b}}{{a}} = {}",
+                nice(bis)
+            ),
+            "塞瓦定理：三角平分线交于内心",
+        ));
+        // Altitudes: feet of the three altitudes; directed product = 1.
+        let mut alt_prod = 1.0;
+        let mut alt_ok = true;
+        for i in 0..3 {
+            let (p0, q1, q2) = (v[i], v[(i + 1) % 3], v[(i + 2) % 3]);
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                alt_ok = false;
+                break;
+            }
+            let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+            let foot = [q1[0] + t * dx, q1[1] + t * dy];
+            match directed_ratio(q1, q2, foot) {
+                Some(r) => alt_prod *= r,
+                None => {
+                    alt_ok = false;
+                    break;
+                }
+            }
+        }
+        if alt_ok {
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{高}}",
+                nice(alt_prod),
+                Some(alt_prod),
+                "\\frac{BD}{DC}\\cdot\\frac{CE}{EA}\\cdot\\frac{AF}{FB} = 1",
+                "塞瓦定理：三高交于垂心（有向比）",
+            ));
+        }
+        // Gergonne: incircle contact points. BD = s−b, DC = s−c, …
+        let (ta, tb, tc) = (p - a, p - b, p - c);
+        if ta > 1e-12 && tb > 1e-12 && tc > 1e-12 {
+            let ger = (tb / tc) * (tc / ta) * (ta / tb);
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{切点}}",
+                nice(ger),
+                Some(ger),
+                "\\frac{s-b}{s-c}\\cdot\\frac{s-c}{s-a}\\cdot\\frac{s-a}{s-b} = 1",
+                "塞瓦定理：内切圆切点连线交于格尔巩点",
+            ));
+        }
+    }
+
+    // Menelaus: a transversal DEF with D on BC, E on CA, F on AB (or extensions)
+    // satisfies (BD/DC)(CE/EA)(AF/FB) = −1 (directed). Construct D,E then F = DE ∩ AB.
+    {
+        let d_pt = section_point(pb, pc, 2.0, 1.0); // BD:DC = 2:1
+        let e_pt = section_point(pc, pa, 2.0, 1.0); // CE:EA = 2:1
+        if let Some(f_pt) = line_line_isect2(d_pt, e_pt, pa, pb) {
+            if let (Some(r_bc), Some(r_ca), Some(r_ab)) = (
+                directed_ratio(pb, pc, d_pt),
+                directed_ratio(pc, pa, e_pt),
+                directed_ratio(pa, pb, f_pt),
+            ) {
+                let prod = r_bc * r_ca * r_ab;
+                out.push(fact(
+                    "塞瓦与梅涅劳斯",
+                    "\\Pi_{\\text{Menelaus}}",
+                    nice(prod),
+                    Some(prod),
+                    &format!(
+                        "\\frac{{BD}}{{DC}}\\cdot\\frac{{CE}}{{EA}}\\cdot\\frac{{AF}}{{FB}} = {}\\cdot{}\\cdot{} = {}",
+                        nice(r_bc),
+                        nice(r_ca),
+                        nice(r_ab),
+                        nice(prod)
+                    ),
+                    "梅涅劳斯定理：横截线分三边的有向比之积为 −1",
+                ).with(Shape::Segment {
+                    x1: d_pt[0],
+                    y1: d_pt[1],
+                    x2: e_pt[0],
+                    y2: e_pt[1],
+                    label: "Menelaus 横截线".into(),
+                }));
+                out.push(fact(
+                    "塞瓦与梅涅劳斯",
+                    "F_{\\text{Menelaus}}",
+                    pt(f_pt[0], f_pt[1]),
+                    None,
+                    "DE \\cap AB",
+                    "横截线与 AB（延长线）的交点",
+                ).with(Shape::Point {
+                    x: f_pt[0],
+                    y: f_pt[1],
+                    label: "F Menelaus".into(),
+                }));
+            }
+        }
+    }
+
+    // Stewart: for a cevian AD to side a=BC with BD=m, DC=n (m+n=a),
+    // a(d² + mn) = b²m + c²n. Verify for medians and angle bisectors.
+    {
+        for i in 0..3 {
+            let (aa, bb, cc) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            // median: m = n = a/2
+            let m = aa / 2.0;
+            let n = aa / 2.0;
+            let d = 0.5 * (2.0 * bb * bb + 2.0 * cc * cc - aa * aa).max(0.0).sqrt();
+            let lhs = bb * bb * m + cc * cc * n;
+            let rhs = aa * (d * d + m * n);
+            if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                out.push(fact(
+                    "斯特瓦尔特定理",
+                    &format!("\\text{{Stewart}}_{{m_{}}}", SIDE[i]),
+                    nice(lhs),
+                    Some(lhs),
+                    &format!(
+                        "{b}^2\\cdot\\frac{{{a}}}{{2}} + {c}^2\\cdot\\frac{{{a}}}{{2}} = {a}\\left(m_{s}^2 + \\left(\\frac{{{a}}}{{2}}\\right)^2\\right)",
+                        a = SIDE[i],
+                        b = SIDE[(i + 1) % 3],
+                        c = SIDE[(i + 2) % 3],
+                        s = SIDE[i],
+                    ),
+                    "斯特瓦尔特定理（中线）",
+                ));
+            }
+            // angle bisector: BD:DC = c:b → m = c/(b+c)·a, n = b/(b+c)·a
+            let den = bb + cc;
+            if den > 1e-12 {
+                let m = cc / den * aa;
+                let n = bb / den * aa;
+                let d = 2.0 * bb * cc * (g[i] / 2.0).cos() / den;
+                let lhs = bb * bb * m + cc * cc * n;
+                let rhs = aa * (d * d + m * n);
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                    out.push(fact(
+                        "斯特瓦尔特定理",
+                        &format!("\\text{{Stewart}}_{{t_{}}}", SIDE[i]),
+                        nice(lhs),
+                        Some(lhs),
+                        &format!(
+                            "{b}^2 m + {c}^2 n = {a}(t_{s}^2 + mn),\\ m:n = {c}:{b}",
+                            a = SIDE[i],
+                            b = SIDE[(i + 1) % 3],
+                            c = SIDE[(i + 2) % 3],
+                            s = SIDE[i],
+                        ),
+                        "斯特瓦尔特定理（角平分线）",
+                    ));
+                }
+            }
+            // altitude: signed segments along side i (foot may lie on the extension)
+            let bpt = v[(i + 1) % 3];
+            let cpt = v[(i + 2) % 3];
+            let apt = v[i];
+            let (dx, dy) = (cpt[0] - bpt[0], cpt[1] - bpt[1]);
+            let den2 = dx * dx + dy * dy;
+            if den2 > 1e-18 && aa > 1e-12 {
+                let t = ((apt[0] - bpt[0]) * dx + (apt[1] - bpt[1]) * dy) / den2;
+                let m = t * aa;
+                let nseg = (1.0 - t) * aa;
+                let d = 2.0 * area / aa;
+                let lhs = bb * bb * m + cc * cc * nseg;
+                let rhs = aa * (d * d + m * nseg);
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                    out.push(fact(
+                        "斯特瓦尔特定理",
+                        &format!("\\text{{Stewart}}_{{h_{}}}", SIDE[i]),
+                        nice(lhs),
+                        Some(lhs),
+                        &format!(
+                            "{b}^2 m + {c}^2 n = {a}(h_{s}^2 + mn)",
+                            a = SIDE[i],
+                            b = SIDE[(i + 1) % 3],
+                            c = SIDE[(i + 2) % 3],
+                            s = SIDE[i],
+                        ),
+                        "斯特瓦尔特定理（高，有向线段）",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Van Obel (incenter form): AI/ID = (b+c)/a.
+    {
+        for i in 0..3 {
+            let (aa, bb, cc) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            let den = bb + cc;
+            if den < 1e-12 || aa < 1e-12 {
+                continue;
+            }
+            let foot = [
+                (bb * v[(i + 1) % 3][0] + cc * v[(i + 2) % 3][0]) / den,
+                (bb * v[(i + 1) % 3][1] + cc * v[(i + 2) % 3][1]) / den,
+            ];
+            let ai = dist2(v[i], inc);
+            let idlen = dist2(inc, foot);
+            if idlen < 1e-12 {
+                continue;
+            }
+            let ratio = ai / idlen;
+            let expect = den / aa;
+            if (ratio - expect).abs() < 1e-6 * (1.0 + expect) {
+                out.push(fact(
+                    "凡奥培尔定理",
+                    &format!("\\dfrac{{|{n}I|}}{{|ID_{{{s}}}|}}", n = names[i], s = SIDE[i]),
+                    nice(ratio),
+                    Some(ratio),
+                    &format!(
+                        "\\dfrac{{{b} + {c}}}{{{a}}} = \\dfrac{{AF}}{{FB}} + \\dfrac{{AE}}{{EC}}",
+                        a = SIDE[i],
+                        b = SIDE[(i + 1) % 3],
+                        c = SIDE[(i + 2) % 3],
+                    ),
+                    "凡奥培尔定理（内心）：角平分线分对边的内分比之和",
+                ).with(Shape::Segment {
+                    x1: v[i][0],
+                    y1: v[i][1],
+                    x2: foot[0],
+                    y2: foot[1],
+                    label: format!("{}I", names[i]),
+                }));
+            }
+        }
+    }
+
+    // Apollonius circle at vertex i.
+    {
+        for i in 0..3 {
+            let b_pt = v[(i + 1) % 3];
+            let c_pt = v[(i + 2) % 3];
+            let side_to_b = s[(i + 2) % 3];
+            let side_to_c = s[(i + 1) % 3];
+            let opp = s[i];
+            if side_to_c < 1e-12 {
+                continue;
+            }
+            let k = side_to_b / side_to_c;
+            if (k - 1.0).abs() < 1e-9 {
+                let mid = [(b_pt[0] + c_pt[0]) / 2.0, (b_pt[1] + c_pt[1]) / 2.0];
+                out.push(fact(
+                    "阿波罗尼奥斯圆",
+                    &format!("\\mathcal{{A}}_{{{}}}", names[i]),
+                    "\\text{中垂线}".into(),
+                    None,
+                    &format!(
+                        "\\frac{{|P{nb}|}}{{|P{nc}|}} = 1",
+                        nb = names[(i + 1) % 3],
+                        nc = names[(i + 2) % 3],
+                    ),
+                    "阿波罗尼奥斯圆退化为对边的中垂线",
+                ).with(Shape::Point {
+                    x: mid[0],
+                    y: mid[1],
+                    label: format!("A_{} 中点", names[i]),
+                }));
+                continue;
+            }
+            let k2 = k * k;
+            let o = [
+                (k2 * c_pt[0] - b_pt[0]) / (k2 - 1.0),
+                (k2 * c_pt[1] - b_pt[1]) / (k2 - 1.0),
+            ];
+            let rad = (k * opp / (k2 - 1.0).abs()).abs();
+            let d_v = dist2(v[i], o);
+            if (d_v - rad).abs() > 1e-4 * (1.0 + rad) {
+                continue;
+            }
+            out.push(fact(
+                "阿波罗尼奥斯圆",
+                &format!("\\mathcal{{A}}_{{{}}}", names[i]),
+                format!(
+                    "O=\\left({},\\ {}\\right),\\ R={}",
+                    nice_short(o[0]),
+                    nice_short(o[1]),
+                    nice(rad)
+                ),
+                Some(rad),
+                &format!(
+                    "\\frac{{|P{nb}|}}{{|P{nc}|}} = \\frac{{{c}}}{{{b}}} = {k}",
+                    nb = names[(i + 1) % 3],
+                    nc = names[(i + 2) % 3],
+                    b = SIDE[(i + 1) % 3],
+                    c = SIDE[(i + 2) % 3],
+                    k = nice(k),
+                ),
+                "阿波罗尼奥斯圆：到两定点距离成定比的轨迹",
+            ).with(Shape::Circle {
+                cx: o[0],
+                cy: o[1],
+                r: rad,
+                label: format!("阿氏圆 {}", names[i]),
+            }));
+        }
+    }
 
     let mut kinds: Vec<String> = Vec::new();
     let maxg = g.iter().cloned().fold(0.0, f64::max);
@@ -587,6 +1027,27 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         kinds.push("等腰".into());
     }
     out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kinds.join("、")), None, "", "由三个角与三边比较"));
+    // Viviani (equilateral): sum of distances to the three sides equals the altitude; at I this is 3r = h.
+    if near(a, b) && near(b, c) {
+        let h = 2.0 * area / a;
+        let sum = 3.0 * r;
+        out.push(fact(
+            "维维安尼定理",
+            "d_a + d_b + d_c",
+            nice(sum),
+            Some(sum),
+            "d_a + d_b + d_c = h",
+            "等边三角形：内点到三边距离之和等于高（内心处为 3r）",
+        ));
+        out.push(fact(
+            "维维安尼定理",
+            "h",
+            nice(h),
+            Some(h),
+            "3r = h",
+            "等边：内切圆半径是高的三分之一",
+        ));
+    }
     if near(maxg, PI / 2.0) {
         out.push(fact("形状判断", "R", nice(rr), Some(rr), "R = \\frac{\\text{斜边}}{2}", "直角三角形外心在斜边中点"));
         // altitude onto the hypotenuse and the two leg projections (射影定理).
@@ -615,11 +1076,45 @@ pub struct NamedPoint {
     pub p: Vec<f64>,
 }
 
+
 pub(crate) fn dist2(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
 
-fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
+/// Directed ratio AP:PB for P on the line AB. P = A + t(B−A) ⇒ AP:PB = t:(1−t).
+fn directed_ratio(a: [f64; 2], b: [f64; 2], p: [f64; 2]) -> Option<f64> {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len2 = dx * dx + dy * dy;
+    if len2 < 1e-18 {
+        return None;
+    }
+    let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
+    if (1.0 - t).abs() < 1e-14 {
+        return None;
+    }
+    Some(t / (1.0 - t))
+}
+
+fn section_point(a: [f64; 2], b: [f64; 2], m: f64, n: f64) -> [f64; 2] {
+    // divides AB in AP:PB = m:n
+    let den = m + n;
+    [(n * a[0] + m * b[0]) / den, (n * a[1] + m * b[1]) / den]
+}
+
+fn line_line_isect2(p: [f64; 2], q: [f64; 2], r: [f64; 2], s: [f64; 2]) -> Option<[f64; 2]> {
+    let d1 = [q[0] - p[0], q[1] - p[1]];
+    let d2 = [s[0] - r[0], s[1] - r[1]];
+    let det = d1[0] * d2[1] - d1[1] * d2[0];
+    if det.abs() < 1e-14 * (d1[0].hypot(d1[1]) * d2[0].hypot(d2[1])).max(1e-18) {
+        return None;
+    }
+    let t = ((r[0] - p[0]) * d2[1] - (r[1] - p[1]) * d2[0]) / det;
+    Some([p[0] + t * d1[0], p[1] + t * d1[1]])
+}
+
+
+pub(crate) fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
     // a x + b y = c, normalised for display
     if near(b, 0.0) {
         return format!("x = {}", nice_short(c / a));
@@ -788,6 +1283,93 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
         } else {
             "一般凸四边形"
         };
+        // Varignon: midpoints of the four sides form a parallelogram.
+        {
+            let mids = [
+                [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0],
+                [(b[0] + c[0]) / 2.0, (b[1] + c[1]) / 2.0],
+                [(c[0] + d[0]) / 2.0, (c[1] + d[1]) / 2.0],
+                [(d[0] + a[0]) / 2.0, (d[1] + a[1]) / 2.0],
+            ];
+            let side = |i: usize, j: usize| {
+                let (u, w) = (mids[i], mids[j]);
+                [w[0] - u[0], w[1] - u[1]]
+            };
+            let (u01, u23) = (side(0, 1), side(3, 2));
+            let (u12, u30) = (side(1, 2), side(0, 3));
+            let para = |p: [f64; 2], q: [f64; 2]| {
+                let cr = p[0] * q[1] - p[1] * q[0];
+                let sc = (p[0].hypot(p[1])) * (q[0].hypot(q[1]));
+                sc < 1e-12 || cr.abs() < 1e-9 * sc
+            };
+            if para(u01, u23) && para(u12, u30) {
+                let l01 = u01[0].hypot(u01[1]);
+                let l12 = u12[0].hypot(u12[1]);
+                out.push(fact(
+                    "瓦里农定理",
+                    "\\text{Varignon}",
+                    "\\text{平行四边形}".into(),
+                    None,
+                    "M_i = \\text{中点}(P_iP_{i+1})",
+                    "任意四边形各边中点连成平行四边形",
+                ));
+                out.push(fact(
+                    "瓦里农定理",
+                    "|M_0M_1|",
+                    nice(l01),
+                    Some(l01),
+                    "",
+                    "Varignon 边长",
+                ).with(Shape::Segment {
+                    x1: mids[0][0], y1: mids[0][1], x2: mids[1][0], y2: mids[1][1],
+                    label: "Varignon".into(),
+                }));
+                out.push(fact(
+                    "瓦里农定理",
+                    "|M_1M_2|",
+                    nice(l12),
+                    Some(l12),
+                    "",
+                    "Varignon 邻边",
+                ));
+                for (i, m) in mids.iter().enumerate() {
+                    out.push(fact(
+                        "瓦里农定理",
+                        &format!("M_{}", i),
+                        pt(m[0], m[1]),
+                        None,
+                        "",
+                        "边中点",
+                    ).with(Shape::Point { x: m[0], y: m[1], label: format!("M{}", i) }));
+                }
+            }
+        }
+        // British flag theorem: for rectangle/square, PA²+PC² = PB²+PD² for any P (verify at origin).
+        if is_para && right {
+            let p0 = [0.0, 0.0];
+            let dsq = |q: [f64; 2]| (q[0] - p0[0]).powi(2) + (q[1] - p0[1]).powi(2);
+            let lhs = dsq(a) + dsq(c);
+            let rhs = dsq(b) + dsq(d);
+            if near(lhs, rhs) {
+                out.push(fact(
+                    "英国国旗定理",
+                    "PA^2 + PC^2",
+                    nice(lhs),
+                    Some(lhs),
+                    "PA^2 + PC^2 = PB^2 + PD^2",
+                    "矩形上任一点（取原点验证）：对角顶点到点的平方和相等",
+                ));
+                out.push(fact(
+                    "英国国旗定理",
+                    "PB^2 + PD^2",
+                    nice(rhs),
+                    Some(rhs),
+                    "PA^2 + PC^2 = PB^2 + PD^2",
+                    "英国国旗定理",
+                ));
+            }
+        }
+
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kind), None, "", "由对边平行、直角、边长相等判断"));
     } else {
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}{}边形}}", if convex { "凸" } else { "凹" }, n), None, "", "内角和 (n-2)·180°"));
@@ -830,10 +1412,126 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
         if pts.len() >= 4 {
             let dpt = pts[3].1;
             let vol = dot3(sub3(dpt, a), nrm).abs() / 6.0;
-            out.push(fact("体积", "V", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
+            out.push(fact("体积", "V_{\\text{四面体}}", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
+            }
+
+            // Viviani for regular tetrahedron: sum of distances from an interior point to the four faces = altitude.
+            {
+                let edges = [
+                    len3(sub3(pts[1].1, pts[0].1)),
+                    len3(sub3(pts[2].1, pts[0].1)),
+                    len3(sub3(pts[3].1, pts[0].1)),
+                    len3(sub3(pts[2].1, pts[1].1)),
+                    len3(sub3(pts[3].1, pts[1].1)),
+                    len3(sub3(pts[3].1, pts[2].1)),
+                ];
+                let e0 = edges[0];
+                if e0 > 1e-12 && edges.iter().all(|e| near(*e, e0)) && vol > 1e-12 {
+                    // Regular tetra: altitude h = √6 / 3 · a; inradius ρ = h/4
+                    let h_reg = (6.0f64).sqrt() / 3.0 * e0;
+                    let rho = h_reg / 4.0;
+                    out.push(fact(
+                        "维维安尼定理",
+                        "\\sum d_{\\text{面}}",
+                        nice(h_reg),
+                        Some(h_reg),
+                        "d_1+d_2+d_3+d_4 = h",
+                        "正四面体：内点到四面距离之和等于高（形心处为 4ρ）",
+                    ));
+                    out.push(fact(
+                        "维维安尼定理",
+                        "\\rho",
+                        nice(rho),
+                        Some(rho),
+                        "\\rho = h/4",
+                        "正四面体内切球半径",
+                    ));
+                }
+            }
+            // Skew / intersecting lines AB and CD from the first four points.
+            let (na, nb, nc, nd) = (&pts[0].0, &pts[1].0, &pts[2].0, &pts[3].0);
+            let (pa, pb, pc, pd) = (pts[0].1, pts[1].1, pts[2].1, pts[3].1);
+            let ab = sub3(pb, pa);
+            let cd = sub3(pd, pc);
+            let (lab, lcd) = (len3(ab), len3(cd));
+            if lab > 1e-12 && lcd > 1e-12 {
+                let cosang = (dot3(ab, cd).abs() / (lab * lcd)).clamp(0.0, 1.0);
+                let theta = cosang.acos();
+                out.push(fact(
+                    "异面直线",
+                    &format!("\\theta({}{}, {}{})", na, nb, nc, nd),
+                    deg(theta),
+                    Some(theta),
+                    "\\cos\\theta = \\frac{|\\vec{AB}\\cdot\\vec{CD}|}{|\\vec{AB}||\\vec{CD}|}",
+                    "两直线方向的夹角（取锐角或直角）",
+                ));
+            }
+            let nskew = cross3(ab, cd);
+            let ln = len3(nskew);
+            let ac = sub3(pc, pa);
+            if ln < 1e-12 * len3(ab).max(len3(cd)).max(1e-12) {
+                let parallel = len3(ab) > 1e-12 && len3(cd) > 1e-12;
+                if parallel {
+                    let n2 = cross3(ab, ac);
+                    let dpar = len3(n2) / len3(ab);
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} \\parallel {}{}", na, nb, nc, nd),
+                        "\\checkmark".into(),
+                        None,
+                        "\\vec{AB} \\times \\vec{CD} = \\mathbf{0}",
+                        "方向向量共线",
+                    ));
+                    out.push(fact(
+                        "异面直线",
+                        &format!("d({}{}, {}{})", na, nb, nc, nd),
+                        nice(dpar),
+                        Some(dpar),
+                        "d = \\frac{|\\vec{AB}\\times\\vec{AC}|}{|\\vec{AB}|}",
+                        "平行直线间距离",
+                    ));
+                }
+            } else {
+                let triple = dot3(ac, nskew);
+                let dskew = triple.abs() / ln;
+                if dskew < 1e-9 {
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} , {}{}", na, nb, nc, nd),
+                        "\\text{共面（相交或平行）}".into(),
+                        Some(0.0),
+                        "\\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD}) = 0",
+                        "混合积为 0 ⇒ 共面",
+                    ));
+                } else {
+                    out.push(fact(
+                        "异面直线",
+                        &format!("d({}{}, {}{})", na, nb, nc, nd),
+                        nice(dskew),
+                        Some(dskew),
+                        "d = \\frac{|\\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD})|}{|\\vec{AB}\\times\\vec{CD}|}",
+                        "异面直线的距离",
+                    ).with(Shape::Line3 {
+                        px: pa[0],
+                        py: pa[1],
+                        pz: pa[2],
+                        dx: ab[0],
+                        dy: ab[1],
+                        dz: ab[2],
+                        label: format!("{na}{nb}"),
+                    }));
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} \\nparallel {}{}", na, nb, nc, nd),
+                        "\\text{异面}".into(),
+                        None,
+                        "\\vec{AB}\\times\\vec{CD}\\ne\\mathbf{0},\\ \\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD})\\ne 0",
+                        "既不平行也不相交",
+                    ));
+                }
             }
         }
     }
@@ -930,6 +1628,23 @@ pub fn vectors_analyze(vs: &[NamedVec]) -> Vec<Fact> {
             let dif: Vec<f64> = (0..3).map(|k| a[k] - b[k]).collect();
             out.push(fact("两向量关系", &format!("{} + {}", na, nb), fmt(&sum), None, "", "坐标相加"));
             out.push(fact("两向量关系", &format!("{} - {}", na, nb), fmt(&dif), None, "", "坐标相减"));
+            // Parallelogram law: |a+b|² + |a−b|² = 2(|a|²+|b|²)
+            {
+                let sum_len2 = sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2];
+                let dif_len2 = dif[0] * dif[0] + dif[1] * dif[1] + dif[2] * dif[2];
+                let rhs = 2.0 * (la * la + lb * lb);
+                let lhs = sum_len2 + dif_len2;
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + rhs) {
+                    out.push(fact(
+                        "平行四边形法则",
+                        &format!("|{0}+{1}|^2 + |{0}-{1}|^2", vs[i].name, vs[j].name),
+                        nice(lhs),
+                        Some(lhs),
+                        "|\\vec a+\\vec b|^2 + |\\vec a-\\vec b|^2 = 2(|\\vec a|^2+|\\vec b|^2)",
+                        "平行四边形法则（向量形式）",
+                    ));
+                }
+            }
         }
     }
     if vs.len() >= 3 && is3 {
@@ -1173,6 +1888,77 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             let x = [q.p[0], *q.p.get(1).unwrap_or(&0.0), *q.p.get(2).unwrap_or(&0.0)];
             let d = (dot3(p.n, x) - p.d).abs() / ln;
             out.push(fact("点与平面", &format!("d({}, {})", q.name, p.name), nice(d), Some(d), "\\frac{|ax_0+by_0+cz_0-d|}{\\sqrt{a^2+b^2+c^2}}", "点到平面距离"));
+            if ln > 1e-12 && d > 1e-8 && d.is_finite() {
+                let lam = (p.d - dot3(p.n, x)) / (ln * ln);
+                let foot = [x[0] + lam * p.n[0], x[1] + lam * p.n[1], x[2] + lam * p.n[2]];
+                out.push(fact(
+                    "点与平面",
+                    &format!("\\text{{foot}}({}, {})", q.name, p.name),
+                    pt3(foot),
+                    None,
+                    "P + \\frac{d - \\vec n\\cdot P}{|\\vec n|^2}\\vec n",
+                    "点到平面的垂足",
+                ).with(Shape::Point3 { x: foot[0], y: foot[1], z: foot[2], label: format!("foot {} {}", q.name, p.name) }));
+            }
+        }
+    }
+    // Line–plane angle: every pair of 3D points defines a line.
+    {
+        let pts3: Vec<(String, [f64; 3])> = points
+            .iter()
+            .filter(|q| q.p.len() >= 3)
+            .map(|q| (q.name.clone(), [q.p[0], q.p[1], q.p[2]]))
+            .collect();
+        let mut pair_count = 0usize;
+        'pairs: for i in 0..pts3.len() {
+            for j in i + 1..pts3.len() {
+                if pair_count >= 6 {
+                    break 'pairs;
+                }
+                let (ref na, pa) = pts3[i];
+                let (ref nb, pb) = pts3[j];
+                let dir = sub3(pb, pa);
+                let ld = len3(dir);
+                if ld < 1e-12 {
+                    continue;
+                }
+                pair_count += 1;
+                for p in ps {
+                    let ln = len3(p.n);
+                    if ln < 1e-12 {
+                        continue;
+                    }
+                    let sin_phi = (dot3(dir, p.n).abs() / (ld * ln)).clamp(0.0, 1.0);
+                    let phi = sin_phi.asin(); // angle between line and plane ∈ [0, π/2]
+                    out.push(fact(
+                        "线面角",
+                        &format!("\\theta({}{}, {})", na, nb, p.name),
+                        deg(phi),
+                        Some(phi),
+                        "\\sin\\theta = \\dfrac{|\\vec v\\cdot\\vec n|}{|\\vec v||\\vec n|}",
+                        "直线与平面所成的角",
+                    ));
+                    if sin_phi < 1e-9 {
+                        out.push(fact(
+                            "线面角",
+                            &format!("{}{} \\parallel {}", na, nb, p.name),
+                            "\\checkmark".into(),
+                            None,
+                            "\\vec v\\cdot\\vec n = 0",
+                            "直线平行于平面（或落在平面上）",
+                        ));
+                    } else if (1.0 - sin_phi).abs() < 1e-9 {
+                        out.push(fact(
+                            "线面角",
+                            &format!("{}{} \\perp {}", na, nb, p.name),
+                            "\\checkmark".into(),
+                            None,
+                            "|\\vec v\\cdot\\vec n| = |\\vec v||\\vec n|",
+                            "直线垂直于平面",
+                        ));
+                    }
+                }
+            }
         }
     }
     for i in 0..ps.len() {
@@ -1191,6 +1977,14 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             }
             let ang = (dot3(p.n, q.n).abs() / (lp * lq)).clamp(-1.0, 1.0).acos();
             out.push(fact("两平面", &format!("\\theta({}, {})", p.name, q.name), deg(ang), Some(ang), "\\cos\\theta = \\frac{|\\vec n_1\\cdot\\vec n_2|}{|\\vec n_1||\\vec n_2|}", "二面角（锐角）"));
+            out.push(fact(
+                "两平面",
+                &format!("\\text{{二面角}}({}, {})", p.name, q.name),
+                deg(ang),
+                Some(ang),
+                "\\cos\\theta = \\frac{|\\vec n_1\\cdot\\vec n_2|}{|\\vec n_1||\\vec n_2|}",
+                "二面角等于两法向量夹角（取锐角）",
+            ));
             if dot3(p.n, q.n).abs() < 1e-9 * lp * lq {
                 out.push(fact("两平面", &format!("{} \\perp {}", p.name, q.name), "\\checkmark".into(), None, "\\vec n_1\\cdot\\vec n_2 = 0", "法向量垂直"));
             }
@@ -1634,6 +2428,27 @@ mod tests {
     }
 
     #[test]
+    fn angle_bisector_theorem_heron_excircles() {
+        // 3-4-5: Heron S = 6; bisector from C splits AB as b:a = 4:3; r_a = 2, r_b = 3, r_c = 6
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap();
+        assert!((get("S_{\\text{海伦}}").num.unwrap() - 6.0).abs() < 1e-9);
+        let ratio = get("\\frac{|AF_{c}|}{|F_{c}B|}").num.unwrap();
+        assert!((ratio - 4.0 / 3.0).abs() < 1e-9, "ratio = {ratio}");
+        assert!((get("r_a").num.unwrap() - 2.0).abs() < 1e-9);
+        assert!((get("r_b").num.unwrap() - 3.0).abs() < 1e-9);
+        assert!((get("r_c").num.unwrap() - 6.0).abs() < 1e-9);
+        // OI² = R(R − 2r) = 2.5 · (2.5 − 2) = 1.25 → OI = √1.25
+        let oi = get("|OI|").num.unwrap();
+        assert!((oi * oi - 1.25).abs() < 1e-9, "OI = {oi}");
+        // right triangle: H at C, O midpoint of AB → |OH| = R = 2.5
+        assert!((get("|OH|").num.unwrap() - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
     fn vector_projection_vector() {
         let vs = vec![NamedVec { name: "a".into(), v: vec![3.0, 4.0] }, NamedVec { name: "b".into(), v: vec![1.0, 0.0] }];
         let out = vectors_analyze(&vs);
@@ -1697,4 +2512,231 @@ mod tests {
         let sim = out.iter().find(|f| f.label.starts_with("\\text{相似比}")).unwrap();
         assert!((sim.num.unwrap() - 1.0 / 3.0).abs() < 1e-9, "k = {}", sim.value);
     }
+
+    #[test]
+    fn ceva_and_menelaus_on_345() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap_or_else(|| panic!("missing {label}"));
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{中线}}").num.unwrap() - 1.0).abs() < 1e-9);
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{角平分线}}").num.unwrap() - 1.0).abs() < 1e-9);
+        // right triangle: an altitude foot sits on a vertex → skip 高 family
+        assert!(fs.iter().all(|f| f.label != "\\Pi_{\\text{Ceva}}^{\\text{高}}"));
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{切点}}").num.unwrap() - 1.0).abs() < 1e-9);
+        let men = get("\\Pi_{\\text{Menelaus}}").num.unwrap();
+        assert!((men + 1.0).abs() < 1e-9, "Menelaus = {men}");
+    }
+
+    #[test]
+    fn ceva_altitudes_acute() {
+        // 6-5-5 acute isosceles: all altitude feet interior → Ceva product = 1
+        let k = TriangleKnown { a: Some(6.0), b: Some(5.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let alt = fs.iter().find(|f| f.label == "\\Pi_{\\text{Ceva}}^{\\text{高}}").unwrap();
+        assert!((alt.num.unwrap() - 1.0).abs() < 1e-9, "alt = {}", alt.value);
+    }
+
+    #[test]
+    fn skew_lines_distance() {
+        // AB = (0,0,0)->(1,0,0), CD = (0,1,0)->(0,1,1): skew, distance = 1
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let d = out.iter().find(|f| f.label == "d(AB, CD)").unwrap();
+        assert!((d.num.unwrap() - 1.0).abs() < 1e-9, "d = {}", d.value);
+        assert!(out.iter().any(|f| f.value.contains("异面")));
+    }
+
+    #[test]
+    fn stewart_median_and_bisector() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        // median to c=5: m=n=2.5, d=2.5; LHS = 3²·2.5 + 4²·2.5 = 62.5
+        let med = fs.iter().find(|f| f.label == "\\text{Stewart}_{m_c}").unwrap();
+        assert!((med.num.unwrap() - 62.5).abs() < 1e-6, "med = {}", med.value);
+        let bis = fs.iter().find(|f| f.label == "\\text{Stewart}_{t_c}").unwrap();
+        assert!(bis.num.unwrap().is_finite());
+        // altitude to the hypotenuse: m = 16/5, n = 9/5, h = 12/5 → LHS = 57.6
+        let alt = fs.iter().find(|f| f.label == "\\text{Stewart}_{h_c}").unwrap();
+        assert!((alt.num.unwrap() - 57.6).abs() < 1e-6, "alt = {}", alt.value);
+        // medians, bisectors, and altitudes
+        assert_eq!(fs.iter().filter(|f| f.label.starts_with("\\text{Stewart}_")).count(), 9);
+    }
+
+    #[test]
+    fn line_plane_angle_perpendicular() {
+        // AB = vertical (0,0,0)->(0,0,1); plane z = 0 → θ = 90°
+        let ps = vec![NamedPlane { name: "α".into(), n: [0.0, 0.0, 1.0], d: 0.0 }];
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![0.0, 0.0, 1.0] },
+            NamedPoint { name: "C".into(), p: vec![1.0, 0.0, 0.0] },
+        ];
+        let out = planes_analyze(&ps, &pts);
+        let th = out.iter().find(|f| f.label == "\\theta(AB, α)").unwrap();
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9, "θ = {}", th.value);
+        assert!(out.iter().any(|f| f.label == "AB \\perp α"));
+        // AC lies in / parallel to the plane → θ = 0
+        let th2 = out.iter().find(|f| f.label == "\\theta(AC, α)").unwrap();
+        assert!(th2.num.unwrap().abs() < 1e-9, "θ(AC) = {}", th2.value);
+        assert!(out.iter().any(|f| f.label == "AC \\parallel α"));
+        let foot = out.iter().find(|f| f.label == "\\text{foot}(B, α)").unwrap();
+        assert!(foot.value.contains('0'), "foot = {}", foot.value);
+        if let Shape::Point3 { x, y, z, .. } = foot.shape.as_ref().unwrap() {
+            assert!(x.abs() < 1e-9 && y.abs() < 1e-9 && z.abs() < 1e-9);
+        } else {
+            panic!("foot should be a point");
+        }
+    }
+
+    #[test]
+    fn skew_line_angle() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let th = out.iter().find(|f| f.label == "\\theta(AB, CD)").unwrap();
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9, "θ = {}", th.value);
+    }
+
+    #[test]
+    fn van_obel_and_apollonius_on_345() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let vo_a = fs.iter().find(|f| f.label.contains("ID_{a}")).expect("Van Obel A");
+        assert!((vo_a.num.unwrap() - 3.0).abs() < 1e-6, "Van Obel A = {}", vo_a.value);
+        let vo_b = fs.iter().find(|f| f.label.contains("ID_{b}")).expect("Van Obel B");
+        assert!((vo_b.num.unwrap() - 2.0).abs() < 1e-6, "Van Obel B = {}", vo_b.value);
+        assert_eq!(fs.iter().filter(|f| f.label.contains("ID_")).count(), 3);
+        let ap = fs.iter().filter(|f| f.group == "阿波罗尼奥斯圆").count();
+        assert_eq!(ap, 3, "Apollonius count");
+    }
+
+    #[test]
+    fn tetrahedron_volume_unit() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 0.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let v = out.iter().find(|f| f.label.contains("四面体")).expect("tetra volume");
+        assert!((v.num.unwrap() - 1.0 / 6.0).abs() < 1e-9, "V = {}", v.value);
+    }
+
+    #[test]
+    fn dihedral_angle_xy_planes() {
+        let ps = vec![
+            NamedPlane { name: "α".into(), n: [1.0, 0.0, 0.0], d: 0.0 },
+            NamedPlane { name: "β".into(), n: [0.0, 1.0, 0.0], d: 0.0 },
+        ];
+        let out = planes_analyze(&ps, &[]);
+        let th = out.iter().find(|f| f.label == "\\theta(α, β)").expect("theta");
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9);
+        assert!(out.iter().any(|f| f.label.contains("二面角")));
+        assert!(out.iter().any(|f| f.label == "α \\perp β"));
+    }
+
+    #[test]
+    fn euler_line_and_nine_point() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.label.contains("O,") && f.value.contains("共线")));
+        let og_gh = fs.iter().find(|f| f.label == "OG:GH").unwrap();
+        assert!((og_gh.num.unwrap() - 2.0).abs() < 1e-6, "OG:GH = {}", og_gh.value);
+        let r9 = fs.iter().find(|f| f.label.contains("九点")).unwrap();
+        assert!((r9.num.unwrap() - 1.25).abs() < 1e-9, "R9 = {}", r9.value); // R=2.5
+        // OI² = R(R-2r) already covered; ensure |OI| present
+        assert!(fs.iter().any(|f| f.label == "|OI|"));
+    }
+
+    #[test]
+    fn british_flag_on_rectangle() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.value.contains("矩形")));
+        let lhs = out.iter().find(|f| f.group == "英国国旗定理" && f.label == "PA^2 + PC^2").expect("british lhs");
+        let rhs = out.iter().find(|f| f.group == "英国国旗定理" && f.label == "PB^2 + PD^2").expect("british rhs");
+        assert!((lhs.num.unwrap() - 25.0).abs() < 1e-9);
+        assert!((rhs.num.unwrap() - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn varignon_parallelogram() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![5.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![1.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.group == "瓦里农定理" && f.value.contains("平行四边形")));
+        assert_eq!(out.iter().filter(|f| f.group == "瓦里农定理" && f.label.starts_with("M_")).count(), 4);
+    }
+
+    #[test]
+    fn viviani_equilateral() {
+        let k = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let sum = fs.iter().find(|f| f.group == "维维安尼定理" && f.label.contains("d_a")).expect("viviani sum");
+        let h = fs.iter().find(|f| f.group == "维维安尼定理" && f.label == "h").expect("viviani h");
+        assert!((sum.num.unwrap() - h.num.unwrap()).abs() < 1e-9);
+        // h = √3 for side 2
+        assert!((h.num.unwrap() - 3f64.sqrt()).abs() < 1e-9, "h = {}", h.value);
+    }
+
+    #[test]
+    fn parallelogram_law_vectors() {
+        let vs = vec![
+            NamedVec { name: "a".into(), v: vec![3.0, 4.0] },
+            NamedVec { name: "b".into(), v: vec![1.0, 0.0] },
+        ];
+        let out = vectors_analyze(&vs);
+        let f = out.iter().find(|f| f.group == "平行四边形法则").expect("parallelogram law");
+        // |a+b|² + |a-b|² = 2(25+1) = 52
+        assert!((f.num.unwrap() - 52.0).abs() < 1e-9, "got {}", f.value);
+    }
+
+    #[test]
+    fn viviani_regular_tetra() {
+        // Regular tetra with edge √2: (1,1,1),(1,-1,-1),(-1,1,-1),(-1,-1,1)
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![1.0, 1.0, 1.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, -1.0, -1.0] },
+            NamedPoint { name: "C".into(), p: vec![-1.0, 1.0, -1.0] },
+            NamedPoint { name: "D".into(), p: vec![-1.0, -1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let sum = out.iter().find(|f| f.group == "维维安尼定理" && f.label.contains("面")).expect("tetra viviani");
+        let edge = 2f64.sqrt() * 2.0 / 1.0; // |A-B| = √[(0)²+(2)²+(2)²] = √8 = 2√2
+        let e = (0.0f64.powi(2) + 2.0f64.powi(2) + 2.0f64.powi(2)).sqrt(); // √8 = 2√2
+        let h_reg = (6.0f64).sqrt() / 3.0 * e;
+        assert!((sum.num.unwrap() - h_reg).abs() < 1e-9, "sum={} expect {}", sum.value, h_reg);
+        let _ = edge;
+    }
+
 }

@@ -316,6 +316,8 @@ function classifyPart(part: string): Statement[] {
     const v = vars(rhs)
     if (!v) return [err(src, engine.inspect(rhs).error ?? '无法解析')]
     if (v.includes('z')) return [{ kind: 'implicit3', F: `(z) - (${rhs})`, src }]
+    // z = c (no x/y) is the horizontal plane; keep it as implicit3 so plane tools apply.
+    if (v.length === 0) return [{ kind: 'implicit3', F: `(z) - (${rhs})`, src }]
     return [{ kind: 'surface', name: named ? named[1] : undefined, expr: rhs, src }]
   }
 
