@@ -3786,6 +3786,112 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(45): X(9)-beth conjugate of I; bary a(2b+2c−a). Always finite (weights > 0).
+    {
+        let wa = a * (2.0 * b + 2.0 * c - a);
+        let wb = b * (2.0 * c + 2.0 * a - b);
+        let wc = c * (2.0 * a + 2.0 * b - c);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x45 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "米滕beth",
+                "X_{45}",
+                pt(x45[0], x45[1]),
+                None,
+                "X(45) = \\bigl(a(2b+2c-a):\\cdots\\bigr)",
+                "X(45)：米滕点对内心的 beth 共轭",
+            ).with(Shape::Point {
+                x: x45[0],
+                y: x45[1],
+                label: "X45".into(),
+            }));
+        }
+    }
+
+    // X(46): X(4)-Ceva conjugate of I; bary a(cos B+cos C−cos A). On OI line.
+    {
+        let wa = a * (g[1].cos() + g[2].cos() - g[0].cos());
+        let wb = b * (g[2].cos() + g[0].cos() - g[1].cos());
+        let wc = c * (g[0].cos() + g[1].cos() - g[2].cos());
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x46 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "垂心Ceva内心",
+                "X_{46}",
+                pt(x46[0], x46[1]),
+                None,
+                "X(46) = \\bigl(a(\\cos B+\\cos C-\\cos A):\\cdots\\bigr)",
+                "X(46)：垂心对内心的 Ceva 共轭（在 OI 线上）",
+            ).with(Shape::Point {
+                x: x46[0],
+                y: x46[1],
+                label: "X46".into(),
+            }));
+        }
+    }
+
+    // X(47): bary a cos 2A; pairs with X(48)=a sin 2A. Equals G on equilateral.
+    {
+        let wa = a * (2.0 * g[0]).cos();
+        let wb = b * (2.0 * g[1]).cos();
+        let wc = c * (2.0 * g[2]).cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x47 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "双倍角余弦",
+                "X_{47}",
+                pt(x47[0], x47[1]),
+                None,
+                "X(47) = (a\\cos 2A:b\\cos 2B:c\\cos 2C)",
+                "X(47)：双倍角余弦点（与 X(48) 成对）",
+            ).with(Shape::Point {
+                x: x47[0],
+                y: x47[1],
+                label: "X47".into(),
+            }));
+        }
+    }
+
+    // X(49): center of sine-triple-angle circle; bary a cos 3A (= sin A cos 3A).
+    // Equals G on equilateral (cos 180° = −1).
+    {
+        let wa = a * (3.0 * g[0]).cos();
+        let wb = b * (3.0 * g[1]).cos();
+        let wc = c * (3.0 * g[2]).cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x49 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "三倍角正弦圆",
+                "X_{49}",
+                pt(x49[0], x49[1]),
+                None,
+                "X(49) = (a\\cos 3A:b\\cos 3B:c\\cos 3C)",
+                "X(49)：三倍角正弦圆圆心",
+            ).with(Shape::Point {
+                x: x49[0],
+                y: x49[1],
+                label: "X49".into(),
+            }));
+        }
+    }
+
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -7369,6 +7475,66 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}"));
         assert!(fs3.iter().any(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}"));
         assert!(fs3.iter().any(|f| f.group == "克劳森等角" && f.label == "X_{63}"));
+    }
+
+    #[test]
+    fn x45_x46_x47_x49() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x45 = fs.iter().find(|f| f.group == "米滕beth" && f.label == "X_{45}").expect("X45");
+        let x46 = fs.iter().find(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}").expect("X46");
+        let x47 = fs.iter().find(|f| f.group == "双倍角余弦" && f.label == "X_{47}").expect("X47");
+        let x49 = fs.iter().find(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}").expect("X49");
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(x45.value, i.value);
+        assert_ne!(x45.value, g.value);
+        assert_ne!(x46.value, i.value);
+        assert_ne!(x46.value, o.value);
+        assert_ne!(x47.value, x48.value);
+        assert_ne!(x47.value, g.value);
+        assert_ne!(x49.value, g.value);
+        assert_ne!(x49.value, x47.value);
+        // X(46) on OI: cross product of OI × OX46 ≈ 0.
+        if let (Some(Shape::Point { x: ox, y: oy, .. }), Some(Shape::Point { x: ix, y: iy, .. }), Some(Shape::Point { x: px, y: py, .. })) =
+            (o.shape.as_ref(), i.shape.as_ref(), x46.shape.as_ref())
+        {
+            let cross = (ix - ox) * (py - oy) - (iy - oy) * (px - ox);
+            assert!(cross.abs() < 1e-6, "X46 not on OI: cross={cross}");
+        } else {
+            panic!("missing shapes for O/I/X46");
+        }
+
+        // Equilateral: X45/X46/X47/X49 all = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("米滕beth", "X_{45}"),
+            ("垂心Ceva内心", "X_{46}"),
+            ("双倍角余弦", "X_{47}"),
+            ("三倍角正弦圆", "X_{49}"),
+        ] {
+            let f = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {lab}"));
+            assert_eq!(f.value, g2.value, "{lab} should be G on equilateral");
+        }
+
+        // Right 3-4-5: all four present (no tan/sec singularity).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "米滕beth" && f.label == "X_{45}"));
+        assert!(fs3.iter().any(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}"));
+        assert!(fs3.iter().any(|f| f.group == "双倍角余弦" && f.label == "X_{47}"));
+        assert!(fs3.iter().any(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}"));
     }
 
     #[test]
