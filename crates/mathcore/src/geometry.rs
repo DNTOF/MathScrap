@@ -3295,6 +3295,139 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(36): inverse of the incenter in the circumcircle; skip when I=O (equilateral).
+    // Geometric: X36 = O + R²(I−O)/|OI|². Barycentrics sin A − sin 2A (ETC).
+    {
+        let oi2 = {
+            let dx = inc[0] - circ[0];
+            let dy = inc[1] - circ[1];
+            dx * dx + dy * dy
+        };
+        if oi2 > 1e-12 {
+            let scale = (rr * rr) / oi2;
+            let x36 = [
+                circ[0] + scale * (inc[0] - circ[0]),
+                circ[1] + scale * (inc[1] - circ[1]),
+            ];
+            // Cross-check ETC bary sin A − sin 2A
+            let wa = g[0].sin() - (2.0 * g[0]).sin();
+            let wb = g[1].sin() - (2.0 * g[1]).sin();
+            let wc = g[2].sin() - (2.0 * g[2]).sin();
+            let den = wa + wb + wc;
+            let x36u = if den.abs() > 1e-12 {
+                let xb = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if dist2(xb, x36) < 1e-4 * (1.0 + rr) {
+                    xb
+                } else {
+                    x36
+                }
+            } else {
+                x36
+            };
+            out.push(fact(
+                "反演内心",
+                "X_{36}",
+                pt(x36u[0], x36u[1]),
+                None,
+                "X(36) = O + R^2(I-O)/|OI|^2",
+                "X(36)：内心关于外接圆的反演点",
+            ).with(Shape::Point {
+                x: x36u[0],
+                y: x36u[1],
+                label: "X36 反演I".into(),
+            }));
+            // |O X36| · |OI| = R²
+            let d_ox = dist2(circ, x36u);
+            let d_oi = oi2.sqrt();
+            if d_oi > 1e-12 {
+                let prod = d_ox * d_oi;
+                if (prod - rr * rr).abs() < 1e-4 * (1.0 + rr * rr) {
+                    out.push(fact(
+                        "反演内心",
+                        "|OX_{36}|\\cdot|OI|",
+                        nice(rr * rr),
+                        Some(rr * rr),
+                        "|OX_{36}|\\cdot|OI| = R^2",
+                        "反演定义：乘积等于外接圆半径平方",
+                    ));
+                }
+            }
+            // Collinear O, I, X36
+            let cross = (inc[0] - circ[0]) * (x36u[1] - circ[1])
+                - (inc[1] - circ[1]) * (x36u[0] - circ[0]);
+            if cross.abs() < 1e-5 * (1.0 + oi2) * (1.0 + dist2(circ, x36u)) {
+                out.push(fact(
+                    "反演内心",
+                    "O,\\ I,\\ X_{36}",
+                    "\\text{共线}".into(),
+                    None,
+                    "X(36)\\in OI",
+                    "反演内心在 OI 线上",
+                ));
+            }
+        }
+    }
+
+    // X(41): bary a³(b+c−a); X(6)-Ceva conjugate of X(31).
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a * a * a * sa;
+            let wb = b * b * b * sb;
+            let wc = c * c * c * sc;
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x41 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "第二幂截点",
+                    "X_{41}",
+                    pt(x41[0], x41[1]),
+                    None,
+                    "X(41) = \\bigl(a^3(b+c-a):\\cdots\\bigr)",
+                    "X(41)：勒莫恩点对第二幂点的 Ceva 共轭",
+                ).with(Shape::Point {
+                    x: x41[0],
+                    y: x41[1],
+                    label: "X41".into(),
+                }));
+            }
+        }
+    }
+
+    // X(48): crosspoint of I and X(63); bary a sin 2A.
+    {
+        let wa = a * (2.0 * g[0]).sin();
+        let wb = b * (2.0 * g[1]).sin();
+        let wc = c * (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x48 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "双倍角截点",
+                "X_{48}",
+                pt(x48[0], x48[1]),
+                None,
+                "X(48) = (a\\sin 2A:b\\sin 2B:c\\sin 2C)",
+                "X(48)：内心与 X(63) 的截线交点",
+            ).with(Shape::Point {
+                x: x48[0],
+                y: x48[1],
+                label: "X48".into(),
+            }));
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -6721,6 +6854,40 @@ mod tests {
             let p = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
             assert_eq!(p.value, g.value, "{lab}");
         }
+    }
+
+    #[test]
+    fn x36_inverse_i_x41_x48() {
+        // Scalene 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x36 = fs.iter().find(|f| f.group == "反演内心" && f.label == "X_{36}").expect("X36");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        assert_ne!(x36.value, i.value);
+        assert_ne!(x36.value, o.value);
+        assert!(fs.iter().any(|f| f.group == "反演内心" && f.label.contains("OX")));
+        assert!(fs.iter().any(|f| f.group == "反演内心" && f.value.contains("共线")));
+        let x41 = fs.iter().find(|f| f.group == "第二幂截点" && f.label == "X_{41}").expect("X41");
+        let x31 = fs.iter().find(|f| f.group == "第二幂点" && f.label == "X_{31}").expect("X31");
+        assert_ne!(x41.value, x31.value);
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        assert_ne!(x48.value, x41.value);
+        assert_ne!(x48.value, x36.value);
+
+        // Equilateral: X36 skipped (I=O); X41=X48=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "反演内心"), "X36 skip equilateral");
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x41e = fs2.iter().find(|f| f.group == "第二幂截点" && f.label == "X_{41}").unwrap();
+        let x48e = fs2.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").unwrap();
+        assert_eq!(x41e.value, g.value);
+        assert_eq!(x48e.value, g.value);
     }
 
     #[test]
