@@ -4257,6 +4257,149 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(28): cevapoint of Clawson X(19) and X(25); bary (sin A tan A)/(b+c).
+    // Skip right △ (tan ∞).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa = (g[0].sin() * g[0].sin() / ca) / (b + c);
+            let wb = (g[1].sin() * g[1].sin() / cb) / (c + a);
+            let wc = (g[2].sin() * g[2].sin() / cc) / (a + b);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x28 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "克劳森X25截点",
+                    "X_{28}",
+                    pt(x28[0], x28[1]),
+                    None,
+                    "X(28) = \\bigl(\\sin A\\tan A/(b+c):\\cdots\\bigr)",
+                    "X(28)：克劳森点与 X(25) 的截线交点（锐角）",
+                ).with(Shape::Point {
+                    x: x28[0],
+                    y: x28[1],
+                    label: "X28".into(),
+                }));
+            }
+        }
+    }
+
+    // X(70): isogonal conjugate of X(26); bary 1/(b² cos 2B + c² cos 2C − a² cos 2A).
+    {
+        let c2a = (2.0 * g[0]).cos();
+        let c2b = (2.0 * g[1]).cos();
+        let c2c = (2.0 * g[2]).cos();
+        let da = b * b * c2b + c * c * c2c - a * a * c2a;
+        let db = c * c * c2c + a * a * c2a - b * b * c2b;
+        let dc = a * a * c2a + b * b * c2b - c * c * c2c;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x70 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "切线外心等角",
+                    "X_{70}",
+                    pt(x70[0], x70[1]),
+                    None,
+                    "X(70) = \\bigl(1/(b^2\\cos 2B+c^2\\cos 2C-a^2\\cos 2A):\\cdots\\bigr)",
+                    "X(70)：切线三角形外心 X(26) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x70[0],
+                    y: x70[1],
+                    label: "X70".into(),
+                }));
+                out.push(fact(
+                    "切线外心等角",
+                    "X_{70} \\leftrightarrow X_{26}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(26)",
+                    "X(70) 与 X(26) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(71): isogonal of X(27); bary (b+c) sin 2A. Always finite (sin 2A=0 only at right vertex).
+    {
+        let wa = (b + c) * (2.0 * g[0]).sin();
+        let wb = (c + a) * (2.0 * g[1]).sin();
+        let wc = (a + b) * (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x71 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "X27等角",
+                "X_{71}",
+                pt(x71[0], x71[1]),
+                None,
+                "X(71) = \\bigl((b+c)\\sin 2A:\\cdots\\bigr)",
+                "X(71)：X(27) 的等角共轭",
+            ).with(Shape::Point {
+                x: x71[0],
+                y: x71[1],
+                label: "X71".into(),
+            }));
+            out.push(fact(
+                "X27等角",
+                "X_{71} \\leftrightarrow X_{27}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(27)",
+                "X(71) 与 X(27) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(73): crosspoint of I and O; isogonal of X(29).
+    // Bary (cos B + cos C) sin 2A.
+    {
+        let wa = (g[1].cos() + g[2].cos()) * (2.0 * g[0]).sin();
+        let wb = (g[2].cos() + g[0].cos()) * (2.0 * g[1]).sin();
+        let wc = (g[0].cos() + g[1].cos()) * (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x73 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "内心外心截点",
+                "X_{73}",
+                pt(x73[0], x73[1]),
+                None,
+                "X(73) = \\bigl((\\cos B+\\cos C)\\sin 2A:\\cdots\\bigr)",
+                "X(73)：内心与外心的截线交点（X(29) 的等角共轭）",
+            ).with(Shape::Point {
+                x: x73[0],
+                y: x73[1],
+                label: "X73".into(),
+            }));
+            out.push(fact(
+                "内心外心截点",
+                "X_{73} \\leftrightarrow X_{29}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(29)",
+                "X(73) 与 X(29) 互为等角共轭",
+            ));
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -8005,6 +8148,54 @@ mod tests {
         let x79e = fs3.iter().find(|f| f.label == "X_{79}").unwrap();
         assert_eq!(x79e.value, g.value);
         assert!(fs3.iter().all(|f| f.group != "反演内心等角"), "X80 skip equilateral");
+    }
+
+    #[test]
+    fn x28_x70_x71_x73() {
+        // Scalene acute 6-7-8: all present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x28 = fs.iter().find(|f| f.group == "克劳森X25截点" && f.label == "X_{28}").expect("X28");
+        let x70 = fs.iter().find(|f| f.group == "切线外心等角" && f.label == "X_{70}").expect("X70");
+        let x26 = fs.iter().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").expect("X26");
+        assert_ne!(x70.value, x26.value);
+        assert!(fs.iter().any(|f| f.group == "切线外心等角" && f.label.contains("26") && f.value.contains("等角")));
+        let x71 = fs.iter().find(|f| f.group == "X27等角" && f.label == "X_{71}").expect("X71");
+        let x27 = fs.iter().find(|f| f.group == "垂心克劳森截点" && f.label == "X_{27}").expect("X27");
+        assert_ne!(x71.value, x27.value);
+        let x73 = fs.iter().find(|f| f.group == "内心外心截点" && f.label == "X_{73}").expect("X73");
+        let x29 = fs.iter().find(|f| f.group == "内心垂心截点" && f.label == "X_{29}").expect("X29");
+        assert_ne!(x73.value, x29.value);
+        assert_ne!(x28.value, x70.value);
+        assert_ne!(x71.value, x73.value);
+
+        // Equilateral: X28=X70=X71=X73=G (X26 also G; isogonal of G is G).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("克劳森X25截点", "X_{28}"),
+            ("切线外心等角", "X_{70}"),
+            ("X27等角", "X_{71}"),
+            ("内心外心截点", "X_{73}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X28 skip (tan); X70/X71/X73 present (X26 at ∞ but isogonal finite).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "克劳森X25截点"), "X28 skip right");
+        assert!(fs3.iter().any(|f| f.group == "切线外心等角" && f.label == "X_{70}"));
+        assert!(fs3.iter().any(|f| f.group == "X27等角" && f.label == "X_{71}"));
+        assert!(fs3.iter().any(|f| f.group == "内心外心截点" && f.label == "X_{73}"));
     }
 
     #[test]
