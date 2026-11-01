@@ -27,6 +27,7 @@ export function decodeTokens(ids: number[], vocab: Vocab): string[] {
 /**
  * CoMER tokens → the ASCII this sheet already parses.
  * `a ^ { 2 } = b` becomes `a^2 = b`. `\vec{a}` stays an arrowed letter.
+ * `\sum_{i=1}^{n} i` keeps braced LaTeX so KaTeX can show it (not a plottable curve).
  * A component tuple is kept only when the model actually emitted parentheses.
  */
 export function tokensToSource(tokens: string[]): string {
@@ -51,12 +52,32 @@ export function tokensToSource(tokens: string[]): string {
     }
     return body
   }
+  /** Keep braces around a group so ∑ / subscripts stay valid LaTeX. */
+  const readLatexGroup = (): string => {
+    if (repaired[i] !== '{') return readAtom()
+    return `{${readGroup()}}`
+  }
   const readAtom = (): string => {
     const cur = repaired[i++]
     if (!cur || cur === '{' || cur === '}') return ''
     if (cur === '\\frac') return `(${readGroup()})/(${readGroup()})`
     if (cur === '\\sqrt') return `sqrt(${readGroup()})`
     if (cur === '\\vec' || cur === '\\overrightarrow') return `\\vec{${readGroup()}}`
+    if (cur === '\\sum') {
+      let out = '\\sum'
+      if (repaired[i] === '_') {
+        i++
+        out += `_${readLatexGroup()}`
+      }
+      if (repaired[i] === '^') {
+        i++
+        out += `^${readLatexGroup()}`
+      }
+      // Body: one atom, or a braced group the model put after the limits.
+      const body = repaired[i] === '{' ? readLatexGroup() : readAtom()
+      if (body) out += ` ${body}`
+      return out
+    }
     if (cur === '^') return `^${readGroup()}`
     if (cur === '_') return `_${readGroup()}`
     if (cur === '\\cdot' || cur === '\\times') return ''

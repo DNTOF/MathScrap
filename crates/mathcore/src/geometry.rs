@@ -514,6 +514,9 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     let rr = a / (2.0 * g[0].sin());
     let r = area / p;
     out.push(fact("面积与周长", "S", nice(area), Some(area), "S = \\frac12 ab\\sin C", "面积公式"));
+    // Heron: same area from three sides — useful when the student only wrote SSS.
+    let heron = (p * (p - a) * (p - b) * (p - c)).max(0.0).sqrt();
+    out.push(fact("面积与周长", "S_{\\text{海伦}}", nice(heron), Some(heron), "S = \\sqrt{p(p-a)(p-b)(p-c)}", "海伦公式"));
     out.push(fact("面积与周长", "C_{\\triangle}", nice(per), Some(per), "a + b + c", "周长"));
 
     let [na, nb, nc] = names;
@@ -564,12 +567,58 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             (y * v[(i + 1) % 3][1] + z * v[(i + 2) % 3][1]) / (y + z),
         ];
         out.push(fact("角平分线", &format!("t_{}", SIDE[i]), nice(t), Some(t), &format!("t_{s} = \\frac{{2{u}{w}\\cos\\frac{{{T}}}{{2}}}}{{{u} + {w}}}", s = SIDE[i], u = SIDE[(i + 1) % 3], w = SIDE[(i + 2) % 3], T = ANG[i]), "角平分线长公式").with(Shape::Segment { x1: v[i][0], y1: v[i][1], x2: foot[0], y2: foot[1], label: format!("t_{}", SIDE[i]) }));
+        // 角平分线定理: foot F on the opposite side splits it as the adjacent sides.
+        let (u, w) = ((i + 1) % 3, (i + 2) % 3);
+        let d_u = dist2(v[u], foot);
+        let d_w = dist2(foot, v[w]);
+        if d_w > 1e-12 {
+            let ratio = d_u / d_w;
+            out.push(fact(
+                "角平分线",
+                &format!("\\frac{{|{nu}F_{{{s}}}|}}{{|F_{{{s}}}{nw}|}}", s = SIDE[i], nu = names[u], nw = names[w]),
+                nice(ratio),
+                Some(ratio),
+                &format!("\\frac{{{w}}}{{{u}}}", u = SIDE[u], w = SIDE[w]),
+                "角平分线定理：分对边成邻边比",
+            ));
+        }
     }
 
     out.push(fact("特殊点", "G", pt(centroid[0], centroid[1]), None, "G = \\frac{A + B + C}{3}", "重心（中线交点）").with(Shape::Point { x: centroid[0], y: centroid[1], label: "G 重心".into() }));
     out.push(fact("特殊点", "O", pt(circ[0], circ[1]), None, "|OA| = |OB| = |OC|", "外心（中垂线交点）").with(Shape::Point { x: circ[0], y: circ[1], label: "O 外心".into() }));
     out.push(fact("特殊点", "I", pt(inc[0], inc[1]), None, "I = \\frac{aA + bB + cC}{a + b + c}", "内心（角平分线交点）").with(Shape::Point { x: inc[0], y: inc[1], label: "I 内心".into() }));
     out.push(fact("特殊点", "H", pt(orth[0], orth[1]), None, "\\vec{OH} = \\vec{OA} + \\vec{OB} + \\vec{OC}", "垂心（高线交点）").with(Shape::Point { x: orth[0], y: orth[1], label: "H 垂心".into() }));
+
+    // Excircle radii; Euler OI² = R(R − 2r); OH from the orthocenter / circumcenter.
+    for i in 0..3 {
+        let ri = area / (p - s[i]);
+        out.push(fact(
+            "外接圆与内切圆",
+            &format!("r_{}", SIDE[i]),
+            nice(ri),
+            Some(ri),
+            &format!("r_{s} = \\frac{{S}}{{p - {s}}}", s = SIDE[i]),
+            "旁切圆半径",
+        ));
+    }
+    let oi = dist2(circ, inc);
+    out.push(fact(
+        "特殊点",
+        "|OI|",
+        nice(oi),
+        Some(oi),
+        "|OI|^2 = R(R - 2r)",
+        "欧拉公式（外心与内心的距离）",
+    ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: inc[0], y2: inc[1], label: "OI".into() }));
+    let oh = dist2(circ, orth);
+    out.push(fact(
+        "特殊点",
+        "|OH|",
+        nice(oh),
+        Some(oh),
+        "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+        "外心与垂心的距离",
+    ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
 
     let mut kinds: Vec<String> = Vec::new();
     let maxg = g.iter().cloned().fold(0.0, f64::max);
@@ -1631,6 +1680,27 @@ mod tests {
         let get = |label: &str| out.iter().find(|f| f.label == label).unwrap();
         assert!((get("|AP|").num.unwrap() - 4.0 / 3.0).abs() < 1e-9);
         assert!((get("\\frac{|AP|}{|PB|}").num.unwrap() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn angle_bisector_theorem_heron_excircles() {
+        // 3-4-5: Heron S = 6; bisector from C splits AB as b:a = 4:3; r_a = 2, r_b = 3, r_c = 6
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap();
+        assert!((get("S_{\\text{海伦}}").num.unwrap() - 6.0).abs() < 1e-9);
+        let ratio = get("\\frac{|AF_{c}|}{|F_{c}B|}").num.unwrap();
+        assert!((ratio - 4.0 / 3.0).abs() < 1e-9, "ratio = {ratio}");
+        assert!((get("r_a").num.unwrap() - 2.0).abs() < 1e-9);
+        assert!((get("r_b").num.unwrap() - 3.0).abs() < 1e-9);
+        assert!((get("r_c").num.unwrap() - 6.0).abs() < 1e-9);
+        // OI² = R(R − 2r) = 2.5 · (2.5 − 2) = 1.25 → OI = √1.25
+        let oi = get("|OI|").num.unwrap();
+        assert!((oi * oi - 1.25).abs() < 1e-9, "OI = {oi}");
+        // right triangle: H at C, O midpoint of AB → |OH| = R = 2.5
+        assert!((get("|OH|").num.unwrap() - 2.5).abs() < 1e-9);
     }
 
     #[test]

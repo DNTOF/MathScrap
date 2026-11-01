@@ -20,6 +20,7 @@ export function mathCues(strokes: InkStroke[]): string[] {
   if (hasFractionBar(strokes)) cues.push('fraction')
   if (hasSuperscript(strokes)) cues.push('superscript')
   if (hasParen(strokes)) cues.push('paren')
+  if (hasSumLike(strokes)) cues.push('sum')
   return cues
 }
 
@@ -44,6 +45,22 @@ export function looksLikeProse(strokes: InkStroke[]): boolean {
   const stepped = boxes.every((b, i) => i === 0 || b.cx > boxes[i - 1].cx)
   const all = bounds(strokes.flatMap((s) => s.points))
   return similar && aligned && stepped && all.w > all.h * 1.35
+}
+
+
+/**
+ * Tall Σ-shaped stroke with optional limit ticks: treat as math even without "=".
+ * A single tall bowl with small marks above/below on the right is the usual handwritten sum.
+ */
+function hasSumLike(strokes: InkStroke[]): boolean {
+  const boxes = strokes.filter((s) => s.points.length >= 4).map((s) => ({ s, b: bounds(s.points) }))
+  const sigma = boxes.find(({ b }) => b.h > Math.max(28, b.w * 1.35) && b.h / Math.max(1, b.w) > 1.2)
+  if (!sigma) return false
+  const others = boxes.filter((x) => x !== sigma)
+  const topRight = others.some(({ b }) => b.cy < sigma.b.y0 + sigma.b.h * 0.35 && b.cx > sigma.b.cx - 4 && b.h < sigma.b.h * 0.55)
+  const botRight = others.some(({ b }) => b.cy > sigma.b.y0 + sigma.b.h * 0.55 && b.cx > sigma.b.cx - 4 && b.h < sigma.b.h * 0.55)
+  // Σ alone, or Σ with at least one limit, counts as a formula cue.
+  return others.length === 0 || topRight || botRight
 }
 
 function hasEquals(strokes: InkStroke[]): boolean {

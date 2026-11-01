@@ -310,6 +310,10 @@ assert.equal(tokensToSource(['a', '^', '{', '2', '}', '=', 'b']), 'a^2 = b')
 assert.equal(tokensToSource(['\\frac', '{', 'a', '}', '{', 'b', '}']), '(a)/(b)')
 assert.equal(tokensToSource(['\\sqrt', '{', 'x', '}']), 'sqrt(x)')
 assert.equal(tokensToSource(['\\vec', '{', 'a', '}']), '\\vec{a}')
+assert.equal(tokensToSource(['\\sum', '_', '{', 'i', '=', '1', '}', '^', '{', 'n', '}', 'i']), '\\sum_{i = 1}^{n} i')
+assert.equal(tokensToSource(['y', '=', '\\sum', '_', '{', 'k', '=', '1', '}', '^', '{', 'n', '}', 'k']), 'y = \\sum_{k = 1}^{n} k')
+assert.equal(tokensToSource(['\\sum', 'i']), '\\sum i')
+
 assert.equal(tokensToSource(['\\overrightarrow', '{', 'b', '}']), '\\vec{b}')
 assert.equal(tokensToSource(['=']), '')
 assert.equal(tokensToSource(['\\frac']), '')
@@ -430,8 +434,28 @@ assert.equal(bindInk(arrowed, 'a = (1, 2, 2)'), boundVec)
 assert.doesNotMatch(boundVec, /1,\s*2,\s*2/)
 console.log('ocr bind ok', { point: bindInk(y2strokes, 'A(1,2)'), vec: boundVec })
 
+
+function sumLikeSigma(): InkStroke[] {
+  const bowl: InkStroke = {
+    lineWidth: 3,
+    points: [
+      { x: 40, y: 8 },
+      { x: 12, y: 10 },
+      { x: 8, y: 36 },
+      { x: 28, y: 52 },
+      { x: 8, y: 70 },
+      { x: 12, y: 96 },
+      { x: 42, y: 98 },
+    ],
+  }
+  const top: InkStroke = { lineWidth: 2, points: [{ x: 48, y: 14 }, { x: 62, y: 12 }] }
+  const bot: InkStroke = { lineWidth: 2, points: [{ x: 48, y: 92 }, { x: 64, y: 94 }] }
+  return [bowl, top, bot]
+}
+
 assert.equal(classifyInk(y2strokes), 'formula')
 assert.equal(classifyInk(arrowLetter()), 'formula')
 assert.equal(classifyInk(proseNote()), 'text', 'a line of letters is not a formula')
+assert.equal(classifyInk(sumLikeSigma()), 'formula', 'Σ with limits is a formula')
 assert.equal(classifyInk(inkFixtures(3).find((s) => s.name === 'frac')!.strokes), 'formula')
 console.log('ocr gate ok', { prose: classifyInk(proseNote()), formula: classifyInk(y2strokes) })
