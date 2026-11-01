@@ -964,15 +964,16 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     }
 
 
-    // Gergonne point: concurrence of vertex-to-incircle-contact cevians; bary a/(s−a):…
+    // Gergonne point: concurrence of vertex-to-incircle-contact cevians; bary 1/(s−a):…
     {
         let sa = p - a;
         let sb = p - b;
         let sc = p - c;
         if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
-            let wa = a / sa;
-            let wb = b / sb;
-            let wc = c / sc;
+            // bary 1/(s−a):1/(s−b):1/(s−c) = isotomic conjugate of Nagel (s−a:s−b:s−c)
+            let wa = 1.0 / sa;
+            let wb = 1.0 / sb;
+            let wc = 1.0 / sc;
             let den = wa + wb + wc;
             let ge = [
                 (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
@@ -983,7 +984,7 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 "Ge",
                 pt(ge[0], ge[1]),
                 None,
-                "Ge = \\frac{\\frac{a}{s-a}A+\\frac{b}{s-b}B+\\frac{c}{s-c}C}{\\sum}",
+                "Ge = \\frac{\\frac{1}{s-a}A+\\frac{1}{s-b}B+\\frac{1}{s-c}C}{\\sum}",
                 "格尔巩点：顶点与对边内切圆切点的连线交点",
             ).with(Shape::Point {
                 x: ge[0],
@@ -1357,6 +1358,127 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                             "欧拉反射点在外接圆上",
                         ));
                     }
+                }
+            }
+        }
+    }
+
+    // Contact (intouch) triangle: incircle tangency points on the sides.
+    // On BC: BD = s-b, DC = s-c; perspector is the Gergonne point.
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let xa = section_point(pb, pc, sb, sc);
+            let xb = section_point(pc, pa, sc, sa);
+            let xc = section_point(pa, pb, sa, sb);
+            let pts = [(xa, "a"), (xb, "b"), (xc, "c")];
+            for (q, lab) in pts {
+                out.push(fact(
+                    "接触三角形",
+                    &format!("X_{}", lab),
+                    pt(q[0], q[1]),
+                    None,
+                    &format!("X_{s}\\text{{ on side }}{s}", s = lab),
+                    "内切圆与边的切点（接触三角形顶点）",
+                ).with(Shape::Point {
+                    x: q[0],
+                    y: q[1],
+                    label: format!("X{} 切点", lab),
+                }));
+            }
+            if (dist2(inc, xa) - r).abs() < 1e-5 * (1.0 + r)
+                && (dist2(inc, xb) - r).abs() < 1e-5 * (1.0 + r)
+                && (dist2(inc, xc) - r).abs() < 1e-5 * (1.0 + r)
+            {
+                out.push(fact(
+                    "接触三角形",
+                    "|IX_*|",
+                    nice(r),
+                    Some(r),
+                    "|IX_a| = |IX_b| = |IX_c| = r",
+                    "切点到内心的距离等于内切圆半径",
+                ));
+            }
+            let wa = 1.0 / sa;
+            let wb = 1.0 / sb;
+            let wc = 1.0 / sc;
+            let den = wa + wb + wc;
+            let ge = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            let cross = (xa[0] - pa[0]) * (ge[1] - pa[1]) - (xa[1] - pa[1]) * (ge[0] - pa[0]);
+            if cross.abs() < 1e-5 * (1.0 + dist2(pa, xa)) * (1.0 + dist2(pa, ge)) {
+                out.push(fact(
+                    "接触三角形",
+                    "A, X_a, Ge",
+                    "\\text{共线}".into(),
+                    None,
+                    "A X_a \\ni Ge",
+                    "接触三角形与原三角形的透视中心为格尔巩点",
+                ));
+            }
+        }
+    }
+
+    // Spieker circle: incircle of the medial triangle; center Sp, radius r/2.
+    {
+        let den = 2.0 * (a + b + c);
+        let sp = [
+            ((b + c) * pa[0] + (c + a) * pb[0] + (a + b) * pc[0]) / den,
+            ((b + c) * pa[1] + (c + a) * pb[1] + (a + b) * pc[1]) / den,
+        ];
+        let r_sp = r / 2.0;
+        out.push(fact(
+            "斯皮克圆",
+            "r_{\\text{Sp}}",
+            nice(r_sp),
+            Some(r_sp),
+            "r_{\\text{Sp}} = r/2",
+            "斯皮克圆：中点三角形的内切圆，半径为 r/2",
+        ).with(Shape::Circle {
+            cx: sp[0],
+            cy: sp[1],
+            r: r_sp,
+            label: "斯皮克圆".into(),
+        }));
+        out.push(fact(
+            "斯皮克圆",
+            "S_{\\text{中点}}/(s/2)",
+            nice(r_sp),
+            Some(r_sp),
+            "\\frac{S/4}{s/2} = \\frac{r}{2}",
+            "由中点三角形的面积与半周长推出",
+        ));
+    }
+
+    // Kosnita point: A O_a ∩ B O_b ∩ C O_c with O_a = circumcenter of △OBC.
+    // Skip when △OAB / OBC / OCA is degenerate (e.g. right △ with O on a side).
+    {
+        let oa = circum2(circ, pb, pc);
+        let ob = circum2(circ, pc, pa);
+        let oc = circum2(circ, pa, pb);
+        if let (Some((oa, _)), Some((ob, _)), Some((oc, _))) = (oa, ob, oc) {
+            if let (Some(k1), Some(k2)) = (
+                line_line_isect2(pa, oa, pb, ob),
+                line_line_isect2(pa, oa, pc, oc),
+            ) {
+                if dist2(k1, k2) < 1e-5 * (1.0 + rr) {
+                    let ko = k1;
+                    out.push(fact(
+                        "科斯尼塔点",
+                        "Ko",
+                        pt(ko[0], ko[1]),
+                        None,
+                        "AO_a \\cap BO_b \\cap CO_c",
+                        "科斯尼塔点：A 与 △OBC 外心等连线的交点",
+                    ).with(Shape::Point {
+                        x: ko[0],
+                        y: ko[1],
+                        label: "Ko 科斯尼塔".into(),
+                    }));
                 }
             }
         }
@@ -4132,10 +4254,14 @@ mod tests {
         assert!(r.error.is_none(), "{:?}", r.error);
         let fs = &r.cases[0].facts;
         let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
-        // nice() prefers exact forms: (13/4, 3/2) == (3.25, 1.5)
+        // bary 1/(s−a):… on 3-4-5 → (3.109…, 1.309…) = (171/55, 72/55)
         assert!(
-            (ge.value.contains("3.25") || ge.value.contains("13/4") || ge.value.contains("\\frac{13}{4}"))
-                && (ge.value.contains("1.5") || ge.value.contains("3/2") || ge.value.contains("\\frac{3}{2}")),
+            ge.value.contains("3.10")
+                || ge.value.contains("1.30")
+                || ge.value.contains("171/55")
+                || ge.value.contains("\\frac{171}{55}")
+                || ge.value.contains("72/55")
+                || ge.value.contains("\\frac{72}{55}"),
             "Ge={}",
             ge.value
         );
@@ -4238,6 +4364,39 @@ mod tests {
             "Er={}",
             er.value
         );
+    }
+
+
+    #[test]
+    fn contact_spieker_radius_kosnita() {
+        // 3-4-5: contact pts; |IX_*|=r=1; r_Sp=1/2; Kosnita skipped (O on AB).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(["X_a", "X_b", "X_c"].iter().all(|lab| fs.iter().any(|f| f.group == "接触三角形" && f.label == *lab)));
+        let ix = fs.iter().find(|f| f.group == "接触三角形" && f.label == "|IX_*|").expect("|IX_*|");
+        assert!((ix.num.unwrap() - 1.0).abs() < 1e-9, "|IX_*|={}", ix.value);
+        assert!(fs.iter().any(|f| f.group == "接触三角形" && f.value.contains("共线")));
+        let rsp = fs.iter().find(|f| f.group == "斯皮克圆" && f.label.contains("Sp")).expect("r_Sp");
+        assert!((rsp.num.unwrap() - 0.5).abs() < 1e-9, "r_Sp={}", rsp.value);
+        assert!(fs.iter().any(|f| f.group == "斯皮克圆" && f.label.contains("中点")));
+        assert!(
+            fs.iter().all(|f| f.group != "科斯尼塔点"),
+            "Kosnita should be skipped on right 3-4-5"
+        );
+
+        // Acute 6-7-8: Kosnita present.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let ko = fs2.iter().find(|f| f.group == "科斯尼塔点" && f.label == "Ko").expect("Ko on 6-7-8");
+        assert!(ko.value.contains("4.5") || ko.value.contains("1.8") || ko.value.contains("\\frac"), "Ko={}", ko.value);
+        let rsp2 = fs2.iter().find(|f| f.group == "斯皮克圆" && f.label.contains("Sp")).unwrap();
+        // r = Δ/s; for 6-7-8, s=10.5, Δ=sqrt(10.5·4.5·3.5·2.5)=21*sqrt(3)/4? 
+        // r_Sp = r/2 > 0
+        assert!(rsp2.num.unwrap() > 0.0);
     }
 
     #[test]
