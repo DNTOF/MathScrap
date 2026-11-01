@@ -5332,6 +5332,190 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(100): anticomplement of Feuerbach X(11); bary a/(b−c).
+    // On circumcircle; skip isosceles (any side-pair equal → denom 0).
+    {
+        let da = b - c;
+        let db = c - a;
+        let dc = a - b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x100 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "反补费尔巴哈",
+                    "X_{100}",
+                    pt(x100[0], x100[1]),
+                    None,
+                    "X(100) = \\bigl(a/(b-c):\\cdots\\bigr)",
+                    "X(100)：费尔巴哈点 X(11) 的反补点（外接圆上）",
+                ).with(Shape::Point {
+                    x: x100[0],
+                    y: x100[1],
+                    label: "X100".into(),
+                }));
+            }
+        }
+    }
+
+    // X(101): Ψ(I,K) = Ψ(X(1),X(6)); bary a²/(b−c). Circumcircle-antipode of X(103).
+    // Skip isosceles (same denom family as X(100)).
+    {
+        let da = b - c;
+        let db = c - a;
+        let dc = a - b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x101 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ内心对称中线",
+                    "X_{101}",
+                    pt(x101[0], x101[1]),
+                    None,
+                    "X(101) = \\bigl(a^2/(b-c):\\cdots\\bigr)",
+                    "X(101)：Ψ(I,K)（外接圆上）",
+                ).with(Shape::Point {
+                    x: x101[0],
+                    y: x101[1],
+                    label: "X101".into(),
+                }));
+            }
+        }
+    }
+
+    // X(104): circumcircle-antipode of X(100); Λ(I,O); bary a/(cos B+cos C−1).
+    // Skip equilateral / when any denom≈0 (cos B+cos C=1).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc - 1.0;
+        let db = cc + ca - 1.0;
+        let dc = ca + cb - 1.0;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x104 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "X100对径",
+                    "X_{104}",
+                    pt(x104[0], x104[1]),
+                    None,
+                    "X(104) = \\bigl(a/(\\cos B+\\cos C-1):\\cdots\\bigr)",
+                    "X(104)：X(100) 在外接圆上的对径点（Λ(I,O)）",
+                ).with(Shape::Point {
+                    x: x104[0],
+                    y: x104[1],
+                    label: "X104".into(),
+                }));
+                // Note: X(104) = 2O − X(100) when both finite (own the coords first).
+                let o_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "O").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                let x100_xy = out.iter().rev().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let (Some((ox, oy)), Some((px, py))) = (o_xy, x100_xy) {
+                    let mid_dx = (x104[0] + px) / 2.0 - ox;
+                    let mid_dy = (x104[1] + py) / 2.0 - oy;
+                    if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                        out.push(fact(
+                            "X100对径",
+                            "X_{104}=2O-X_{100}",
+                            "\text{外接圆对径}".into(),
+                            None,
+                            "X(104) = 2O - X(100)",
+                            "X(104) 与 X(100) 互为外接圆对径点",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(105): Λ(I,K); bary a/[b²+c²−a(b+c)]. Skip when any denom≈0 (equilateral).
+    {
+        let da = b * b + c * c - a * (b + c);
+        let db = c * c + a * a - b * (c + a);
+        let dc = a * a + b * b - c * (a + b);
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x105 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Λ内心勒莫恩",
+                    "X_{105}",
+                    pt(x105[0], x105[1]),
+                    None,
+                    "X(105) = \\bigl(a/(b^2+c^2-a(b+c)):\\cdots\\bigr)",
+                    "X(105)：Λ(I,K)",
+                ).with(Shape::Point {
+                    x: x105[0],
+                    y: x105[1],
+                    label: "X105".into(),
+                }));
+            }
+        }
+    }
+
+    // X(106): Λ(I,G); bary a²/(2a−b−c). Skip equilateral / when any denom≈0.
+    {
+        let da = 2.0 * a - b - c;
+        let db = 2.0 * b - c - a;
+        let dc = 2.0 * c - a - b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x106 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Λ内心重心",
+                    "X_{106}",
+                    pt(x106[0], x106[1]),
+                    None,
+                    "X(106) = \\bigl(a^2/(2a-b-c):\\cdots\\bigr)",
+                    "X(106)：Λ(I,G)",
+                ).with(Shape::Point {
+                    x: x106[0],
+                    y: x106[1],
+                    label: "X106".into(),
+                }));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -9396,6 +9580,60 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "米滕beth等角" && f.label == "X_{89}"));
         assert!(fs3.iter().any(|f| f.group == "垂心Ceva等角" && f.label == "X_{90}"));
         assert!(fs3.iter().any(|f| f.group == "垂足垂心等角" && f.label == "X_{96}"));
+    }
+
+    #[test]
+    fn x100_x101_x104_x105_x106() {
+        // Scalene acute 6-7-9: all five present (6-7-8 has 2b−c−a=0 → X106 skip); X104 = 2O − X100.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x100 = fs.iter().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").expect("X100");
+        let x101 = fs.iter().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").expect("X101");
+        let x104 = fs.iter().find(|f| f.group == "X100对径" && f.label == "X_{104}").expect("X104");
+        let x105 = fs.iter().find(|f| f.group == "Λ内心勒莫恩" && f.label == "X_{105}").expect("X105");
+        let x106 = fs.iter().find(|f| f.group == "Λ内心重心" && f.label == "X_{106}").expect("X106");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        assert_ne!(x100.value, x101.value);
+        assert_ne!(x100.value, x104.value);
+        assert_ne!(x105.value, x106.value);
+        assert_ne!(x100.value, g.value);
+        assert_ne!(x101.value, g.value);
+        assert_ne!(x104.value, g.value);
+        assert_ne!(x105.value, g.value);
+        assert_ne!(x106.value, g.value);
+        assert!(fs.iter().any(|f| f.group == "X100对径" && f.label.contains("2O")));
+        if let (Some(Shape::Point { x: ox, y: oy, .. }), Some(Shape::Point { x: ax, y: ay, .. }), Some(Shape::Point { x: bx, y: by, .. })) =
+            (o.shape.as_ref(), x100.shape.as_ref(), x104.shape.as_ref())
+        {
+            assert!(((ax + bx) / 2.0 - ox).abs() < 1e-6 && ((ay + by) / 2.0 - oy).abs() < 1e-6, "X104 not antipode of X100");
+        } else {
+            panic!("missing shapes for O/X100/X104");
+        }
+
+        // Isosceles non-eq 5-5-6: X100/X101 skipped (b−c=0); X104/X105/X106 present.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "反补费尔巴哈"), "X100 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ内心对称中线"), "X101 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "X100对径" && f.label == "X_{104}"));
+        assert!(fs2.iter().any(|f| f.group == "Λ内心勒莫恩" && f.label == "X_{105}"));
+        assert!(fs2.iter().any(|f| f.group == "Λ内心重心" && f.label == "X_{106}"));
+
+        // Equilateral: all five skipped (denom 0).
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "反补费尔巴哈"), "X100 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "Ψ内心对称中线"), "X101 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "X100对径"), "X104 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "Λ内心勒莫恩"), "X105 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "Λ内心重心"), "X106 skip equilateral");
     }
 
     #[test]
