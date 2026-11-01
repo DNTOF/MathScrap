@@ -761,6 +761,96 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     if (facts.length) sections.push({ id: 'sphere-plane', title: '球面 ∩ 平面', subtitle: '交圆 · 相切 · 相离', tone: 'geo', facts })
   }
 
+
+  if (spheres.length >= 2) {
+    const facts: RustFact[] = []
+    for (let i = 0; i < spheres.length; i++) {
+      for (let j = i + 1; j < spheres.length; j++) {
+        const A = spheres[i]
+        const B = spheres[j]
+        const n = [B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]]
+        const ln = Math.hypot(n[0], n[1], n[2])
+        const d =
+          (B.c[0] ** 2 + B.c[1] ** 2 + B.c[2] ** 2 - A.c[0] ** 2 - A.c[1] ** 2 - A.c[2] ** 2 - B.r ** 2 + A.r ** 2) / 2
+        if (ln < 1e-12) {
+          facts.push({
+            group: '根面',
+            label: `${A.name}, ${B.name}`,
+            value: Math.abs(A.r - B.r) < 1e-9 ? '\\text{同心等半径（重合）}' : '\\text{同心不等半径（无根面）}',
+            num: null,
+            how: '\\vec{O_1O_2} = \\mathbf{0}',
+            why: '两球球心重合',
+            shape: null,
+          })
+          continue
+        }
+        const terms: string[] = []
+        ;(['x', 'y', 'z'] as const).forEach((ax, k) => {
+          if (Math.abs(n[k]) < 1e-12) return
+          const coef = Math.abs(n[k] - 1) < 1e-9 ? '' : Math.abs(n[k] + 1) < 1e-9 ? '-' : fmt(n[k])
+          terms.push(`${coef}${ax}`)
+        })
+        let eq = terms.join(' + ').replace('+ -', '- ')
+        if (!eq) eq = '0'
+        eq = `${eq} = ${fmt(d)}`
+        facts.push({
+          group: '根面',
+          label: `\\pi_{${A.name}${B.name}}`,
+          value: eq,
+          num: null,
+          how: '(\\vec{O_2}-\\vec{O_1})\\cdot\\vec{x} = \\frac{|O_2|^2-|O_1|^2-r_2^2+r_1^2}{2}',
+          why: '两球面方程相减得根面',
+          shape: null,
+        })
+        objects.push({ type: 'plane', name: `π_${A.name}${B.name}`, n, d, color: nextColor() })
+        const signed = (n[0] * A.c[0] + n[1] * A.c[1] + n[2] * A.c[2] - d) / ln
+        const dist = Math.abs(signed)
+        facts.push({
+          group: '根面',
+          label: `d(O_{${A.name}}, \\pi_{${A.name}${B.name}})`,
+          value: engine.nice(dist),
+          num: dist,
+          how: '\\dfrac{|\\vec n\\cdot O_1 - d|}{|\\vec n|}',
+          why: '球心到根面的距离',
+          shape: null,
+        })
+        const rho2 = A.r * A.r - signed * signed
+        if (rho2 > 1e-9) {
+          facts.push({
+            group: '根面',
+            label: `\\rho_{${A.name}\\cap ${B.name}}`,
+            value: engine.nice(Math.sqrt(rho2)),
+            num: Math.sqrt(rho2),
+            how: '\\rho = \\sqrt{r_1^2 - d_1^2}',
+            why: '两球交圆落在根面上',
+            shape: null,
+          })
+        } else if (Math.abs(rho2) <= 1e-9) {
+          facts.push({
+            group: '根面',
+            label: `${A.name} \\cap ${B.name}`,
+            value: '\\text{相切}',
+            num: 0,
+            how: 'd_1 = \\pm r_1',
+            why: '两球相切，交点在根面上',
+            shape: null,
+          })
+        } else {
+          facts.push({
+            group: '根面',
+            label: `${A.name}, ${B.name}`,
+            value: '\\text{相离（根面仍在）}',
+            num: null,
+            how: 'r_1^2 - d_1^2 < 0',
+            why: '无实交圆；根面是等幂点的轨迹',
+            shape: null,
+          })
+        }
+      }
+    }
+    if (facts.length) sections.push({ id: 'radical', title: '两球根面', subtitle: '等幂点轨迹 · 交圆平面', tone: 'geo', facts })
+  }
+
   if (marks.length) objects.push({ type: 'marks', pts: marks })
 
   // ---- dimension ---------------------------------------------------------------------------

@@ -740,6 +740,61 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // Stewart: for a cevian AD to side a=BC with BD=m, DC=n (m+n=a),
+    // a(d² + mn) = b²m + c²n. Verify for medians and angle bisectors.
+    {
+        for i in 0..3 {
+            let (aa, bb, cc) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            // median: m = n = a/2
+            let m = aa / 2.0;
+            let n = aa / 2.0;
+            let d = 0.5 * (2.0 * bb * bb + 2.0 * cc * cc - aa * aa).max(0.0).sqrt();
+            let lhs = bb * bb * m + cc * cc * n;
+            let rhs = aa * (d * d + m * n);
+            if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                out.push(fact(
+                    "斯特瓦尔特定理",
+                    &format!("\\text{{Stewart}}_{{m_{}}}", SIDE[i]),
+                    nice(lhs),
+                    Some(lhs),
+                    &format!(
+                        "{b}^2\\cdot\\frac{{{a}}}{{2}} + {c}^2\\cdot\\frac{{{a}}}{{2}} = {a}\\left(m_{s}^2 + \\left(\\frac{{{a}}}{{2}}\\right)^2\\right)",
+                        a = SIDE[i],
+                        b = SIDE[(i + 1) % 3],
+                        c = SIDE[(i + 2) % 3],
+                        s = SIDE[i],
+                    ),
+                    "斯特瓦尔特定理（中线）",
+                ));
+            }
+            // angle bisector: BD:DC = c:b → m = c/(b+c)·a, n = b/(b+c)·a
+            let den = bb + cc;
+            if den > 1e-12 {
+                let m = cc / den * aa;
+                let n = bb / den * aa;
+                let d = 2.0 * bb * cc * (g[i] / 2.0).cos() / den;
+                let lhs = bb * bb * m + cc * cc * n;
+                let rhs = aa * (d * d + m * n);
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                    out.push(fact(
+                        "斯特瓦尔特定理",
+                        &format!("\\text{{Stewart}}_{{t_{}}}", SIDE[i]),
+                        nice(lhs),
+                        Some(lhs),
+                        &format!(
+                            "{b}^2 m + {c}^2 n = {a}(t_{s}^2 + mn),\\ m:n = {c}:{b}",
+                            a = SIDE[i],
+                            b = SIDE[(i + 1) % 3],
+                            c = SIDE[(i + 2) % 3],
+                            s = SIDE[i],
+                        ),
+                        "斯特瓦尔特定理（角平分线）",
+                    ));
+                }
+            }
+        }
+    }
+
     let mut kinds: Vec<String> = Vec::new();
     let maxg = g.iter().cloned().fold(0.0, f64::max);
     if near(maxg, PI / 2.0) {
@@ -1447,6 +1502,65 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             out.push(fact("点与平面", &format!("d({}, {})", q.name, p.name), nice(d), Some(d), "\\frac{|ax_0+by_0+cz_0-d|}{\\sqrt{a^2+b^2+c^2}}", "点到平面距离"));
         }
     }
+    // Line–plane angle: every pair of 3D points defines a line.
+    {
+        let pts3: Vec<(String, [f64; 3])> = points
+            .iter()
+            .filter(|q| q.p.len() >= 3)
+            .map(|q| (q.name.clone(), [q.p[0], q.p[1], q.p[2]]))
+            .collect();
+        let mut pair_count = 0usize;
+        'pairs: for i in 0..pts3.len() {
+            for j in i + 1..pts3.len() {
+                if pair_count >= 6 {
+                    break 'pairs;
+                }
+                let (ref na, pa) = pts3[i];
+                let (ref nb, pb) = pts3[j];
+                let dir = sub3(pb, pa);
+                let ld = len3(dir);
+                if ld < 1e-12 {
+                    continue;
+                }
+                pair_count += 1;
+                for p in ps {
+                    let ln = len3(p.n);
+                    if ln < 1e-12 {
+                        continue;
+                    }
+                    let sin_phi = (dot3(dir, p.n).abs() / (ld * ln)).clamp(0.0, 1.0);
+                    let phi = sin_phi.asin(); // angle between line and plane ∈ [0, π/2]
+                    out.push(fact(
+                        "线面角",
+                        &format!("\\theta({}{}, {})", na, nb, p.name),
+                        deg(phi),
+                        Some(phi),
+                        "\\sin\\theta = \\dfrac{|\\vec v\\cdot\\vec n|}{|\\vec v||\\vec n|}",
+                        "直线与平面所成的角",
+                    ));
+                    if sin_phi < 1e-9 {
+                        out.push(fact(
+                            "线面角",
+                            &format!("{}{} \\parallel {}", na, nb, p.name),
+                            "\\checkmark".into(),
+                            None,
+                            "\\vec v\\cdot\\vec n = 0",
+                            "直线平行于平面（或落在平面上）",
+                        ));
+                    } else if (1.0 - sin_phi).abs() < 1e-9 {
+                        out.push(fact(
+                            "线面角",
+                            &format!("{}{} \\perp {}", na, nb, p.name),
+                            "\\checkmark".into(),
+                            None,
+                            "|\\vec v\\cdot\\vec n| = |\\vec v||\\vec n|",
+                            "直线垂直于平面",
+                        ));
+                    }
+                }
+            }
+        }
+    }
     for i in 0..ps.len() {
         for j in i + 1..ps.len() {
             let (p, q) = (&ps[i], &ps[j]);
@@ -2031,5 +2145,39 @@ mod tests {
         let d = out.iter().find(|f| f.label == "d(AB, CD)").unwrap();
         assert!((d.num.unwrap() - 1.0).abs() < 1e-9, "d = {}", d.value);
         assert!(out.iter().any(|f| f.value.contains("异面")));
+    }
+
+    #[test]
+    fn stewart_median_and_bisector() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        // median to c=5: m=n=2.5, d=2.5; LHS = 3²·2.5 + 4²·2.5 = 62.5
+        let med = fs.iter().find(|f| f.label == "\\text{Stewart}_{m_c}").unwrap();
+        assert!((med.num.unwrap() - 62.5).abs() < 1e-6, "med = {}", med.value);
+        let bis = fs.iter().find(|f| f.label == "\\text{Stewart}_{t_c}").unwrap();
+        assert!(bis.num.unwrap().is_finite());
+        // both sides of Stewart agree for every median/bisector we emitted
+        assert_eq!(fs.iter().filter(|f| f.label.starts_with("\\text{Stewart}_")).count(), 6);
+    }
+
+    #[test]
+    fn line_plane_angle_perpendicular() {
+        // AB = vertical (0,0,0)->(0,0,1); plane z = 0 → θ = 90°
+        let ps = vec![NamedPlane { name: "α".into(), n: [0.0, 0.0, 1.0], d: 0.0 }];
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![0.0, 0.0, 1.0] },
+            NamedPoint { name: "C".into(), p: vec![1.0, 0.0, 0.0] },
+        ];
+        let out = planes_analyze(&ps, &pts);
+        let th = out.iter().find(|f| f.label == "\\theta(AB, α)").unwrap();
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9, "θ = {}", th.value);
+        assert!(out.iter().any(|f| f.label == "AB \\perp α"));
+        // AC lies in / parallel to the plane → θ = 0
+        let th2 = out.iter().find(|f| f.label == "\\theta(AC, α)").unwrap();
+        assert!(th2.num.unwrap().abs() < 1e-9, "θ(AC) = {}", th2.value);
+        assert!(out.iter().any(|f| f.label == "AC \\parallel α"));
     }
 }
