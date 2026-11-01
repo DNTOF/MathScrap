@@ -1630,6 +1630,111 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // Clawson point X(19): bary tan A : tan B : tan C.
+    // Undefined / at infinity on right △ (tan → ∞); emit only for acute triangles.
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let acute = cosines.iter().all(|&c| c > 1e-9)
+            && g.iter().all(|&ang| ang > 1e-9 && ang < std::f64::consts::FRAC_PI_2 - 1e-9);
+        if acute {
+            let wa = g[0].tan();
+            let wb = g[1].tan();
+            let wc = g[2].tan();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let cl = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "克劳森点",
+                    "Cl",
+                    pt(cl[0], cl[1]),
+                    None,
+                    "Cl = \\frac{\\tan A\\,A+\\tan B\\,B+\\tan C\\,C}{\\sum}",
+                    "克劳森点 X(19)：锐角三角形中 tan A:tan B:tan C（直角时退化）",
+                ).with(Shape::Point {
+                    x: cl[0],
+                    y: cl[1],
+                    label: "Cl 克劳森".into(),
+                }));
+            }
+        }
+    }
+
+    // First Yff center of congruence X(174): bary sec A : sec B : sec C = 1/cos.
+    // Skip when any cos ≈ 0 (right / near-right △).
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        if cosines.iter().all(|&c| c.abs() > 1e-9) {
+            let wa = 1.0 / cosines[0];
+            let wb = 1.0 / cosines[1];
+            let wc = 1.0 / cosines[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let yff = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "伊夫中心",
+                    "Yff",
+                    pt(yff[0], yff[1]),
+                    None,
+                    "Yff = \\frac{\\sec A\\,A+\\sec B\\,B+\\sec C\\,C}{\\sum}",
+                    "伊夫中心 X(174)：sec A:sec B:sec C（直角时 sec 无定义）",
+                ).with(Shape::Point {
+                    x: yff[0],
+                    y: yff[1],
+                    label: "Yff 伊夫".into(),
+                }));
+            }
+        }
+    }
+
+    // Exeter point X(22): perspector of tangential and circummedial triangles;
+    // bary a(b⁴+c⁴−a⁴) : b(c⁴+a⁴−b⁴) : c(a⁴+b⁴−c⁴).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let a4 = a2 * a2;
+        let b4 = b2 * b2;
+        let c4 = c2 * c2;
+        let wa = a * (b4 + c4 - a4);
+        let wb = b * (c4 + a4 - b4);
+        let wc = c * (a4 + b4 - c4);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let ex = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "埃克塞特点",
+                "Ex",
+                pt(ex[0], ex[1]),
+                None,
+                "Ex = \\frac{a(b^4+c^4-a^4)A+\\cdots}{\\sum}",
+                "埃克塞特点 X(22)：切线三角形与外接中点三角形的透视中心",
+            ).with(Shape::Point {
+                x: ex[0],
+                y: ex[1],
+                label: "Ex 埃克塞特".into(),
+            }));
+            // Perspector helper: name the classical pair.
+            out.push(fact(
+                "埃克塞特点",
+                "\\text{perspector}",
+                "\\text{tangential}/\\text{circummedial}".into(),
+                None,
+                "\\text{perspector}(\\triangle_{\\text{tang}},\\triangle_{\\text{cm}})",
+                "透视中心：切线三角形与外接中点三角形",
+            ));
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -4582,6 +4687,37 @@ mod tests {
         assert!(r2.error.is_none(), "{:?}", r2.error);
         let fs2 = &r2.cases[0].facts;
         assert!(fs2.iter().any(|f| f.group == "施泰纳内接椭圆" && f.label.contains("pi r")));
+    }
+
+    #[test]
+    fn clawson_yff_exeter() {
+        // Right 3-4-5: Clawson & Yff skipped (tan/sec undefined); Exeter present.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().all(|f| f.group != "克劳森点"), "Clawson must skip right △");
+        assert!(fs.iter().all(|f| f.group != "伊夫中心"), "Yff must skip right △");
+        let ex = fs.iter().find(|f| f.group == "埃克塞特点" && f.label == "Ex").expect("Exeter on 3-4-5");
+        assert!(ex.value.contains("\\left") || ex.value.contains("(") || ex.value.contains("\\frac"), "Ex={}", ex.value);
+        assert!(fs.iter().any(|f| f.group == "埃克塞特点" && f.label.contains("perspector")));
+
+        // Acute 6-7-8: all three present.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let cl = fs2.iter().find(|f| f.group == "克劳森点" && f.label == "Cl").expect("Clawson on 6-7-8");
+        let yff = fs2.iter().find(|f| f.group == "伊夫中心" && f.label == "Yff").expect("Yff on 6-7-8");
+        let ex2 = fs2.iter().find(|f| f.group == "埃克塞特点" && f.label == "Ex").expect("Exeter on 6-7-8");
+        assert!(cl.value.contains("\\left") || cl.value.contains("("), "Cl={}", cl.value);
+        assert!(yff.value.contains("\\left") || yff.value.contains("("), "Yff={}", yff.value);
+        assert!(ex2.value.contains("\\left") || ex2.value.contains("("), "Ex={}", ex2.value);
+        // Distinct from each other and from G on a scalene acute △.
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(cl.value, yff.value);
+        assert_ne!(cl.value, ex2.value);
+        assert_ne!(yff.value, g.value);
     }
 
     #[test]
