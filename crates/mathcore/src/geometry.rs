@@ -1204,6 +1204,164 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // Bevan point: circumcenter of the excentral triangle = reflection of I over O.
+    {
+        let bevan = [2.0 * circ[0] - inc[0], 2.0 * circ[1] - inc[1]];
+        out.push(fact(
+            "贝万点",
+            "Be",
+            pt(bevan[0], bevan[1]),
+            None,
+            "Be = 2O - I",
+            "贝万点：旁心三角形的外心（内心关于外心的对称点）",
+        ).with(Shape::Point {
+            x: bevan[0],
+            y: bevan[1],
+            label: "Be 贝万".into(),
+        }));
+        let mut ex = [[0.0f64; 2]; 3];
+        let mut ex_ok = true;
+        for i in 0..3 {
+            let (ai, aj, ak) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            let den = -ai + aj + ak;
+            if den.abs() < 1e-12 {
+                ex_ok = false;
+                break;
+            }
+            ex[i] = [
+                (-ai * v[i][0] + aj * v[(i + 1) % 3][0] + ak * v[(i + 2) % 3][0]) / den,
+                (-ai * v[i][1] + aj * v[(i + 1) % 3][1] + ak * v[(i + 2) % 3][1]) / den,
+            ];
+        }
+        if ex_ok {
+            if let Some((o_ex, _)) = circum2(ex[0], ex[1], ex[2]) {
+                if dist2(o_ex, bevan) < 1e-5 * (1.0 + dist2(circ, inc)) {
+                    out.push(fact(
+                        "贝万点",
+                        "O(I_a I_b I_c)",
+                        "\\checkmark".into(),
+                        None,
+                        "Be = O(I_a I_b I_c)",
+                        "旁心三角形的外心与 2O−I 重合",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Orthic triangle: feet of the altitudes (on the nine-point circle).
+    {
+        let n9loc = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9loc = rr / 2.0;
+        let mut feet = [[0.0f64; 2]; 3];
+        let mut ok = true;
+        for i in 0..3 {
+            let p0 = v[i];
+            let q1 = v[(i + 1) % 3];
+            let q2 = v[(i + 2) % 3];
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                ok = false;
+                break;
+            }
+            let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+            feet[i] = [q1[0] + t * dx, q1[1] + t * dy];
+        }
+        if ok {
+            for i in 0..3 {
+                let f = feet[i];
+                out.push(fact(
+                    "垂足三角形",
+                    &format!("H_{}", SIDE[i]),
+                    pt(f[0], f[1]),
+                    None,
+                    &format!("H_{s} = \\text{{足}}_{{{s}}}", s = SIDE[i]),
+                    "垂足三角形的顶点（高线足）",
+                ).with(Shape::Point {
+                    x: f[0],
+                    y: f[1],
+                    label: format!("H{} 垂足", SIDE[i]),
+                }));
+            }
+            let on_n9 = (0..3).all(|i| (dist2(feet[i], n9loc) - r9loc).abs() < 1e-5 * (1.0 + r9loc));
+            if on_n9 {
+                out.push(fact(
+                    "垂足三角形",
+                    "H_a, H_b, H_c \\in \\text{九点圆}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, H_*) = R/2",
+                    "垂足三角形内接于九点圆",
+                ));
+            }
+        }
+    }
+
+    // Euler reflection point X(110): reflections of Euler line over the sides concur on (O).
+    // May fail to concur for some right triangles — emit only when found.
+    {
+        let reflect = |pt: [f64; 2], s1: [f64; 2], s2: [f64; 2]| -> [f64; 2] {
+            let dx = s2[0] - s1[0];
+            let dy = s2[1] - s1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                return pt;
+            }
+            let t = ((pt[0] - s1[0]) * dx + (pt[1] - s1[1]) * dy) / den;
+            let foot = [s1[0] + t * dx, s1[1] + t * dy];
+            [2.0 * foot[0] - pt[0], 2.0 * foot[1] - pt[1]]
+        };
+        let mirrors = [(pb, pc), (pc, pa), (pa, pb)];
+        let mut segs: [([f64; 2], [f64; 2]); 3] = [([0.0; 2], [0.0; 2]); 3];
+        let mut ok = true;
+        for (i, (s1, s2)) in mirrors.into_iter().enumerate() {
+            let p = reflect(circ, s1, s2);
+            let mut q = reflect(orth, s1, s2);
+            if dist2(p, q) < 1e-9 {
+                q = reflect(centroid, s1, s2);
+                if dist2(p, q) < 1e-9 {
+                    ok = false;
+                    break;
+                }
+            }
+            segs[i] = (p, q);
+        }
+        if ok {
+            if let (Some(e1), Some(e2)) = (
+                line_line_isect2(segs[0].0, segs[0].1, segs[1].0, segs[1].1),
+                line_line_isect2(segs[0].0, segs[0].1, segs[2].0, segs[2].1),
+            ) {
+                if dist2(e1, e2) < 1e-5 * (1.0 + rr) {
+                    let er = e1;
+                    out.push(fact(
+                        "欧拉反射点",
+                        "E_r",
+                        pt(er[0], er[1]),
+                        None,
+                        "\\mathrm{refl}_{BC}(OH)\\cap\\mathrm{refl}_{CA}(OH)",
+                        "欧拉反射点：欧拉线关于三边的反射线交点",
+                    ).with(Shape::Point {
+                        x: er[0],
+                        y: er[1],
+                        label: "Er 欧拉反射".into(),
+                    }));
+                    if (dist2(er, circ) - rr).abs() < 1e-5 * (1.0 + rr) {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "E_r \\in (O)",
+                            "\\checkmark".into(),
+                            None,
+                            "d(O, E_r) = R",
+                            "欧拉反射点在外接圆上",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -4039,6 +4197,46 @@ mod tests {
                 || sc.value.contains("0.63"),
             "Sc={}",
             sc.value
+        );
+    }
+
+
+    #[test]
+    fn bevan_orthic_euler_reflection() {
+        // 3-4-5: Be = 2O−I = (2,−1); orthic feet; Euler reflection skipped (right).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let be = fs.iter().find(|f| f.group == "贝万点" && f.label == "Be").expect("Be");
+        assert!(
+            (be.value.contains("2") || be.value.contains("2.0"))
+                && (be.value.contains("-1")),
+            "Be={}",
+            be.value
+        );
+        assert!(fs.iter().any(|f| f.group == "贝万点" && f.label.contains("I_a")));
+        assert!(["H_a", "H_b", "H_c"].iter().all(|lab| fs.iter().any(|f| f.group == "垂足三角形" && f.label == *lab)));
+        assert!(fs.iter().any(|f| f.group == "垂足三角形" && f.label.contains("九点圆")));
+        let hc = fs.iter().find(|f| f.group == "垂足三角形" && f.label == "H_c").expect("Hc");
+        assert!(
+            hc.value.contains("3.2") || hc.value.contains("16/5") || hc.value.contains("\\frac{16}{5}"),
+            "Hc={}",
+            hc.value
+        );
+
+        // Acute 6-7-8: Euler reflection point on circumcircle.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "欧拉反射点" && f.label == "E_r"), "E_r missing on 6-7-8");
+        assert!(fs2.iter().any(|f| f.group == "欧拉反射点" && f.label.contains("(O)")));
+        let er = fs2.iter().find(|f| f.group == "欧拉反射点" && f.label == "E_r").unwrap();
+        assert!(
+            er.value.contains("1.7") || er.value.contains("4.4") || er.value.contains("\\frac"),
+            "Er={}",
+            er.value
         );
     }
 
