@@ -93,7 +93,7 @@ export const cases: [string, string, Expect][] = [
   ['线面角', 'A(0,0,0)\nB(0,0,1)\nC(1,0,0)\nz = 0', { dim: 3, facts: ['\\theta(AB, α)', 'AB \\perp α', 'AC \\parallel α', '\\text{foot}(B, α)'] }],
   ['两圆根轴', 'x^2 + y^2 = 4\n(x-3)^2 + y^2 = 4', { dim: 2, facts: ['l_{', '相交', '公共弦'] }],
   ['两球根面', 'x^2 + y^2 + z^2 = 4\n(x-3)^2 + y^2 + z^2 = 4', { dim: 3, facts: ['\\pi_', '\\rho_', '公共弦'] }],
-  ['四面体体积', 'A(0,0,0)\nB(1,0,0)\nC(0,1,0)\nD(0,0,1)', { dim: 3, facts: ['V_{\\text{四面体}}'] }],
+  ['四面体体积', 'A(0,0,0)\nB(1,0,0)\nC(0,1,0)\nD(0,0,1)', { dim: 3, facts: ['V_{\\text{四面体}}', 'V_{\\text{Cayley'] }],
   ['二面角', 'x + 0*z = 0\ny + 0*z = 0', { dim: 3, facts: ['\\text{二面角}', '\\perp'] }],
   ['直线交球面', 'A(0,0,0)\nB(4,0,0)\nx^2 + y^2 + z^2 = 4', { dim: 3, facts: ['P_{AB\\cap', '|P_1P_2|'] }],
   ['笛卡尔圆', 'A(0,0)\nB(2,0)\nC(1,1.7320508075688772)\n⊙A: r = 1\n⊙B: r = 1\n⊙C: r = 1', { dim: 2, facts: ['\\text{Descartes}'], minFacts: 2 }],
@@ -107,6 +107,8 @@ export const cases: [string, string, Expect][] = [
   ['拿破仑定理', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['\\text{Napoleon}', '|G_aG_b|'], minFacts: 3 }],
   ['欧拉OH²与卡诺', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['|OH|^2', '9R^2', 'R+r', 'H \\leftrightarrow O'], minFacts: 6 }],
   ['莫利定理', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['\\text{Morley}', '|M_0M_1|'], minFacts: 3 }],
+  ['西姆松与三线极线', '△ABC: a = 3, b = 4, c = 5', { dim: 2, facts: ['\\text{Simson}', 'l_{\\text{Simson}}', '\\tau(I)', 'OH\\text{ 九点圆直径}'], minFacts: 6 }],
+  ['凯莱门杰四面体', 'A(0,0,0)\nB(1,0,0)\nC(0,1,0)\nD(0,0,1)', { dim: 3, facts: ['V_{\\text{四面体}}', 'V_{\\text{Cayley'] }],
   ['空间螺旋线', 'r(t) = (cos(t), sin(t), t/3)', { dim: 3 }],
   ['空间三点', 'P(1,2,3), Q(0,1,-1), R(2,0,1)', { dim: 3 }],
 ]
