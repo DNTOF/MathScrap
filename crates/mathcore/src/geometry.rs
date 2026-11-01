@@ -1893,6 +1893,102 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
             }
         }
     }
+
+    // Pascal (cyclic hexagon) + Brianchon (opposite-vertex diagonals) for 6-gon in order.
+    if n == 6 {
+        let v: [[f64; 2]; 6] = std::array::from_fn(|i| pts[i].1);
+        let names: [&str; 6] = std::array::from_fn(|i| pts[i].0.as_str());
+        // Cyclic? circumcircle of first three; others on it.
+        if let Some((o, r)) = circum2(v[0], v[1], v[2]) {
+            let cyclic = (3..6).all(|i| (dist2(v[i], o) - r).abs() < 1e-6 * (1.0 + r));
+            if cyclic {
+                // Opposite sides: AB∩DE, BC∩EF, CD∩FA
+                let p01 = line_line_isect2(v[0], v[1], v[3], v[4]);
+                let p12 = line_line_isect2(v[1], v[2], v[4], v[5]);
+                let p23 = line_line_isect2(v[2], v[3], v[5], v[0]);
+                match (p01, p12, p23) {
+                    (Some(x), Some(y), Some(z)) if collinear2(x, y, z) => {
+                        out.push(fact(
+                            "帕斯卡定理",
+                            "\\text{Pascal}",
+                            "\\text{共线}".into(),
+                            None,
+                            "AB\\cap DE,\\ BC\\cap EF,\\ CD\\cap FA",
+                            "圆内接六边形：三组对边交点共线（帕斯卡线）",
+                        ).with(Shape::Segment {
+                            x1: x[0],
+                            y1: x[1],
+                            x2: y[0],
+                            y2: y[1],
+                            label: "Pascal".into(),
+                        }));
+                        out.push(fact(
+                            "帕斯卡定理",
+                            "\\text{Pascal线}",
+                            line_eq_latex(y[1] - x[1], x[0] - y[0], (y[1] - x[1]) * x[0] + (x[0] - y[0]) * x[1]),
+                            None,
+                            "",
+                            "帕斯卡线方程",
+                        ));
+                    }
+                    (None, None, None) => {
+                        out.push(fact(
+                            "帕斯卡定理",
+                            "\\text{Pascal}",
+                            "\\text{无穷远直线}".into(),
+                            None,
+                            "AB\\parallel DE,\\ BC\\parallel EF,\\ CD\\parallel FA",
+                            "对边皆平行：帕斯卡线为无穷远直线",
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Brianchon: diagonals joining opposite vertices AD, BE, CF concur.
+        if let Some(s) = line_line_isect2(v[0], v[3], v[1], v[4]) {
+            if collinear2(s, v[2], v[5]) {
+                // also check tangential side condition a+c+e = b+d+f (sufficient for circle)
+                let side = |i: usize, j: usize| dist2(v[i], v[j]);
+                let ace = side(0, 1) + side(2, 3) + side(4, 5);
+                let bdf = side(1, 2) + side(3, 4) + side(5, 0);
+                out.push(fact(
+                    "布利安雄定理",
+                    "\\text{Brianchon}",
+                    "\\text{共点}".into(),
+                    None,
+                    &format!(
+                        "{}{}\\cap{}{}\\cap{}{}",
+                        names[0], names[3], names[1], names[4], names[2], names[5]
+                    ),
+                    "六边形对顶点连线共点（布利安雄点）",
+                ).with(Shape::Point {
+                    x: s[0],
+                    y: s[1],
+                    label: "Brianchon".into(),
+                }));
+                out.push(fact(
+                    "布利安雄定理",
+                    "B",
+                    pt(s[0], s[1]),
+                    None,
+                    "AD\\cap BE\\cap CF",
+                    "布利安雄点",
+                ));
+                if (ace - bdf).abs() < 1e-6 * (1.0 + ace) {
+                    out.push(fact(
+                        "布利安雄定理",
+                        "a+c+e = b+d+f",
+                        nice(ace),
+                        Some(ace),
+                        "a+c+e = b+d+f",
+                        "对边和相等：存在内切圆（切线六边形）",
+                    ));
+                }
+            }
+        }
+    }
+
     out
 }
 
@@ -1993,6 +2089,39 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
+            }
+
+            
+            // Four face areas and altitudes from each vertex to the opposite face.
+            {
+                let verts = [pts[0].1, pts[1].1, pts[2].1, pts[3].1];
+                let labels = [&pts[0].0, &pts[1].0, &pts[2].0, &pts[3].0];
+                let faces = [[1usize, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
+                for (i, face) in faces.iter().enumerate() {
+                    let (p, q, r) = (verts[face[0]], verts[face[1]], verts[face[2]]);
+                    let nrm = cross3(sub3(q, p), sub3(r, p));
+                    let s_face = len3(nrm) / 2.0;
+                    let fname = format!("{}{}{}", labels[face[0]], labels[face[1]], labels[face[2]]);
+                    out.push(fact(
+                        "四面体面",
+                        &format!("S_{{\\triangle {}}}", fname),
+                        nice(s_face),
+                        Some(s_face),
+                        "S = \\frac12|\\vec{u}\\times\\vec{v}|",
+                        "四面体的一个面的面积",
+                    ));
+                    if s_face > 1e-12 && vol > 1e-12 {
+                        let h_i = 3.0 * vol / s_face;
+                        out.push(fact(
+                            "四面体面",
+                            &format!("h_{{{}}}", labels[i]),
+                            nice(h_i),
+                            Some(h_i),
+                            "h = \\frac{3V}{S_{\\text{对面}}}",
+                            &format!("从顶点 {} 到对面的高", labels[i]),
+                        ));
+                    }
+                }
             }
 
             // Viviani for regular tetrahedron: sum of distances from an interior point to the four faces = altitude.
@@ -2343,6 +2472,21 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
                 out.push(fact("点与直线", &format!("{} \\in {}", p.name, nm), "\\checkmark".into(), None, "", "代入方程成立"));
             } else {
                 out.push(fact("点与直线", &format!("d({}, {})", p.name, nm), nice(d), Some(d), "d = \\frac{|Ax_0 + By_0 + C|}{\\sqrt{A^2 + B^2}}", "点到直线距离").with(Shape::Segment { x1: x, y1: y, x2: foot[0], y2: foot[1], label: format!("{} 到 {}", p.name, nm) }));
+
+                let rp = [2.0 * foot[0] - x, 2.0 * foot[1] - y];
+                out.push(fact(
+                    "反射",
+                    &format!("{}^{{\\prime}}_{{{}}}", p.name, nm),
+                    pt(rp[0], rp[1]),
+                    None,
+                    "P' = 2\\,\\mathrm{foot} - P",
+                    &format!("点 {} 关于直线 {} 的反射", p.name, nm),
+                ).with(Shape::Point {
+                    x: rp[0],
+                    y: rp[1],
+                    label: format!("{}′/{}", p.name, nm),
+                }));
+
             }
         }
     }
@@ -2621,6 +2765,22 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
                     "P + \\frac{d - \\vec n\\cdot P}{|\\vec n|^2}\\vec n",
                     "点到平面的垂足",
                 ).with(Shape::Point3 { x: foot[0], y: foot[1], z: foot[2], label: format!("foot {} {}", q.name, p.name) }));
+
+                let rp = [2.0 * foot[0] - x[0], 2.0 * foot[1] - x[1], 2.0 * foot[2] - x[2]];
+                out.push(fact(
+                    "反射",
+                    &format!("{}^{{\\prime}}_{{{}}}", q.name, p.name),
+                    pt3(rp),
+                    None,
+                    "P' = 2\\,\\mathrm{foot} - P",
+                    &format!("点 {} 关于平面 {} 的反射", q.name, p.name),
+                ).with(Shape::Point3 {
+                    x: rp[0],
+                    y: rp[1],
+                    z: rp[2],
+                    label: format!("{}′/{}", q.name, p.name),
+                }));
+
             }
         }
     }
@@ -3590,5 +3750,89 @@ mod tests {
             "Desargues axis missing"
         );
     }
+
+    #[test]
+    fn pascal_cyclic_hexagon() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![5.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "C".into(), p: vec![-3.0, 4.0] },
+            NamedPoint { name: "D".into(), p: vec![-5.0, 0.0] },
+            NamedPoint { name: "E".into(), p: vec![-3.0, -4.0] },
+            NamedPoint { name: "F".into(), p: vec![4.0, -3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(
+            out.iter().any(|f| f.group == "帕斯卡定理" && f.value.contains("共线")),
+            "Pascal missing"
+        );
+        assert!(out.iter().any(|f| f.group == "帕斯卡定理" && f.label.contains("Pascal线")));
+    }
+
+    #[test]
+    fn brianchon_regular_hexagon() {
+        let s3 = 3f64.sqrt();
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![1.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![0.5, s3 / 2.0] },
+            NamedPoint { name: "C".into(), p: vec![-0.5, s3 / 2.0] },
+            NamedPoint { name: "D".into(), p: vec![-1.0, 0.0] },
+            NamedPoint { name: "E".into(), p: vec![-0.5, -s3 / 2.0] },
+            NamedPoint { name: "F".into(), p: vec![0.5, -s3 / 2.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(
+            out.iter().any(|f| f.group == "布利安雄定理" && f.value.contains("共点")),
+            "Brianchon missing"
+        );
+        assert!(out.iter().any(|f| f.group == "布利安雄定理" && f.label.contains("a+c+e")));
+        assert!(
+            out.iter().any(|f| f.group == "帕斯卡定理" && f.value.contains("无穷远")),
+            "Pascal at infinity for regular hex"
+        );
+    }
+
+    #[test]
+    fn tetra_face_areas_and_altitudes() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 0.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let faces = out.iter().filter(|f| f.group == "四面体面" && f.label.starts_with("S_")).count();
+        assert_eq!(faces, 4, "four face areas");
+        let hs = out.iter().filter(|f| f.group == "四面体面" && f.label.starts_with("h_")).count();
+        assert_eq!(hs, 4, "four altitudes");
+        let sabc = out.iter().find(|f| f.label.contains("ABC") && f.label.starts_with("S_")).unwrap();
+        assert!((sabc.num.unwrap() - 0.5).abs() < 1e-9);
+        let hd = out.iter().find(|f| f.label == "h_{D}").unwrap();
+        assert!((hd.num.unwrap() - 1.0).abs() < 1e-9); // V=1/6, S_ABC=1/2 → h=1
+    }
+
+    #[test]
+    fn reflect_point_over_line_and_plane() {
+        let ls = vec![NamedLine { name: "l".into(), a: 0.0, b: 1.0, c: 0.0 }]; // y=0
+        let pts = vec![NamedPoint { name: "P".into(), p: vec![1.0, 2.0] }];
+        let out = lines_analyze(&ls, &pts);
+        let rp = out.iter().find(|f| f.group == "反射").expect("line reflection");
+        assert!(rp.value.contains("1") && rp.value.contains("-2") || rp.value.contains("1,\\ -2") || rp.value.contains("(1"), "got {}", rp.value);
+        if let Some(Shape::Point { x, y, .. }) = rp.shape.as_ref() {
+            assert!((*x - 1.0).abs() < 1e-9 && (*y + 2.0).abs() < 1e-9);
+        } else {
+            panic!("expected point shape");
+        }
+        let planes = vec![NamedPlane { name: "α".into(), n: [0.0, 0.0, 1.0], d: 0.0 }]; // z=0
+        let q = vec![NamedPoint { name: "Q".into(), p: vec![1.0, 2.0, 3.0] }];
+        let out3 = planes_analyze(&planes, &q);
+        let rq = out3.iter().find(|f| f.group == "反射").expect("plane reflection");
+        if let Some(Shape::Point3 { x, y, z, .. }) = rq.shape.as_ref() {
+            assert!((*x - 1.0).abs() < 1e-9 && (*y - 2.0).abs() < 1e-9 && (*z + 3.0).abs() < 1e-9);
+        } else {
+            panic!("expected Point3");
+        }
+    }
+
 
 }
