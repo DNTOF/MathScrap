@@ -195,11 +195,22 @@ function asNotation(src: string): Statement | null {
   return { kind: 'notation', latex, src: src.trim() }
 }
 
+/**
+ * A lone σ is the letter, not the graph of y = σ. `y = sigma` stays a curve.
+ * Other bare names (including `pi`) keep the expression reader.
+ */
+function asGreekSymbol(src: string): Statement | null {
+  if (src.trim() !== 'sigma') return null
+  return { kind: 'notation', latex: '\\sigma', src: 'sigma' }
+}
+
 function classifyPart(part: string): Statement[] {
   const src = part.trim()
   if (!src) return []
   const notation = asNotation(src)
   if (notation) return [notation]
+  const greek = asGreekSymbol(src)
+  if (greek) return [greek]
 
   // 过(1,3) / through (1,3) and (2,5) / 过点A
   const through = src.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.*)$/i)
@@ -592,7 +603,9 @@ export function kindLabel(s: Statement): string {
     case 'constraint':
       return '条件'
     case 'notation':
-      return s.latex.includes('\\int') && !s.latex.includes('\\sum') ? '积分' : '求和'
+      if (s.latex.includes('\\sum')) return '求和'
+      if (s.latex.includes('\\int')) return '积分'
+      return '符号'
     case 'error':
       return '待修正'
   }
