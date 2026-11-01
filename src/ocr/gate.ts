@@ -1,4 +1,4 @@
-import { findOverArrow } from './comer/bind.ts'
+import { findOverArrow, looksLikeSumBars } from './comer/bind.ts'
 import type { InkStroke, StrokePoint } from './comer/preprocess.ts'
 
 /**
@@ -20,7 +20,7 @@ export function mathCues(strokes: InkStroke[]): string[] {
   if (hasFractionBar(strokes)) cues.push('fraction')
   if (hasSuperscript(strokes)) cues.push('superscript')
   if (hasParen(strokes)) cues.push('paren')
-  if (hasSumLike(strokes)) cues.push('sum')
+  if (hasSumLike(strokes) || looksLikeSumBars(strokes)) cues.push('sum')
   if (looksLikeIsolatedSigma(strokes)) cues.push('sigma')
   return cues
 }

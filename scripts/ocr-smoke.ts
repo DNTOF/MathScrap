@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import type { Stroke } from '../src/board/types.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
 import { bindInk, findOverArrow } from '../src/ocr/comer/bind.ts'
-import { classifyInk, looksLikeIsolatedSigma } from '../src/ocr/gate.ts'
+import { classifyInk, looksLikeIsolatedSigma, mathCues } from '../src/ocr/gate.ts'
 import { agreeConfidence, recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
 import { isInkMeaningful, preprocessStrokes, resamplePoints, type InkStroke } from '../src/ocr/comer/preprocess.ts'
@@ -444,6 +444,13 @@ const boundVec = bindInk(arrowed, 'a')
 assert.match(boundVec, /^\\vec\{a\} = \([0-9.\-]+, [0-9.\-]+\)$/)
 assert.equal(bindInk(arrowed, 'a = (1, 2, 2)'), boundVec)
 assert.doesNotMatch(boundVec, /1,\s*2,\s*2/)
+assert.equal(findOverArrow(sumBar()), null, 'Σ bars are not an over-arrow')
+assert.equal(bindInk(sumBar(), 'a'), '')
+assert.equal(bindInk(sumBar(), '\\vec{a}'), '')
+assert.equal(bindInk(sumBar(), '\\sum'), '\\sum')
+assert.equal(bindInk(sumBar(), '\\sum_{i = 1}^{n} i'), '\\sum_{i = 1}^{n} i')
+assert.equal(agreeConfidence(sumBar(), '\\vec{a} = (1, 0)', 0.48), 0.48)
+assert.equal(agreeConfidence(sumBar(), '\\sum', 0.45), 0.78)
 assert.equal(bindInk(arrowed, '\\sum'), '\\sum')
 assert.equal(bindInk(arrowed, '\\sum_{i = 1}^{n} i'), '\\sum_{i = 1}^{n} i')
 assert.equal(bindInk(arrowed, 'y = 2'), 'y = 2')
@@ -567,5 +574,8 @@ assert.equal(classifyInk(closedZero()), 'formula')
 assert.equal(classifyInk(sumLikeSigma()), 'formula', 'Σ with limits is a formula')
 assert.equal(classifyInk(sumGlyph()), 'formula')
 assert.equal(classifyInk(sumBar()), 'formula')
+assert.ok(mathCues(sumBar()).includes('sum'), 'barred Σ is a sum, not only an arrow')
+assert.ok(!mathCues(sumBar()).includes('arrow'))
+assert.ok(mathCues(arrowLetter()).includes('arrow'))
 assert.equal(classifyInk(inkFixtures(3).find((s) => s.name === 'frac')!.strokes), 'formula')
 console.log('ocr gate ok', { prose: classifyInk(proseNote()), formula: classifyInk(y2strokes) })
