@@ -4056,6 +4056,38 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(52): orthocenter of the orthic triangle; bary a cos 2A cos(B−C).
+    // Skip right/near-right (orthic degenerates when cos A≈0). Equals G on equilateral.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-9 && cb.abs() > 1e-9 && cc.abs() > 1e-9 {
+            let wa = a * (2.0 * g[0]).cos() * (g[1] - g[2]).cos();
+            let wb = b * (2.0 * g[1]).cos() * (g[2] - g[0]).cos();
+            let wc = c * (2.0 * g[2]).cos() * (g[0] - g[1]).cos();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x52 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足垂心",
+                    "X_{52}",
+                    pt(x52[0], x52[1]),
+                    None,
+                    "X(52) = \\bigl(a\\cos 2A\\cos(B-C):\\cdots\\bigr)",
+                    "X(52)：垂足三角形的垂心（锐角）",
+                ).with(Shape::Point {
+                    x: x52[0],
+                    y: x52[1],
+                    label: "X52".into(),
+                }));
+            }
+        }
+    }
+
     // X(26): circumcenter of the tangential triangle; on Euler line.
     // Bary a²(b² cos 2B + c² cos 2C − a² cos 2A). Isogonal of X(70).
     // Right △: Σweights = 0 → point at infinity on Euler — skip.
@@ -4804,6 +4836,56 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // X(96): isogonal conjugate of X(52); bary a sec 2A sec(B−C).
+    // Skip when cos 2A≈0 (A=45°) or cos(B−C)≈0. Equals G on equilateral when finite.
+    {
+        let c2a = (2.0 * g[0]).cos();
+        let c2b = (2.0 * g[1]).cos();
+        let c2c = (2.0 * g[2]).cos();
+        let cab = (g[1] - g[2]).cos();
+        let cbc = (g[2] - g[0]).cos();
+        let cca = (g[0] - g[1]).cos();
+        if c2a.abs() > 1e-9
+            && c2b.abs() > 1e-9
+            && c2c.abs() > 1e-9
+            && cab.abs() > 1e-9
+            && cbc.abs() > 1e-9
+            && cca.abs() > 1e-9
+        {
+            let wa = a / (c2a * cab);
+            let wb = b / (c2b * cbc);
+            let wc = c / (c2c * cca);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x96 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足垂心等角",
+                    "X_{96}",
+                    pt(x96[0], x96[1]),
+                    None,
+                    "X(96) = \\bigl(a\\sec 2A\\sec(B-C):\\cdots\\bigr)",
+                    "X(96)：垂足垂心 X(52) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x96[0],
+                    y: x96[1],
+                    label: "X96".into(),
+                }));
+                out.push(fact(
+                    "垂足垂心等角",
+                    "X_{96} \\leftrightarrow X_{52}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(52)",
+                    "X(96) 与垂足垂心 X(52) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
     // X(67): isogonal conjugate of Far-out X(23); bary 1/(b⁴+c⁴−a⁴−b²c²).
     // Skip when any denom vanishes or Σweights≈0 (equilateral → same as G via limit).
     {
@@ -5084,6 +5166,167 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     None,
                     "\\text{isogonal of }X(41)",
                     "X(85) 与 X(41) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+
+    // X(87): isogonal of X(43); bary a/(ab+ac−bc). Always finite when denom≠0.
+    {
+        let da = a * b + a * c - b * c;
+        let db = b * c + b * a - c * a;
+        let dc = c * a + c * b - a * b;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x87 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "勒莫恩Ceva等角",
+                    "X_{87}",
+                    pt(x87[0], x87[1]),
+                    None,
+                    "X(87) = \\bigl(a/(ab+ac-bc):\\cdots\\bigr)",
+                    "X(87)：X(43) 的等角共轭（X(2) 对 X(1) 的截线共轭）",
+                ).with(Shape::Point {
+                    x: x87[0],
+                    y: x87[1],
+                    label: "X87".into(),
+                }));
+                out.push(fact(
+                    "勒莫恩Ceva等角",
+                    "X_{87} \\leftrightarrow X_{43}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(43)",
+                    "X(87) 与 X(43) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(88): isogonal of X(44); bary a/(b+c−2a). Skip equilateral / when any denom≈0.
+    {
+        let da = b + c - 2.0 * a;
+        let db = c + a - 2.0 * b;
+        let dc = a + b - 2.0 * c;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x88 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "勒莫恩线等角",
+                    "X_{88}",
+                    pt(x88[0], x88[1]),
+                    None,
+                    "X(88) = \\bigl(a/(b+c-2a):\\cdots\\bigr)",
+                    "X(88)：X(44) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x88[0],
+                    y: x88[1],
+                    label: "X88".into(),
+                }));
+                out.push(fact(
+                    "勒莫恩线等角",
+                    "X_{88} \\leftrightarrow X_{44}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(44)",
+                    "X(88) 与 X(44) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(89): isogonal of X(45); bary a/(2b+2c−a). Always finite for proper △.
+    {
+        let da = 2.0 * b + 2.0 * c - a;
+        let db = 2.0 * c + 2.0 * a - b;
+        let dc = 2.0 * a + 2.0 * b - c;
+        if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x89 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "米滕beth等角",
+                    "X_{89}",
+                    pt(x89[0], x89[1]),
+                    None,
+                    "X(89) = \\bigl(a/(2b+2c-a):\\cdots\\bigr)",
+                    "X(89)：X(45) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x89[0],
+                    y: x89[1],
+                    label: "X89".into(),
+                }));
+                out.push(fact(
+                    "米滕beth等角",
+                    "X_{89} \\leftrightarrow X_{45}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(45)",
+                    "X(89) 与 X(45) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(90): isogonal of X(46); bary a/(cos B+cos C−cos A). X(3)-cross conjugate of I.
+    // Skip when any denom≈0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc - ca;
+        let db = cc + ca - cb;
+        let dc = ca + cb - cc;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x90 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂心Ceva等角",
+                    "X_{90}",
+                    pt(x90[0], x90[1]),
+                    None,
+                    "X(90) = \\bigl(a/(\\cos B+\\cos C-\\cos A):\\cdots\\bigr)",
+                    "X(90)：X(46) 的等角共轭（外心对内心的截线共轭）",
+                ).with(Shape::Point {
+                    x: x90[0],
+                    y: x90[1],
+                    label: "X90".into(),
+                }));
+                out.push(fact(
+                    "垂心Ceva等角",
+                    "X_{90} \\leftrightarrow X_{46}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(46)",
+                    "X(90) 与 X(46) 互为等角共轭",
                 ));
             }
         }
@@ -9096,6 +9339,63 @@ mod tests {
         assert!(fs3.iter().all(|f| f.group != "垂心beth自共轭"), "X34 skip right");
         assert!(fs3.iter().all(|f| f.group != "埃克塞特等角"), "X66 skip right (infinity)");
         assert!(fs3.iter().any(|f| f.group == "克劳森X25等角" && f.label == "X_{72}"));
+    }
+
+    #[test]
+    fn x52_x96_x87_x88_x89_x90() {
+        // Scalene acute 6-7-9: all six present (6-7-8 has b+c-2a style denom 0 for X88).
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x52 = fs.iter().find(|f| f.group == "垂足垂心" && f.label == "X_{52}").expect("X52");
+        let x96 = fs.iter().find(|f| f.group == "垂足垂心等角" && f.label == "X_{96}").expect("X96");
+        assert_ne!(x52.value, x96.value);
+        assert!(fs.iter().any(|f| f.group == "垂足垂心等角" && f.label.contains("52") && f.value.contains("等角")));
+        let x87 = fs.iter().find(|f| f.group == "勒莫恩Ceva等角" && f.label == "X_{87}").expect("X87");
+        let x43 = fs.iter().find(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}").expect("X43");
+        assert_ne!(x87.value, x43.value);
+        let x88 = fs.iter().find(|f| f.group == "勒莫恩线等角" && f.label == "X_{88}").expect("X88");
+        let x44 = fs.iter().find(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}").expect("X44");
+        assert_ne!(x88.value, x44.value);
+        let x89 = fs.iter().find(|f| f.group == "米滕beth等角" && f.label == "X_{89}").expect("X89");
+        let x45 = fs.iter().find(|f| f.group == "米滕beth" && f.label == "X_{45}").expect("X45");
+        assert_ne!(x89.value, x45.value);
+        let x90 = fs.iter().find(|f| f.group == "垂心Ceva等角" && f.label == "X_{90}").expect("X90");
+        let x46 = fs.iter().find(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}").expect("X46");
+        assert_ne!(x90.value, x46.value);
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x52.value, g.value);
+        assert_ne!(x96.value, g.value);
+        assert_ne!(x87.value, g.value);
+        assert_ne!(x88.value, g.value);
+        assert_ne!(x89.value, g.value);
+        assert_ne!(x90.value, g.value);
+
+        // Equilateral: X52/X96/X87/X89/X90 = G; X88 skipped (denom 0, same as X44).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{52}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{96}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{87}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{89}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{90}").unwrap().value, g2.value);
+        assert!(fs2.iter().all(|f| f.group != "勒莫恩线等角"), "X88 skip equilateral");
+
+        // Right 5-12-13: X52 skipped; X87/X88/X89/X90/X96 present (3-4-5 kills X88 denom).
+        let k3 = TriangleKnown { a: Some(5.0), b: Some(12.0), c: Some(13.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "垂足垂心"), "X52 skip right");
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩Ceva等角" && f.label == "X_{87}"));
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩线等角" && f.label == "X_{88}"));
+        assert!(fs3.iter().any(|f| f.group == "米滕beth等角" && f.label == "X_{89}"));
+        assert!(fs3.iter().any(|f| f.group == "垂心Ceva等角" && f.label == "X_{90}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足垂心等角" && f.label == "X_{96}"));
     }
 
     #[test]
