@@ -1064,6 +1064,59 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[u]), nice(lu * lu / hyp), Some(lu * lu / hyp), &format!("\\frac{{{u}^2}}{{{c}}}", u = SIDE[u], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[w][0], y1: v[w][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[u]) }));
         out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[w]), nice(lw * lw / hyp), Some(lw * lw / hyp), &format!("\\frac{{{w}^2}}{{{c}}}", w = SIDE[w], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[u][0], y1: v[u][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[w]) }));
     }
+    // Napoleon: outward equilateral on each side → centroids form an equilateral triangle.
+    {
+        // Orient: positive cross (pa→pb)×(pa→pc) means CCW; outward on edge B→C is clockwise (−60°).
+        let orient = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pb[1] - pa[1]) * (pc[0] - pa[0]);
+        let sign = if orient >= 0.0 { -1.0 } else { 1.0 }; // outward
+        let cos60 = 0.5;
+        let sin60 = sign * (3.0f64).sqrt() / 2.0;
+        let rot = |u: [f64; 2]| -> [f64; 2] {
+            [u[0] * cos60 - u[1] * sin60, u[0] * sin60 + u[1] * cos60]
+        };
+        let mut cents = [[0.0; 2]; 3];
+        for i in 0..3 {
+            let b = v[(i + 1) % 3];
+            let c = v[(i + 2) % 3];
+            let w = rot([c[0] - b[0], c[1] - b[1]]);
+            let dpt = [b[0] + w[0], b[1] + w[1]];
+            cents[i] = [(b[0] + c[0] + dpt[0]) / 3.0, (b[1] + c[1] + dpt[1]) / 3.0];
+        }
+        let e01 = dist2(cents[0], cents[1]);
+        let e12 = dist2(cents[1], cents[2]);
+        let e20 = dist2(cents[2], cents[0]);
+        if e01 > 1e-12 && near(e01, e12) && near(e12, e20) {
+            out.push(fact(
+                "拿破仑定理",
+                "\\text{Napoleon}",
+                "\\text{等边}".into(),
+                None,
+                "G_aG_bG_c\\text{ 等边}",
+                "各边向外作等边三角形，其重心连成等边三角形",
+            ));
+            out.push(fact(
+                "拿破仑定理",
+                "|G_aG_b|",
+                nice(e01),
+                Some(e01),
+                "",
+                "拿破仑三角形边长",
+            ).with(Shape::Segment {
+                x1: cents[0][0], y1: cents[0][1], x2: cents[1][0], y2: cents[1][1],
+                label: "Napoleon".into(),
+            }));
+            for (i, gcent) in cents.iter().enumerate() {
+                out.push(fact(
+                    "拿破仑定理",
+                    &format!("G_{{{}}}", SIDE[i]),
+                    pt(gcent[0], gcent[1]),
+                    None,
+                    "",
+                    "外侧等边三角形的重心",
+                ).with(Shape::Point { x: gcent[0], y: gcent[1], label: format!("G{}", SIDE[i]) }));
+            }
+        }
+    }
     out
 }
 
@@ -1366,6 +1419,53 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
                     Some(rhs),
                     "PA^2 + PC^2 = PB^2 + PD^2",
                     "英国国旗定理",
+                ));
+            }
+        }
+
+        // Cyclic quad: opposite angles sum to π → Ptolemy + Brahmagupta.
+        {
+            let cyclic = convex
+                && near(angles[0] + angles[2], PI)
+                && near(angles[1] + angles[3], PI);
+            if cyclic {
+                out.push(fact(
+                    "圆内接四边形",
+                    "\\text{共圆}",
+                    "\\checkmark".into(),
+                    None,
+                    "\\angle A + \\angle C = \\angle B + \\angle D = 180^\\circ",
+                    "对角互补 ⇒ 四点共圆",
+                ));
+                let (ab, bc, cd, da) = (sides[0], sides[1], sides[2], sides[3]);
+                let (ac, bd) = (d1, d2);
+                let lhs = ac * bd;
+                let rhs = ab * cd + da * bc;
+                out.push(fact(
+                    "托勒密定理",
+                    "AC \\cdot BD",
+                    nice(lhs),
+                    Some(lhs),
+                    "AC\\cdot BD = AB\\cdot CD + AD\\cdot BC",
+                    "圆内接四边形的托勒密定理",
+                ));
+                out.push(fact(
+                    "托勒密定理",
+                    "AB\\cdot CD + AD\\cdot BC",
+                    nice(rhs),
+                    Some(rhs),
+                    "AC\\cdot BD = AB\\cdot CD + AD\\cdot BC",
+                    "托勒密：对角线积 = 对边积之和",
+                ));
+                let ssemi = (ab + bc + cd + da) / 2.0;
+                let brahm = ((ssemi - ab) * (ssemi - bc) * (ssemi - cd) * (ssemi - da)).max(0.0).sqrt();
+                out.push(fact(
+                    "婆罗摩笈多公式",
+                    "S_{\\text{Brahmagupta}}",
+                    nice(brahm),
+                    Some(brahm),
+                    "S = \\sqrt{(s-a)(s-b)(s-c)(s-d)}",
+                    "圆内接四边形面积（婆罗摩笈多）",
                 ));
             }
         }
@@ -2738,5 +2838,38 @@ mod tests {
         assert!((sum.num.unwrap() - h_reg).abs() < 1e-9, "sum={} expect {}", sum.value, h_reg);
         let _ = edge;
     }
+
+
+    #[test]
+    fn ptolemy_and_brahmagupta_rectangle() {
+        // 3-4-5 rectangle: sides 4,3,4,3; diagonals 5,5; area 12
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.group == "圆内接四边形"));
+        let acbd = out.iter().find(|f| f.group == "托勒密定理" && f.label.contains("AC")).unwrap();
+        assert!((acbd.num.unwrap() - 25.0).abs() < 1e-9, "AC·BD = {}", acbd.value);
+        let rhs = out.iter().find(|f| f.group == "托勒密定理" && f.label.contains("AB")).unwrap();
+        assert!((rhs.num.unwrap() - 25.0).abs() < 1e-9);
+        let s = out.iter().find(|f| f.group == "婆罗摩笈多公式").unwrap();
+        assert!((s.num.unwrap() - 12.0).abs() < 1e-9, "Brahmagupta = {}", s.value);
+    }
+
+    #[test]
+    fn napoleon_equilateral_centroids() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.group == "拿破仑定理" && f.value.contains("等边")));
+        let side = fs.iter().find(|f| f.label == "|G_aG_b|").unwrap();
+        assert!(side.num.unwrap() > 0.0);
+        assert_eq!(fs.iter().filter(|f| f.group == "拿破仑定理" && f.label.starts_with("G_")).count(), 3);
+    }
+
 
 }

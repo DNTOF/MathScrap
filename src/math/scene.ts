@@ -820,13 +820,39 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
         })
         const rho2 = A.r * A.r - signed * signed
         if (rho2 > 1e-9) {
+          const rho = Math.sqrt(rho2)
           facts.push({
             group: '根面',
             label: `\\rho_{${A.name}\\cap ${B.name}}`,
-            value: engine.nice(Math.sqrt(rho2)),
-            num: Math.sqrt(rho2),
+            value: engine.nice(rho),
+            num: rho,
             how: '\\rho = \\sqrt{r_1^2 - d_1^2}',
             why: '两球交圆落在根面上',
+            shape: null,
+          })
+          // Common chord in a plane through the line of centres = diameter of the intersection circle.
+          const chord = 2 * rho
+          facts.push({
+            group: '根面',
+            label: `|\\text{公共弦}_{${A.name}${B.name}}|`,
+            value: engine.nice(chord),
+            num: chord,
+            how: '2\\rho = 2\\sqrt{r_1^2 - d_1^2}',
+            why: '过两球心的平面截交圆得公共弦（交圆直径）',
+            shape: null,
+          })
+          // Centre of the intersection circle on the radical plane, along O1O2.
+          const tParam = -signed / ln
+          const cx = A.c[0] + tParam * n[0]
+          const cy = A.c[1] + tParam * n[1]
+          const cz = A.c[2] + tParam * n[2]
+          facts.push({
+            group: '根面',
+            label: `C_{${A.name}\\cap ${B.name}}`,
+            value: `\\left(${engine.nice(cx)},\\ ${engine.nice(cy)},\\ ${engine.nice(cz)}\\right)`,
+            num: null,
+            how: 'O_1 + \\dfrac{-\\mathrm{signed}}{|O_1O_2|}\\vec{O_1O_2}',
+            why: '交圆圆心：根面与球心连线的交点',
             shape: null,
           })
         } else if (Math.abs(rho2) <= 1e-9) {
