@@ -854,6 +854,43 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     "九点圆与内切圆相切",
                 ));
             }
+            // Feuerbach point X(11): internal contact of nine-point circle and incircle.
+            // T = ((R/2) I - r N) / (R/2 - r) along NI (order N–I–Fe).
+            // Skip when N=I (equilateral: nine-point coincides with incircle).
+            {
+                let den_f = r9 - r;
+                let ni_len = dist2(n9, inc);
+                if den_f.abs() > 1e-9 && ni_len > 1e-9 {
+                    let fe = [
+                        (r9 * inc[0] - r * n9[0]) / den_f,
+                        (r9 * inc[1] - r * n9[1]) / den_f,
+                    ];
+                    let d_n = dist2(n9, fe);
+                    let d_i = dist2(inc, fe);
+                    if (d_n - r9).abs() < 1e-4 * (1.0 + r9) && (d_i - r).abs() < 1e-4 * (1.0 + r) {
+                        out.push(fact(
+                            "费尔巴哈点",
+                            "Fe",
+                            pt(fe[0], fe[1]),
+                            None,
+                            "Fe = \\dfrac{(R/2)I - r\\,N}{R/2 - r}",
+                            "费尔巴哈点 X(11)：九点圆与内切圆的内切点",
+                        ).with(Shape::Point {
+                            x: fe[0],
+                            y: fe[1],
+                            label: "Fe 费尔巴哈".into(),
+                        }));
+                        out.push(fact(
+                            "费尔巴哈点",
+                            "|N\\,Fe|",
+                            nice(d_n),
+                            Some(d_n),
+                            "|N\\,Fe| = R/2",
+                            "费尔巴哈点在九点圆上",
+                        ));
+                    }
+                }
+            }
             for i in 0..3 {
                 let ri = area / (p - s[i]);
                 // excenter I_i opposite vertex i: (-a_i V_i + a_j V_j + a_k V_k) / (-a_i + a_j + a_k)
@@ -2151,6 +2188,181 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     y: ap[1],
                     label: "Ap 阿氏".into(),
                 }));
+            }
+        }
+    }
+
+
+    // Fermat–Torricelli / isogonic centers X(13), X(14) — distinct from isodynamic X(15)/X(16).
+    // Trilinear csc(A±π/3); bary a csc(A±π/3). If some angle ≥ 120°, X(13) is that vertex.
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let two_pi3 = 2.0 * pi3;
+        let mut obtuse120: Option<usize> = None;
+        for (i, &ang) in g.iter().enumerate() {
+            if ang >= two_pi3 - 1e-9 {
+                obtuse120 = Some(i);
+                break;
+            }
+        }
+        if let Some(i) = obtuse120 {
+            let fv = v[i];
+            out.push(fact(
+                "费马点",
+                "F_1",
+                pt(fv[0], fv[1]),
+                None,
+                "F_1 = \\text{obtuse vertex (}\\ge 120^\\circ\\text{)}",
+                "第一费马–托里拆利点 X(13)：钝角 ≥120° 时退化为该顶点",
+            ).with(Shape::Point {
+                x: fv[0],
+                y: fv[1],
+                label: "F1 费马".into(),
+            }));
+        } else {
+            let s13 = [(g[0] + pi3).sin(), (g[1] + pi3).sin(), (g[2] + pi3).sin()];
+            if s13.iter().all(|&s| s.abs() > 1e-9) {
+                let wa = a / s13[0];
+                let wb = b / s13[1];
+                let wc = c / s13[2];
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let f1 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "费马点",
+                        "F_1",
+                        pt(f1[0], f1[1]),
+                        None,
+                        "F_1 = \\frac{a\\csc(A+\\pi/3)A+\\cdots}{\\sum}",
+                        "第一费马–托里拆利 / 等角线中心 X(13)（异于等动力点 X(15)）",
+                    ).with(Shape::Point {
+                        x: f1[0],
+                        y: f1[1],
+                        label: "F1 费马".into(),
+                    }));
+                }
+            }
+        }
+        // X(14) 2nd isogonic: skip equilateral (sin(A−π/3)=0).
+        let s14 = [(g[0] - pi3).sin(), (g[1] - pi3).sin(), (g[2] - pi3).sin()];
+        // Guard: any near-zero sin → skip (equilateral / 60° singularity in csc form)
+        if s14.iter().all(|&s| s.abs() > 1e-9) {
+            let wa = a / s14[0];
+            let wb = b / s14[1];
+            let wc = c / s14[2];
+            {
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let f2 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "费马点",
+                        "F_2",
+                        pt(f2[0], f2[1]),
+                        None,
+                        "F_2 = \\frac{a\\csc(A-\\pi/3)A+\\cdots}{\\sum}",
+                        "第二等角线中心 X(14)（异于等动力点 X(16)）",
+                    ).with(Shape::Point {
+                        x: f2[0],
+                        y: f2[1],
+                        label: "F2 费马".into(),
+                    }));
+                }
+            }
+        }
+        // Helper: isogonic ≠ isodynamic (X13 isogonal conjugate of X15).
+        if out.iter().any(|f| f.group == "费马点" && f.label == "F_1")
+            && out.iter().any(|f| f.group == "等动力点" && f.label.contains("S_{1}"))
+        {
+            let f1v = out.iter().find(|f| f.group == "费马点" && f.label == "F_1").map(|f| f.value.clone());
+            let s1v = out.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).map(|f| f.value.clone());
+            if let (Some(a), Some(b)) = (f1v, s1v) {
+                if a != b {
+                    out.push(fact(
+                        "费马点",
+                        "F_1 \\ne S_1",
+                        "\\text{isogonic} \\ne \\text{isodynamic}".into(),
+                        None,
+                        "X(13)=\\text{isogonal of }X(15)",
+                        "等角线中心与等动力点不同（互为等角共轭）",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Equal detour X(176) / isoperimetric X(175) (inner/outer Soddy centers).
+    // X(176): bary sin A · (1 + sec(A/2) cos(B/2) cos(C/2)); always for non-degen △.
+    // X(175): same with −1; emit only when a+b+c > 4R+r.
+    {
+        let ha = g[0] / 2.0;
+        let hb = g[1] / 2.0;
+        let hc = g[2] / 2.0;
+        let cos_ha = ha.cos();
+        let cos_hb = hb.cos();
+        let cos_hc = hc.cos();
+        if cos_ha.abs() > 1e-12 && cos_hb.abs() > 1e-12 && cos_hc.abs() > 1e-12 {
+            let t176 = [
+                1.0 + cos_hb * cos_hc / cos_ha,
+                1.0 + cos_hc * cos_ha / cos_hb,
+                1.0 + cos_ha * cos_hb / cos_hc,
+            ];
+            let wa = a * t176[0];
+            let wb = b * t176[1];
+            let wc = c * t176[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let ed = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "等迂回点",
+                    "Ed",
+                    pt(ed[0], ed[1]),
+                    None,
+                    "Ed = (\\sin A\\,(1+\\sec\\tfrac{A}{2}\\cos\\tfrac{B}{2}\\cos\\tfrac{C}{2}):\\cdots)",
+                    "等迂回点 X(176)：内苏迪圆圆心",
+                ).with(Shape::Point {
+                    x: ed[0],
+                    y: ed[1],
+                    label: "Ed 等迂回".into(),
+                }));
+            }
+            // Isoperimetric / outer Soddy X(175)
+            if per > 4.0 * rr + r + 1e-9 {
+                let t175 = [
+                    -1.0 + cos_hb * cos_hc / cos_ha,
+                    -1.0 + cos_hc * cos_ha / cos_hb,
+                    -1.0 + cos_ha * cos_hb / cos_hc,
+                ];
+                let wa = a * t175[0];
+                let wb = b * t175[1];
+                let wc = c * t175[2];
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let ip = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "等周点",
+                        "Ip",
+                        pt(ip[0], ip[1]),
+                        None,
+                        "Ip = (\\sin A\\,(-1+\\sec\\tfrac{A}{2}\\cos\\tfrac{B}{2}\\cos\\tfrac{C}{2}):\\cdots)",
+                        "等周点 X(175)：外苏迪圆圆心（需 a+b+c>4R+r）",
+                    ).with(Shape::Point {
+                        x: ip[0],
+                        y: ip[1],
+                        label: "Ip 等周".into(),
+                    }));
+                }
             }
         }
     }
@@ -5256,6 +5468,53 @@ mod tests {
         assert_eq!(kme.value, g2.value);
         let ape = fs2.iter().find(|f| f.group == "阿波罗尼奥斯点" && f.label == "Ap").unwrap();
         assert_eq!(ape.value, g2.value);
+    }
+
+    #[test]
+    fn fermat_feuerbach_point_detour() {
+        // 3-4-5: F1,F2 distinct from S1,S2; Fe on nine-point & incircle; Ed + Ip (12>4*2.5+1).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let f1 = fs.iter().find(|f| f.group == "费马点" && f.label == "F_1").expect("F1");
+        let f2 = fs.iter().find(|f| f.group == "费马点" && f.label == "F_2").expect("F2");
+        assert_ne!(f1.value, f2.value);
+        let s1 = fs.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1");
+        assert_ne!(f1.value, s1.value, "isogonic ≠ isodynamic");
+        assert!(fs.iter().any(|f| f.group == "费马点" && f.label.contains("S_1")));
+        let fe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").expect("Fe");
+        let nfe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label.contains("N")).expect("|N Fe|");
+        let r9 = fs.iter().find(|f| f.group == "欧拉线" && f.label.contains("九点")).expect("R9");
+        assert!((nfe.num.unwrap() - r9.num.unwrap()).abs() < 1e-6);
+        let ed = fs.iter().find(|f| f.group == "等迂回点" && f.label == "Ed").expect("Ed");
+        let ip = fs.iter().find(|f| f.group == "等周点" && f.label == "Ip").expect("Ip");
+        assert_ne!(ed.value, ip.value);
+        assert_ne!(fe.value, ed.value);
+
+        // Equilateral: F1=G; F2 skipped; Fe, Ed, Ip (=G for eq?).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let f1e = fs2.iter().find(|f| f.group == "费马点" && f.label == "F_1").unwrap();
+        assert_eq!(f1e.value, g.value);
+        assert!(fs2.iter().all(|f| !(f.group == "费马点" && f.label == "F_2")), "F2 skip equilateral");
+        assert!(fs2.iter().all(|f| f.group != "费尔巴哈点"), "Fe skip equilateral coincident circles");
+        assert!(fs2.iter().any(|f| f.group == "等迂回点" && f.label == "Ed"));
+
+        // Obtuse with angle > 120°: F1 at obtuse vertex. Sides 2,3,4: cos C=(4+9-16)/12 < 0, C>90; check C>120?
+        // 2²+3²=13 < 16, obtuse at C. cos C = (4+9-16)/12 = -3/12 = -0.25, C ≈ 104.5° < 120.
+        // Need stronger obtuse: sides 1,1,1.9 — almost flat apex.
+        let k3 = TriangleKnown { a: Some(1.0), b: Some(1.0), c: Some(1.9), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        // angle opposite c=1.9: cos C = (1+1-3.61)/2 = -1.61/2 = -0.805, C≈143.6° > 120
+        let f1o = fs3.iter().find(|f| f.group == "费马点" && f.label == "F_1").expect("F1 obtuse");
+        // F1 should be at C = verts[2]
+        assert!(f1o.why.contains("120") || f1o.how.contains("obtuse") || f1o.how.contains("120"), "why={}", f1o.why);
     }
 
     #[test]
