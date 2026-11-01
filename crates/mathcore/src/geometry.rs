@@ -3453,6 +3453,113 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(61), X(62): isogonal conjugates of the Napoleon centers X(17), X(18).
+    // Trilinear cos(A∓π/3); bary a cos(A∓π/3). sec(A−π/3) = csc(A+π/6), so
+    // these are the reciprocals of the Napoleon trilinears.
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let c61 = [(g[0] - pi3).cos(), (g[1] - pi3).cos(), (g[2] - pi3).cos()];
+        let wa = a * c61[0];
+        let wb = b * c61[1];
+        let wc = c * c61[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x61 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{61}",
+                pt(x61[0], x61[1]),
+                None,
+                "X(61) = \\bigl(a\\cos(A-\\pi/3):\\cdots\\bigr)",
+                "X(61)：第一拿破仑点的等角共轭",
+            ).with(Shape::Point {
+                x: x61[0],
+                y: x61[1],
+                label: "X61".into(),
+            }));
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{61} \\leftrightarrow N_1",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(17)",
+                "X(61) 与第一拿破仑点 X(17) 互为等角共轭",
+            ));
+        }
+        let c62 = [(g[0] + pi3).cos(), (g[1] + pi3).cos(), (g[2] + pi3).cos()];
+        let wa = a * c62[0];
+        let wb = b * c62[1];
+        let wc = c * c62[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x62 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{62}",
+                pt(x62[0], x62[1]),
+                None,
+                "X(62) = \\bigl(a\\cos(A+\\pi/3):\\cdots\\bigr)",
+                "X(62)：第二拿破仑点的等角共轭",
+            ).with(Shape::Point {
+                x: x62[0],
+                y: x62[1],
+                label: "X62".into(),
+            }));
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{62} \\leftrightarrow N_2",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(18)",
+                "X(62) 与第二拿破仑点 X(18) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(63): bary cos A : cos B : cos C. Isogonal of Clawson X(19).
+    // cos A + cos B + cos C = 1 + r/R > 0, so the point stays finite.
+    // A right angle puts the point on the hypotenuse (that cosine is 0).
+    {
+        let wa = g[0].cos();
+        let wb = g[1].cos();
+        let wc = g[2].cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x63 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "余弦点",
+                "X_{63}",
+                pt(x63[0], x63[1]),
+                None,
+                "X(63) = (\\cos A:\\cos B:\\cos C)",
+                "X(63)：克劳森点的等角共轭（直角时落在斜边上）",
+            ).with(Shape::Point {
+                x: x63[0],
+                y: x63[1],
+                label: "X63".into(),
+            }));
+            let right = g.iter().any(|ang| (ang - std::f64::consts::FRAC_PI_2).abs() < 1e-8);
+            if !right {
+                out.push(fact(
+                    "余弦点",
+                    "X_{63} \\leftrightarrow Cl",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(19)",
+                    "X(63) 与克劳森点 X(19) 互为等角共轭",
+                ));
+            }
+        }
+    }
 
     // X(23) Far-out point: circumcircle-inverse of the centroid; skip equilateral (G=O).
     // Trilinear a(b⁴+c⁴−a⁴−b²c²); bary a²(b⁴+c⁴−a⁴−b²c²). On Euler line.
@@ -7114,6 +7221,53 @@ mod tests {
         assert!(fs3.iter().any(|f| f.group == "远点" && f.label == "X_{23}"));
         assert!(fs3.iter().any(|f| f.group == "OI调和点" && f.label == "X_{35}"));
         assert!(fs3.iter().any(|f| f.group == "截线交点" && f.label == "X_{38}"));
+    }
+
+    #[test]
+    fn x61_x62_napoleon_isogonals_x63() {
+        // Acute 6-7-8: X61 ≠ N1, X62 ≠ N2, X63 ≠ Cl.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x61 = fs.iter().find(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}").expect("X61");
+        let n1 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1");
+        assert_ne!(x61.value, n1.value);
+        assert!(fs.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label.contains("N_1") && f.value.contains("等角")));
+        let x62 = fs.iter().find(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}").expect("X62");
+        let n2 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2");
+        assert_ne!(x62.value, n2.value);
+        assert_ne!(x61.value, x62.value);
+        assert!(fs.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label.contains("N_2") && f.value.contains("等角")));
+        let x63 = fs.iter().find(|f| f.group == "余弦点" && f.label == "X_{63}").expect("X63");
+        let cl = fs.iter().find(|f| f.group == "克劳森点" && f.label == "Cl").expect("Cl");
+        assert_ne!(x63.value, cl.value);
+        assert!(fs.iter().any(|f| f.group == "余弦点" && f.label.contains("Cl") && f.value.contains("等角")));
+
+        // Right 3-4-5: all three points; Clawson note skipped.
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}"));
+        assert!(fs2.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}"));
+        assert!(fs2.iter().any(|f| f.group == "余弦点" && f.label == "X_{63}"));
+        assert!(fs2.iter().all(|f| !(f.group == "余弦点" && f.label.contains("Cl"))), "X63–Cl note skip right");
+
+        // Equilateral: all = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("拿破仑等角共轭点", "X_{61}"),
+            ("拿破仑等角共轭点", "X_{62}"),
+            ("余弦点", "X_{63}"),
+        ] {
+            let p = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g.value, "{lab}");
+        }
     }
 
     #[test]
