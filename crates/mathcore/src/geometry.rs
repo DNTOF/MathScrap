@@ -1100,6 +1100,20 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 y: omp[1],
                 label: "Ω′ 布罗卡".into(),
             }));
+            // Brocard midpoint X(39) = midpoint(Ω, Ω′); center of Brocard circle.
+            let bm = [(om[0] + omp[0]) / 2.0, (om[1] + omp[1]) / 2.0];
+            out.push(fact(
+                "布罗卡",
+                "X_{39}",
+                pt(bm[0], bm[1]),
+                None,
+                "X_{39} = \\text{mid}(\\Omega,\\Omega')",
+                "布罗卡中点：第一/第二布罗卡点的中点（布罗卡圆圆心）",
+            ).with(Shape::Point {
+                x: bm[0],
+                y: bm[1],
+                label: "X39 布罗卡中点".into(),
+            }));
         }
     }
 
@@ -2016,6 +2030,126 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     x: vi[0],
                     y: vi[1],
                     label: "Vin 韦克滕".into(),
+                }));
+            }
+        }
+    }
+
+
+    // Hofstadter points X(359), X(360): transcendental centers (angles in barycentrics).
+    // X(360) zero-point: bary A:B:C; X(359) one-point: bary a²/A:b²/B:c²/C.
+    {
+        if g[0] > 1e-12 && g[1] > 1e-12 && g[2] > 1e-12 {
+            let den0 = g[0] + g[1] + g[2];
+            let hz = [
+                (g[0] * pa[0] + g[1] * pb[0] + g[2] * pc[0]) / den0,
+                (g[0] * pa[1] + g[1] * pb[1] + g[2] * pc[1]) / den0,
+            ];
+            out.push(fact(
+                "霍夫斯塔特点",
+                "Hf_0",
+                pt(hz[0], hz[1]),
+                None,
+                "Hf_0 = (A:B:C)",
+                "霍夫斯塔特零点 X(360)：重心坐标为三角本身",
+            ).with(Shape::Point {
+                x: hz[0],
+                y: hz[1],
+                label: "Hf0 霍夫".into(),
+            }));
+            let wa = (a * a) / g[0];
+            let wb = (b * b) / g[1];
+            let wc = (c * c) / g[2];
+            let den1 = wa + wb + wc;
+            if den1.abs() > 1e-12 {
+                let ho = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den1,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den1,
+                ];
+                out.push(fact(
+                    "霍夫斯塔特点",
+                    "Hf_1",
+                    pt(ho[0], ho[1]),
+                    None,
+                    "Hf_1 = (a^2/A:b^2/B:c^2/C)",
+                    "霍夫斯塔特一点 X(359)：与 Hf_0 互为等角共轭",
+                ).with(Shape::Point {
+                    x: ho[0],
+                    y: ho[1],
+                    label: "Hf1 霍夫".into(),
+                }));
+            }
+        }
+    }
+
+    // Kenmotu point X(371): congruent-squares point; bary a cos(A−π/4).
+    // Isogonal conjugate of outer Vecten X(485).
+    {
+        let pi4 = std::f64::consts::FRAC_PI_4;
+        let ca = [(g[0] - pi4).cos(), (g[1] - pi4).cos(), (g[2] - pi4).cos()];
+        let wa = a * ca[0];
+        let wb = b * ca[1];
+        let wc = c * ca[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let km = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "肯莫图点",
+                "Km",
+                pt(km[0], km[1]),
+                None,
+                "Km = \\frac{a\\cos(A-\\pi/4)A+\\cdots}{\\sum}",
+                "肯莫图点 X(371)：三全等正方形的公共点（等角共轭于外韦克滕点）",
+            ).with(Shape::Point {
+                x: km[0],
+                y: km[1],
+                label: "Km 肯莫图".into(),
+            }));
+            let edge_den = a * a + b * b + c * c + 4.0 * area;
+            if edge_den > 1e-12 {
+                let edge = std::f64::consts::SQRT_2 * a * b * c / edge_den;
+                out.push(fact(
+                    "肯莫图点",
+                    "s_{\\text{square}}",
+                    nice(edge),
+                    Some(edge),
+                    "s = \\frac{\\sqrt{2}\\,abc}{a^2+b^2+c^2+4S}",
+                    "三全等正方形的边长",
+                ));
+            }
+        }
+    }
+
+    // Apollonius point X(181): perspector of Apollonius circle with the excircles.
+    // Bary a²(b+c)²/(b+c−a); b+c−a=2(s−a)>0 for non-degenerate △.
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = (a * a) * (b + c) * (b + c) / (2.0 * sa);
+            let wb = (b * b) * (c + a) * (c + a) / (2.0 * sb);
+            let wc = (c * c) * (a + b) * (a + b) / (2.0 * sc);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let ap = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "阿波罗尼奥斯点",
+                    "Ap",
+                    pt(ap[0], ap[1]),
+                    None,
+                    "Ap = \\frac{a^2(b+c)^2/(b+c-a)\\,A+\\cdots}{\\sum}",
+                    "阿波罗尼奥斯点 X(181)：与三旁切圆外切的阿氏圆的透视中心",
+                ).with(Shape::Point {
+                    x: ap[0],
+                    y: ap[1],
+                    label: "Ap 阿氏".into(),
                 }));
             }
         }
@@ -5085,6 +5219,43 @@ mod tests {
         assert!(fs3.iter().all(|f| !(f.group == "韦克滕点" && f.label.contains("in"))), "Vin skip 45°");
         assert!(fs3.iter().any(|f| f.group == "韦克滕点" && f.label.contains("out")), "Vout on isos right");
         assert!(fs3.iter().any(|f| f.group == "帕里点" && f.label == "Py"));
+    }
+
+    #[test]
+    fn hofstadter_kenmotu_apollonius() {
+        // 3-4-5: Hofstadter, Kenmotu (+square edge), Apollonius, Brocard midpoint.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let hf0 = fs.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_0").expect("Hf0");
+        let hf1 = fs.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_1").expect("Hf1");
+        assert_ne!(hf0.value, hf1.value);
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(hf0.value, g.value, "Hofstadter zero ≠ centroid on scalene");
+        let km = fs.iter().find(|f| f.group == "肯莫图点" && f.label == "Km").expect("Kenmotu");
+        let sq = fs.iter().find(|f| f.group == "肯莫图点" && f.label.contains("square")).expect("square edge");
+        assert!(sq.num.unwrap() > 0.0);
+        let vout = fs.iter().find(|f| f.group == "韦克滕点" && f.label.contains("out")).expect("Vout");
+        assert_ne!(km.value, vout.value, "Kenmotu ≠ outer Vecten (isogonal mates)");
+        let ap = fs.iter().find(|f| f.group == "阿波罗尼奥斯点" && f.label == "Ap").expect("Apollonius");
+        assert!(ap.value.contains("(") || ap.value.contains("\\left"));
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label.contains("39")));
+
+        // Equilateral: Hf0=Hf1=G; Kenmotu=G; Apollonius=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let hf0e = fs2.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_0").unwrap();
+        let hf1e = fs2.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_1").unwrap();
+        assert_eq!(hf0e.value, g2.value);
+        assert_eq!(hf1e.value, g2.value);
+        let kme = fs2.iter().find(|f| f.group == "肯莫图点" && f.label == "Km").unwrap();
+        assert_eq!(kme.value, g2.value);
+        let ape = fs2.iter().find(|f| f.group == "阿波罗尼奥斯点" && f.label == "Ap").unwrap();
+        assert_eq!(ape.value, g2.value);
     }
 
     #[test]
