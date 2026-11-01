@@ -774,12 +774,24 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             "N",
             pt(n9[0], n9[1]),
             None,
-            "N = \\text{中点}(O, H)",
+            "N = \\text{中点}(O, H) = X(5)",
             "九点圆圆心（欧拉圆）",
         ).with(Shape::Point {
             x: n9[0],
             y: n9[1],
             label: "N 九点圆圆心".into(),
+        }));
+        out.push(fact(
+            "欧拉线",
+            "X_{5}",
+            pt(n9[0], n9[1]),
+            None,
+            "X(5) = N = \\text{midpoint}(O, H)",
+            "X(5)：九点圆心",
+        ).with(Shape::Point {
+            x: n9[0],
+            y: n9[1],
+            label: "X5".into(),
         }));
         out.push(fact(
             "欧拉线",
@@ -967,12 +979,24 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 "Na",
                 pt(na[0], na[1]),
                 None,
-                "Na = \\frac{(s-a)A+(s-b)B+(s-c)C}{s}",
+                "Na = X(8) = \\frac{(s-a)A+(s-b)B+(s-c)C}{s}",
                 "奈格尔点：顶点与对旁切圆切点的连线交点",
             ).with(Shape::Point {
                 x: na[0],
                 y: na[1],
                 label: "Na 奈格尔".into(),
+            }));
+            out.push(fact(
+                "奈格尔点",
+                "X_{8}",
+                pt(na[0], na[1]),
+                None,
+                "X(8) = (s-a:s-b:s-c)",
+                "X(8)：奈格尔点",
+            ).with(Shape::Point {
+                x: na[0],
+                y: na[1],
+                label: "X8".into(),
             }));
             // Nagel line: I, G, Na collinear with IG:GNa = 1:2
             let ig = dist2(inc, centroid);
@@ -1021,12 +1045,24 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 "Ge",
                 pt(ge[0], ge[1]),
                 None,
-                "Ge = \\frac{\\frac{1}{s-a}A+\\frac{1}{s-b}B+\\frac{1}{s-c}C}{\\sum}",
+                "Ge = X(7) = \\frac{\\frac{1}{s-a}A+\\frac{1}{s-b}B+\\frac{1}{s-c}C}{\\sum}",
                 "格尔巩点：顶点与对边内切圆切点的连线交点",
             ).with(Shape::Point {
                 x: ge[0],
                 y: ge[1],
                 label: "Ge 格尔巩".into(),
+            }));
+            out.push(fact(
+                "格尔巩点",
+                "X_{7}",
+                pt(ge[0], ge[1]),
+                None,
+                "X(7) = (1/(s-a):1/(s-b):1/(s-c))",
+                "X(7)：格尔巩点",
+            ).with(Shape::Point {
+                x: ge[0],
+                y: ge[1],
+                label: "X7".into(),
             }));
             out.push(fact(
                 "格尔巩点",
@@ -6116,6 +6152,203 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(110): Euler reflection point / focus of Kiepert parabola.
+    // Bary a²/(b²−c²); circumcircle antipode of X(74); = 2O − X(74).
+    // Skip isosceles (denom 0) / equilateral. Works on scalene right (unlike fold construction).
+    {
+        let da = b * b - c * c;
+        let db = c * c - a * a;
+        let dc = a * a - b * b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x110 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "欧拉反射点",
+                    "X_{110}",
+                    pt(x110[0], x110[1]),
+                    None,
+                    "X(110) = \\bigl(a^2/(b^2-c^2):\\cdots\\bigr)",
+                    "X(110)：欧拉反射点（基伯特抛物线焦点；外接圆上）",
+                ).with(Shape::Point {
+                    x: x110[0],
+                    y: x110[1],
+                    label: "X110".into(),
+                }));
+                if (dist2(x110, circ) - rr).abs() < 1e-5 * (1.0 + rr) {
+                    out.push(fact(
+                        "欧拉反射点",
+                        "X_{110}\\in(O)",
+                        "\\checkmark".into(),
+                        None,
+                        "d(O, X(110)) = R",
+                        "X(110) 在外接圆上",
+                    ));
+                }
+                // Cross-check: circum-antipode of X(74).
+                let x74_xy = out.iter().rev().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((px, py)) = x74_xy {
+                    let mid_dx = (x110[0] + px) / 2.0 - circ[0];
+                    let mid_dy = (x110[1] + py) / 2.0 - circ[1];
+                    if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "X_{110}=2O-X_{74}",
+                            "\\text{外接圆对径}".into(),
+                            None,
+                            "X(110) = 2O - X(74)",
+                            "X(110) 与 X(74) 互为外接圆对径点",
+                        ));
+                    }
+                }
+                // Cross-check geometric Er (fold of Euler line) when present.
+                let er_xy = out.iter().rev().find(|f| f.group == "欧拉反射点" && f.label == "E_r").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((ex, ey)) = er_xy {
+                    if (ex - x110[0]).abs() < 1e-5 && (ey - x110[1]).abs() < 1e-5 {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "X_{110}=E_r",
+                            "\\text{折线构造}".into(),
+                            None,
+                            "X(110) = E_r",
+                            "X(110) 与欧拉线三边反射交点重合",
+                        ));
+                    }
+                }
+                // Cross-check: X(113) = midpoint(H, X(110)).
+                let x113_xy = out.iter().rev().find(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((qx, qy)) = x113_xy {
+                    let mx = (orth[0] + x110[0]) / 2.0;
+                    let my = (orth[1] + x110[1]) / 2.0;
+                    if (mx - qx).abs() < 1e-5 && (my - qy).abs() < 1e-5 {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "X_{113}=\\mathrm{mid}(H,X_{110})",
+                            "\\text{九点圆}".into(),
+                            None,
+                            "X(113) = \\text{midpoint}(H, X(110))",
+                            "X(113) 为垂心与 X(110) 的中点",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(120): X(105)-of-medial; on nine-point circle.
+    // Bary g(a,b,c)=(2abc−(b+c)(a²+(b−c)²))(b²+c²−ab−ac). Skip equilateral / vanishing den.
+    {
+        let ga = {
+            let t = 2.0 * a * b * c - (b + c) * (a * a + (b - c) * (b - c));
+            t * (b * b + c * c - a * b - a * c)
+        };
+        let gb = {
+            let t = 2.0 * b * c * a - (c + a) * (b * b + (c - a) * (c - a));
+            t * (c * c + a * a - b * c - b * a)
+        };
+        let gc = {
+            let t = 2.0 * c * a * b - (a + b) * (c * c + (a - b) * (a - b));
+            t * (a * a + b * b - c * a - c * b)
+        };
+        let den = ga + gb + gc;
+        if den.abs() > 1e-10 {
+            let x120 = [
+                (ga * pa[0] + gb * pb[0] + gc * pc[0]) / den,
+                (ga * pa[1] + gb * pb[1] + gc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "中点X105",
+                "X_{120}",
+                pt(x120[0], x120[1]),
+                None,
+                "X(120) = X(105)\\text{-of-medial}",
+                "X(120)：中点三角形的 X(105)（九点圆上）",
+            ).with(Shape::Point {
+                x: x120[0],
+                y: x120[1],
+                label: "X120".into(),
+            }));
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let r9 = rr / 2.0;
+            if (dist2(x120, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X105",
+                    "X_{120}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(120)) = R/2",
+                    "X(120) 在九点圆上",
+                ));
+            }
+        }
+    }
+
+    // X(121): X(106)-of-medial; on nine-point circle.
+    // Bary g=(b+c−2a)[b³+c³+a(b²+c²)−2bc(b+c)]. Skip equilateral.
+    {
+        let ga = {
+            let u = b + c - 2.0 * a;
+            let v = b * b * b + c * c * c + a * (b * b + c * c) - 2.0 * b * c * (b + c);
+            u * v
+        };
+        let gb = {
+            let u = c + a - 2.0 * b;
+            let v = c * c * c + a * a * a + b * (c * c + a * a) - 2.0 * c * a * (c + a);
+            u * v
+        };
+        let gc = {
+            let u = a + b - 2.0 * c;
+            let v = a * a * a + b * b * b + c * (a * a + b * b) - 2.0 * a * b * (a + b);
+            u * v
+        };
+        let den = ga + gb + gc;
+        if den.abs() > 1e-10 {
+            let x121 = [
+                (ga * pa[0] + gb * pb[0] + gc * pc[0]) / den,
+                (ga * pa[1] + gb * pb[1] + gc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "中点X106",
+                "X_{121}",
+                pt(x121[0], x121[1]),
+                None,
+                "X(121) = X(106)\\text{-of-medial}",
+                "X(121)：中点三角形的 X(106)（九点圆上）",
+            ).with(Shape::Point {
+                x: x121[0],
+                y: x121[1],
+                label: "X121".into(),
+            }));
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let r9 = rr / 2.0;
+            if (dist2(x121, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X106",
+                    "X_{121}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(121)) = R/2",
+                    "X(121) 在九点圆上",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -10452,6 +10685,100 @@ mod tests {
         assert!(fs4.iter().any(|f| f.group == "基伯特对径" && f.label == "X_{114}"));
         assert!(fs4.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}"));
         assert!(fs4.iter().any(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}"));
+    }
+
+    #[test]
+    fn x5_x7_x8_x110_x120_x121() {
+        // Scalene acute 6-7-9: classical + Euler reflection + medial-of NPC points.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let x5 = fs.iter().find(|f| f.group == "欧拉线" && f.label == "X_{5}").expect("X5");
+        let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
+        let x7 = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "X_{7}").expect("X7");
+        let na = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "Na").expect("Na");
+        let x8 = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "X_{8}").expect("X8");
+        let x110 = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").expect("X110");
+        let er = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "E_r").expect("Er");
+        let x74 = fs.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74");
+        let x113 = fs.iter().find(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}").expect("X113");
+        let x120 = fs.iter().find(|f| f.group == "中点X105" && f.label == "X_{120}").expect("X120");
+        let x121 = fs.iter().find(|f| f.group == "中点X106" && f.label == "X_{121}").expect("X121");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let (nx, ny) = ptxy(n);
+        let (a5, b5) = ptxy(x5);
+        assert!((nx - a5).abs() < 1e-9 && (ny - b5).abs() < 1e-9, "X5 != N");
+        let (gx, gy) = ptxy(ge);
+        let (a7, b7) = ptxy(x7);
+        assert!((gx - a7).abs() < 1e-9 && (gy - b7).abs() < 1e-9, "X7 != Ge");
+        let (nax, nay) = ptxy(na);
+        let (a8, b8) = ptxy(x8);
+        assert!((nax - a8).abs() < 1e-9 && (nay - b8).abs() < 1e-9, "X8 != Na");
+        let (ox, oy) = ptxy(o);
+        let (hx, hy) = ptxy(h);
+        let (e0, e1) = ptxy(x110);
+        let (rx, ry) = ptxy(er);
+        let (p74x, p74y) = ptxy(x74);
+        let (a13, b13) = ptxy(x113);
+        assert!((e0 - rx).abs() < 1e-5 && (e1 - ry).abs() < 1e-5, "X110 != Er");
+        assert!(((e0 + p74x) / 2.0 - ox).abs() < 1e-5 && ((e1 + p74y) / 2.0 - oy).abs() < 1e-5, "X110 not antipode of X74");
+        assert!(((hx + e0) / 2.0 - a13).abs() < 1e-5 && ((hy + e1) / 2.0 - b13).abs() < 1e-5, "X113 not mid(H,X110)");
+        assert!(fs.iter().any(|f| f.group == "欧拉反射点" && f.label.contains("2O")));
+        assert!(fs.iter().any(|f| f.group == "中点X105" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X106" && f.label.contains("NPC")));
+        let (p120x, p120y) = ptxy(x120);
+        let (p121x, p121y) = ptxy(x121);
+        let r9 = ((ox - hx).hypot(oy - hy)) / 2.0; // unused; check distinct from N/G
+        let _ = r9;
+        assert!((p120x - nx).abs() > 1e-4 || (p120y - ny).abs() > 1e-4, "X120 coincides N");
+        assert!((p121x - nx).abs() > 1e-4 || (p121y - ny).abs() > 1e-4, "X121 coincides N");
+        assert_ne!(x120.value, x121.value);
+
+        // Isosceles 5-5-6: X110 skipped (denom 0); X5/X7/X8/X120/X121 present.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "欧拉线" && f.label == "X_{5}"));
+        assert!(fs2.iter().any(|f| f.group == "格尔巩点" && f.label == "X_{7}"));
+        assert!(fs2.iter().any(|f| f.group == "奈格尔点" && f.label == "X_{8}"));
+        assert!(fs2.iter().all(|f| !(f.group == "欧拉反射点" && f.label == "X_{110}")), "X110 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "中点X105" && f.label == "X_{120}"), "X120 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "中点X106" && f.label == "X_{121}"), "X121 on isosceles");
+
+        // Equilateral: X110/X120/X121 skip; X5/X7/X8 remain.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "欧拉线" && f.label == "X_{5}"));
+        assert!(fs3.iter().any(|f| f.group == "格尔巩点" && f.label == "X_{7}"));
+        assert!(fs3.iter().any(|f| f.group == "奈格尔点" && f.label == "X_{8}"));
+        assert!(fs3.iter().all(|f| !(f.group == "欧拉反射点" && f.label == "X_{110}")), "X110 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X105"), "X120 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X106"), "X121 skip equilateral");
+
+        // Right 3-4-5: X110 via bary (Er may skip); antipode of X74 holds.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        let x110r = fs4.iter().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").expect("X110 on 3-4-5");
+        let x74r = fs4.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74 on 3-4-5");
+        let or = fs4.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let (e0, e1) = ptxy(x110r);
+        let (p74x, p74y) = ptxy(x74r);
+        let (ox, oy) = ptxy(or);
+        assert!(((e0 + p74x) / 2.0 - ox).abs() < 1e-5 && ((e1 + p74y) / 2.0 - oy).abs() < 1e-5, "3-4-5 X110 antipode");
+        assert!(fs4.iter().any(|f| f.group == "中点X105" && f.label == "X_{120}"));
+        assert!(fs4.iter().any(|f| f.group == "中点X106" && f.label == "X_{121}"));
     }
 
     #[test]
