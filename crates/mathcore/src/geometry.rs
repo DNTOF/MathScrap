@@ -4608,6 +4608,202 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // X(93), X(94): isogonal conjugates of the triple-angle points X(49)=a cos 3A
+    // and X(50)=a sin 3A. Bary a sec 3A and a csc 3A.
+    // X(93) blows up when cos 3A = 0 (A=30° or a right angle: 3·90°=270°).
+    // X(94) blows up when sin 3A = 0 (equilateral / any 60° angle: 3A=180°).
+    {
+        let c3 = [(3.0 * g[0]).cos(), (3.0 * g[1]).cos(), (3.0 * g[2]).cos()];
+        if c3.iter().all(|c| c.abs() > 1e-9) {
+            let wa = a / c3[0];
+            let wb = b / c3[1];
+            let wc = c / c3[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x93 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "三倍角正割",
+                    "X_{93}",
+                    pt(x93[0], x93[1]),
+                    None,
+                    "X(93) = (a\\sec 3A:b\\sec 3B:c\\sec 3C)",
+                    "X(93)：X(49) 的等角共轭（直角或 30° 角时 cos 3A=0，略过）",
+                ).with(Shape::Point {
+                    x: x93[0],
+                    y: x93[1],
+                    label: "X93".into(),
+                }));
+                out.push(fact(
+                    "三倍角正割",
+                    "X_{93} \\leftrightarrow X_{49}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(49)",
+                    "X(93) 与 X(49) 互为等角共轭",
+                ));
+            }
+        }
+        let s3 = [(3.0 * g[0]).sin(), (3.0 * g[1]).sin(), (3.0 * g[2]).sin()];
+        if s3.iter().all(|s| s.abs() > 1e-9) {
+            let wa = a / s3[0];
+            let wb = b / s3[1];
+            let wc = c / s3[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x94 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "三倍角余割",
+                    "X_{94}",
+                    pt(x94[0], x94[1]),
+                    None,
+                    "X(94) = (a\\csc 3A:b\\csc 3B:c\\csc 3C)",
+                    "X(94)：X(50) 的等角共轭（等边/60° 角时 sin 3A=0，略过）",
+                ).with(Shape::Point {
+                    x: x94[0],
+                    y: x94[1],
+                    label: "X94".into(),
+                }));
+                out.push(fact(
+                    "三倍角余割",
+                    "X_{94} \\leftrightarrow X_{50}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(50)",
+                    "X(94) 与 X(50) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(68) Prasolov point: isogonal conjugate of X(24); bary tan 2A.
+    // Skip right/obtuse (tan 2A undefined when A≥90° or when cos 2A=0 i.e. A=45°).
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let acute = cosines.iter().all(|&c| c > 1e-9)
+            && g.iter().all(|&ang| ang > 1e-9 && ang < std::f64::consts::FRAC_PI_2 - 1e-9);
+        let c2 = [(2.0 * g[0]).cos(), (2.0 * g[1]).cos(), (2.0 * g[2]).cos()];
+        if acute && c2.iter().all(|c| c.abs() > 1e-9) {
+            let wa = (2.0 * g[0]).tan();
+            let wb = (2.0 * g[1]).tan();
+            let wc = (2.0 * g[2]).tan();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x68 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "普拉索洛夫点",
+                    "X_{68}",
+                    pt(x68[0], x68[1]),
+                    None,
+                    "X(68) = (\\tan 2A:\\tan 2B:\\tan 2C)",
+                    "普拉索洛夫点 X(68)：X(24) 的等角共轭（锐角）",
+                ).with(Shape::Point {
+                    x: x68[0],
+                    y: x68[1],
+                    label: "X68".into(),
+                }));
+                out.push(fact(
+                    "普拉索洛夫点",
+                    "X_{68} \\leftrightarrow X_{24}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(24)",
+                    "X(68) 与 X(24) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(95): cevapoint of G and O; isogonal of X(51).
+    // Bary bc sec(B−C) : ca sec(C−A) : ab sec(A−B). Equals G on equilateral.
+    // Skip when any cos(B−C)≈0 (|B−C|=90°).
+    {
+        let cab = (g[1] - g[2]).cos();
+        let cbc = (g[2] - g[0]).cos();
+        let cca = (g[0] - g[1]).cos();
+        if cab.abs() > 1e-9 && cbc.abs() > 1e-9 && cca.abs() > 1e-9 {
+            let wa = b * c / cab;
+            let wb = c * a / cbc;
+            let wc = a * b / cca;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x95 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足重心等角",
+                    "X_{95}",
+                    pt(x95[0], x95[1]),
+                    None,
+                    "X(95) = (bc\\sec(B-C):ca\\sec(C-A):ab\\sec(A-B))",
+                    "X(95)：X(51) 的等角共轭（G 与 O 的 Ceva 截点）",
+                ).with(Shape::Point {
+                    x: x95[0],
+                    y: x95[1],
+                    label: "X95".into(),
+                }));
+                out.push(fact(
+                    "垂足重心等角",
+                    "X_{95} \\leftrightarrow X_{51}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(51)",
+                    "X(95) 与垂足重心 X(51) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(97): isogonal of X(53); bary cos A sec(B−C).
+    // Equals G on equilateral. Skip when any cos(B−C)≈0.
+    {
+        let cab = (g[1] - g[2]).cos();
+        let cbc = (g[2] - g[0]).cos();
+        let cca = (g[0] - g[1]).cos();
+        if cab.abs() > 1e-9 && cbc.abs() > 1e-9 && cca.abs() > 1e-9 {
+            let wa = g[0].cos() / cab;
+            let wb = g[1].cos() / cbc;
+            let wc = g[2].cos() / cca;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x97 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足对称中线等角",
+                    "X_{97}",
+                    pt(x97[0], x97[1]),
+                    None,
+                    "X(97) = (\\cos A\\sec(B-C):\\cdots)",
+                    "X(97)：X(53) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x97[0],
+                    y: x97[1],
+                    label: "X97".into(),
+                }));
+                out.push(fact(
+                    "垂足对称中线等角",
+                    "X_{97} \\leftrightarrow X_{53}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(53)",
+                    "X(97) 与垂足对称中线点 X(53) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -8437,6 +8633,62 @@ mod tests {
         let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
         assert_eq!(fs3.iter().find(|f| f.label == "X_{91}").unwrap().value, g.value);
         assert_eq!(fs3.iter().find(|f| f.label == "X_{92}").unwrap().value, g.value);
+    }
+
+    #[test]
+    fn x93_x94_x68_x95_x97_isogonals() {
+        // Scalene acute 6-7-8: X93/X94/X68 present; distinct from X49/X50/X24.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x93 = fs.iter().find(|f| f.group == "三倍角正割" && f.label == "X_{93}").expect("X93");
+        let x49 = fs.iter().find(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}").expect("X49");
+        assert_ne!(x93.value, x49.value);
+        assert!(fs.iter().any(|f| f.group == "三倍角正割" && f.label.contains("49") && f.value.contains("等角")));
+        let x94 = fs.iter().find(|f| f.group == "三倍角余割" && f.label == "X_{94}").expect("X94");
+        let x50 = fs.iter().find(|f| f.group == "三倍角正弦" && f.label == "X_{50}").expect("X50");
+        assert_ne!(x94.value, x50.value);
+        assert_ne!(x93.value, x94.value);
+        let x68 = fs.iter().find(|f| f.group == "普拉索洛夫点" && f.label == "X_{68}").expect("X68");
+        let x24 = fs.iter().find(|f| f.group == "二重垂足透视" && f.label == "X_{24}").expect("X24");
+        assert_ne!(x68.value, x24.value);
+        assert!(fs.iter().any(|f| f.group == "普拉索洛夫点" && f.label.contains("24") && f.value.contains("等角")));
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x93.value, g.value);
+        assert_ne!(x68.value, g.value);
+
+        // Equilateral: X93=X68=G; X94 skipped (sin 180°=0).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{93}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{68}").unwrap().value, g2.value);
+        assert!(fs2.iter().all(|f| f.group != "三倍角余割"), "X94 skip equilateral");
+
+        // Right 3-4-5: X93/X68 skip (cos 270°=0 / tan); X94 present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "三倍角正割"), "X93 skip right");
+        assert!(fs3.iter().all(|f| f.group != "普拉索洛夫点"), "X68 skip right");
+        assert!(fs3.iter().any(|f| f.group == "三倍角余割" && f.label == "X_{94}"));
+
+        // X95/X97 on acute scalene; both = G on equilateral; present on right (finite).
+        let x95 = fs.iter().find(|f| f.group == "垂足重心等角" && f.label == "X_{95}").expect("X95");
+        let x51 = fs.iter().find(|f| f.group == "垂足重心" && f.label == "X_{51}").expect("X51");
+        assert_ne!(x95.value, x51.value);
+        let x97 = fs.iter().find(|f| f.group == "垂足对称中线等角" && f.label == "X_{97}").expect("X97");
+        let x53 = fs.iter().find(|f| f.group == "垂足对称中线点" && f.label == "X_{53}").expect("X53");
+        assert_ne!(x97.value, x53.value);
+        assert_ne!(x95.value, x97.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{95}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{97}").unwrap().value, g2.value);
+        assert!(fs3.iter().any(|f| f.group == "垂足重心等角" && f.label == "X_{95}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足对称中线等角" && f.label == "X_{97}"));
     }
 
     #[test]
