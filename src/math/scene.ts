@@ -851,6 +851,92 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
     if (facts.length) sections.push({ id: 'radical', title: '两球根面', subtitle: '等幂点轨迹 · 交圆平面', tone: 'geo', facts })
   }
 
+  // Line–sphere: every pair of 3D points defines a line; intersect with each sphere.
+  if (spheres.length && pts3.length >= 2) {
+    const facts: RustFact[] = []
+    const maxPairs = 6
+    let pairs = 0
+    for (let i = 0; i < pts3.length; i++) {
+      for (let j = i + 1; j < pts3.length; j++) {
+        if (pairs >= maxPairs) break
+        const A = pts3[i]
+        const B = pts3[j]
+        const d = [B.p[0] - A.p[0], B.p[1] - A.p[1], B.p[2] - A.p[2]]
+        const dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+        if (dd < 1e-16) continue
+        pairs++
+        for (const s of spheres) {
+          const ac = [A.p[0] - s.c[0], A.p[1] - s.c[1], A.p[2] - s.c[2]]
+          const qa = dd
+          const qb = 2 * (d[0] * ac[0] + d[1] * ac[1] + d[2] * ac[2])
+          const qc = ac[0] * ac[0] + ac[1] * ac[1] + ac[2] * ac[2] - s.r * s.r
+          const disc = qb * qb - 4 * qa * qc
+          const lab = `${A.name}${B.name}`
+          if (disc < -1e-9) {
+            facts.push({
+              group: '直线与球面',
+              label: `${lab} \\cap ${s.name}`,
+              value: '\\varnothing',
+              num: null,
+              how: '\\Delta < 0',
+              why: '直线与球面相离',
+              shape: null,
+            })
+          } else if (Math.abs(disc) <= 1e-9) {
+            const t0 = -qb / (2 * qa)
+            const q = [A.p[0] + t0 * d[0], A.p[1] + t0 * d[1], A.p[2] + t0 * d[2]]
+            facts.push({
+              group: '直线与球面',
+              label: `${lab} \\cap ${s.name}`,
+              value: '\\text{相切}',
+              num: 0,
+              how: '\\Delta = 0',
+              why: '直线与球面相切',
+              shape: { type: 'point3', x: q[0], y: q[1], z: q[2], label: `${lab}∩${s.name}` },
+            })
+          } else {
+            const sq = Math.sqrt(disc)
+            const t1 = (-qb - sq) / (2 * qa)
+            const t2 = (-qb + sq) / (2 * qa)
+            const q1 = [A.p[0] + t1 * d[0], A.p[1] + t1 * d[1], A.p[2] + t1 * d[2]]
+            const q2 = [A.p[0] + t2 * d[0], A.p[1] + t2 * d[1], A.p[2] + t2 * d[2]]
+            facts.push({
+              group: '直线与球面',
+              label: `P_{${lab}\\cap ${s.name},1}`,
+              value: `\\left(${fmt(q1[0])},\\ ${fmt(q1[1])},\\ ${fmt(q1[2])}\\right)`,
+              num: null,
+              how: '|A + t(B-A) - O|^2 = r^2',
+              why: '直线与球面的交点',
+              shape: { type: 'point3', x: q1[0], y: q1[1], z: q1[2], label: `${lab}∩${s.name}` },
+            })
+            facts.push({
+              group: '直线与球面',
+              label: `P_{${lab}\\cap ${s.name},2}`,
+              value: `\\left(${fmt(q2[0])},\\ ${fmt(q2[1])},\\ ${fmt(q2[2])}\\right)`,
+              num: null,
+              how: '|A + t(B-A) - O|^2 = r^2',
+              why: '直线与球面的交点',
+              shape: { type: 'point3', x: q2[0], y: q2[1], z: q2[2], label: `${lab}∩${s.name}` },
+            })
+            const chord = Math.hypot(q2[0] - q1[0], q2[1] - q1[1], q2[2] - q1[2])
+            facts.push({
+              group: '直线与球面',
+              label: `|P_1P_2|_{${lab}\\cap ${s.name}}`,
+              value: engine.nice(chord),
+              num: chord,
+              how: '两交点距离',
+              why: '弦长',
+              shape: null,
+            })
+          }
+        }
+      }
+      if (pairs >= maxPairs) break
+    }
+    if (facts.length) sections.push({ id: 'line-sphere', title: '直线 ∩ 球面', subtitle: '交点 · 相切 · 相离', tone: 'geo', facts })
+  }
+
+
   if (marks.length) objects.push({ type: 'marks', pts: marks })
 
   // ---- dimension ---------------------------------------------------------------------------

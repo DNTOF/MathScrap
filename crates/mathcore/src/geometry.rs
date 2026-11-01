@@ -795,6 +795,119 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // Van Obel (incenter form): AI/ID = (b+c)/a.
+    {
+        for i in 0..3 {
+            let (aa, bb, cc) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            let den = bb + cc;
+            if den < 1e-12 || aa < 1e-12 {
+                continue;
+            }
+            let foot = [
+                (bb * v[(i + 1) % 3][0] + cc * v[(i + 2) % 3][0]) / den,
+                (bb * v[(i + 1) % 3][1] + cc * v[(i + 2) % 3][1]) / den,
+            ];
+            let ai = dist2(v[i], inc);
+            let idlen = dist2(inc, foot);
+            if idlen < 1e-12 {
+                continue;
+            }
+            let ratio = ai / idlen;
+            let expect = den / aa;
+            if (ratio - expect).abs() < 1e-6 * (1.0 + expect) {
+                out.push(fact(
+                    "凡奥培尔定理",
+                    &format!("\\dfrac{{|{n}I|}}{{|ID_{{{s}}}|}}", n = names[i], s = SIDE[i]),
+                    nice(ratio),
+                    Some(ratio),
+                    &format!(
+                        "\\dfrac{{{b} + {c}}}{{{a}}} = \\dfrac{{AF}}{{FB}} + \\dfrac{{AE}}{{EC}}",
+                        a = SIDE[i],
+                        b = SIDE[(i + 1) % 3],
+                        c = SIDE[(i + 2) % 3],
+                    ),
+                    "凡奥培尔定理（内心）：角平分线分对边的内分比之和",
+                ).with(Shape::Segment {
+                    x1: v[i][0],
+                    y1: v[i][1],
+                    x2: foot[0],
+                    y2: foot[1],
+                    label: format!("{}I", names[i]),
+                }));
+            }
+        }
+    }
+
+    // Apollonius circle at vertex i.
+    {
+        for i in 0..3 {
+            let b_pt = v[(i + 1) % 3];
+            let c_pt = v[(i + 2) % 3];
+            let side_to_b = s[(i + 2) % 3];
+            let side_to_c = s[(i + 1) % 3];
+            let opp = s[i];
+            if side_to_c < 1e-12 {
+                continue;
+            }
+            let k = side_to_b / side_to_c;
+            if (k - 1.0).abs() < 1e-9 {
+                let mid = [(b_pt[0] + c_pt[0]) / 2.0, (b_pt[1] + c_pt[1]) / 2.0];
+                out.push(fact(
+                    "阿波罗尼奥斯圆",
+                    &format!("\\mathcal{{A}}_{{{}}}", names[i]),
+                    "\\text{中垂线}".into(),
+                    None,
+                    &format!(
+                        "\\frac{{|P{nb}|}}{{|P{nc}|}} = 1",
+                        nb = names[(i + 1) % 3],
+                        nc = names[(i + 2) % 3],
+                    ),
+                    "阿波罗尼奥斯圆退化为对边的中垂线",
+                ).with(Shape::Point {
+                    x: mid[0],
+                    y: mid[1],
+                    label: format!("A_{} 中点", names[i]),
+                }));
+                continue;
+            }
+            let k2 = k * k;
+            let o = [
+                (k2 * c_pt[0] - b_pt[0]) / (k2 - 1.0),
+                (k2 * c_pt[1] - b_pt[1]) / (k2 - 1.0),
+            ];
+            let rad = (k * opp / (k2 - 1.0).abs()).abs();
+            let d_v = dist2(v[i], o);
+            if (d_v - rad).abs() > 1e-4 * (1.0 + rad) {
+                continue;
+            }
+            out.push(fact(
+                "阿波罗尼奥斯圆",
+                &format!("\\mathcal{{A}}_{{{}}}", names[i]),
+                format!(
+                    "O=\\left({},\\ {}\\right),\\ R={}",
+                    nice_short(o[0]),
+                    nice_short(o[1]),
+                    nice(rad)
+                ),
+                Some(rad),
+                &format!(
+                    "\\frac{{|P{nb}|}}{{|P{nc}|}} = \\frac{{{c}}}{{{b}}} = {k}",
+                    nb = names[(i + 1) % 3],
+                    nc = names[(i + 2) % 3],
+                    b = SIDE[(i + 1) % 3],
+                    c = SIDE[(i + 2) % 3],
+                    k = nice(k),
+                ),
+                "阿波罗尼奥斯圆：到两定点距离成定比的轨迹",
+            ).with(Shape::Circle {
+                cx: o[0],
+                cy: o[1],
+                r: rad,
+                label: format!("阿氏圆 {}", names[i]),
+            }));
+        }
+    }
+
     let mut kinds: Vec<String> = Vec::new();
     let maxg = g.iter().cloned().fold(0.0, f64::max);
     if near(maxg, PI / 2.0) {
@@ -1088,7 +1201,7 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
         if pts.len() >= 4 {
             let dpt = pts[3].1;
             let vol = dot3(sub3(dpt, a), nrm).abs() / 6.0;
-            out.push(fact("体积", "V", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
+            out.push(fact("体积", "V_{\\text{四面体}}", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
@@ -1577,6 +1690,14 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             }
             let ang = (dot3(p.n, q.n).abs() / (lp * lq)).clamp(-1.0, 1.0).acos();
             out.push(fact("两平面", &format!("\\theta({}, {})", p.name, q.name), deg(ang), Some(ang), "\\cos\\theta = \\frac{|\\vec n_1\\cdot\\vec n_2|}{|\\vec n_1||\\vec n_2|}", "二面角（锐角）"));
+            out.push(fact(
+                "两平面",
+                &format!("\\text{{二面角}}({}, {})", p.name, q.name),
+                deg(ang),
+                Some(ang),
+                "\\cos\\theta = \\frac{|\\vec n_1\\cdot\\vec n_2|}{|\\vec n_1||\\vec n_2|}",
+                "二面角等于两法向量夹角（取锐角）",
+            ));
             if dot3(p.n, q.n).abs() < 1e-9 * lp * lq {
                 out.push(fact("两平面", &format!("{} \\perp {}", p.name, q.name), "\\checkmark".into(), None, "\\vec n_1\\cdot\\vec n_2 = 0", "法向量垂直"));
             }
@@ -2179,5 +2300,46 @@ mod tests {
         let th2 = out.iter().find(|f| f.label == "\\theta(AC, α)").unwrap();
         assert!(th2.num.unwrap().abs() < 1e-9, "θ(AC) = {}", th2.value);
         assert!(out.iter().any(|f| f.label == "AC \\parallel α"));
+    }
+
+    #[test]
+    fn van_obel_and_apollonius_on_345() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let vo_a = fs.iter().find(|f| f.label.contains("ID_{a}")).expect("Van Obel A");
+        assert!((vo_a.num.unwrap() - 3.0).abs() < 1e-6, "Van Obel A = {}", vo_a.value);
+        let vo_b = fs.iter().find(|f| f.label.contains("ID_{b}")).expect("Van Obel B");
+        assert!((vo_b.num.unwrap() - 2.0).abs() < 1e-6, "Van Obel B = {}", vo_b.value);
+        assert_eq!(fs.iter().filter(|f| f.label.contains("ID_")).count(), 3);
+        let ap = fs.iter().filter(|f| f.group == "阿波罗尼奥斯圆").count();
+        assert_eq!(ap, 3, "Apollonius count");
+    }
+
+    #[test]
+    fn tetrahedron_volume_unit() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 0.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let v = out.iter().find(|f| f.label.contains("四面体")).expect("tetra volume");
+        assert!((v.num.unwrap() - 1.0 / 6.0).abs() < 1e-9, "V = {}", v.value);
+    }
+
+    #[test]
+    fn dihedral_angle_xy_planes() {
+        let ps = vec![
+            NamedPlane { name: "α".into(), n: [1.0, 0.0, 0.0], d: 0.0 },
+            NamedPlane { name: "β".into(), n: [0.0, 1.0, 0.0], d: 0.0 },
+        ];
+        let out = planes_analyze(&ps, &[]);
+        let th = out.iter().find(|f| f.label == "\\theta(α, β)").expect("theta");
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9);
+        assert!(out.iter().any(|f| f.label.contains("二面角")));
+        assert!(out.iter().any(|f| f.label == "α \\perp β"));
     }
 }
