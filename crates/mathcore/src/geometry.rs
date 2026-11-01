@@ -5516,6 +5516,142 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(107): Ψ(K,H) = Ψ(X(6),X(4)); bary 1/[(b²−c²)(b²+c²−a²)²].
+    // Skip isosceles (b²=c²) and right (any b²+c²−a²≈0).
+    {
+        let da = (b * b - c * c) * (b * b + c * c - a * a).powi(2);
+        let db = (c * c - a * a) * (c * c + a * a - b * b).powi(2);
+        let dc = (a * a - b * b) * (a * a + b * b - c * c).powi(2);
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x107 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ对称中线垂心",
+                    "X_{107}",
+                    pt(x107[0], x107[1]),
+                    None,
+                    "X(107) = \\bigl(1/[(b^2-c^2)(b^2+c^2-a^2)^2]:\\cdots\\bigr)",
+                    "X(107)：Ψ(K,H)",
+                ).with(Shape::Point {
+                    x: x107[0],
+                    y: x107[1],
+                    label: "X107".into(),
+                }));
+            }
+        }
+    }
+
+    // X(108): Ψ(O,H) = Ψ(X(3),X(4)) = Ψ(I,H); bary a²/(sec B−sec C).
+    // Skip isosceles / right (sec undefined when cos=0) / sec B=sec C.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-9 && cb.abs() > 1e-9 && cc.abs() > 1e-9 {
+            let da = 1.0 / cb - 1.0 / cc;
+            let db = 1.0 / cc - 1.0 / ca;
+            let dc = 1.0 / ca - 1.0 / cb;
+            if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                let wa = (a * a) / da;
+                let wb = (b * b) / db;
+                let wc = (c * c) / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let x108 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "Ψ外心垂心",
+                        "X_{108}",
+                        pt(x108[0], x108[1]),
+                        None,
+                        "X(108) = \\bigl(a^2/(\\sec B-\\sec C):\\cdots\\bigr)",
+                        "X(108)：Ψ(O,H)=Ψ(I,H)",
+                    ).with(Shape::Point {
+                        x: x108[0],
+                        y: x108[1],
+                        label: "X108".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    // X(109): Ψ(I,O) = Λ(I,O) partner; bary a²/(cos B−cos C).
+    // Circumcircle-antipode of X(102); skip isosceles.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb - cc;
+        let db = cc - ca;
+        let dc = ca - cb;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x109 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ内心外心",
+                    "X_{109}",
+                    pt(x109[0], x109[1]),
+                    None,
+                    "X(109) = \\bigl(a^2/(\\cos B-\\cos C):\\cdots\\bigr)",
+                    "X(109)：Ψ(I,O)（外接圆上；X(102) 对径）",
+                ).with(Shape::Point {
+                    x: x109[0],
+                    y: x109[1],
+                    label: "X109".into(),
+                }));
+            }
+        }
+    }
+
+    // X(112): Ψ(H,K) = Ψ(X(4),X(6)); bary a²/(sin 2B−sin 2C).
+    // Skip isosceles / when sin 2B=sin 2C (incl. right where 2A=π → sin2B=sin2C may hold).
+    {
+        let da = (2.0 * g[1]).sin() - (2.0 * g[2]).sin();
+        let db = (2.0 * g[2]).sin() - (2.0 * g[0]).sin();
+        let dc = (2.0 * g[0]).sin() - (2.0 * g[1]).sin();
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x112 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ垂心对称中线",
+                    "X_{112}",
+                    pt(x112[0], x112[1]),
+                    None,
+                    "X(112) = \\bigl(a^2/(\\sin 2B-\\sin 2C):\\cdots\\bigr)",
+                    "X(112)：Ψ(H,K)",
+                ).with(Shape::Point {
+                    x: x112[0],
+                    y: x112[1],
+                    label: "X112".into(),
+                }));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -9634,6 +9770,58 @@ mod tests {
         assert!(fs3.iter().all(|f| f.group != "X100对径"), "X104 skip equilateral");
         assert!(fs3.iter().all(|f| f.group != "Λ内心勒莫恩"), "X105 skip equilateral");
         assert!(fs3.iter().all(|f| f.group != "Λ内心重心"), "X106 skip equilateral");
+    }
+
+    #[test]
+    fn x107_x108_x109_x112() {
+        // Scalene acute 6-7-9: all four present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x107 = fs.iter().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").expect("X107");
+        let x108 = fs.iter().find(|f| f.group == "Ψ外心垂心" && f.label == "X_{108}").expect("X108");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x112 = fs.iter().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").expect("X112");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x107.value, x108.value);
+        assert_ne!(x108.value, x109.value);
+        assert_ne!(x109.value, x112.value);
+        assert_ne!(x107.value, g.value);
+        assert_ne!(x108.value, g.value);
+        assert_ne!(x109.value, g.value);
+        assert_ne!(x112.value, g.value);
+
+        // Isosceles non-eq 5-5-6: all four skipped (denoms vanish).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "Ψ对称中线垂心"), "X107 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ外心垂心"), "X108 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ内心外心"), "X109 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ垂心对称中线"), "X112 skip isosceles");
+
+        // Right 3-4-5: X107/X108 skip (cos=0 / b²+c²−a²=0); X109/X112 may remain.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "Ψ对称中线垂心"), "X107 skip right");
+        assert!(fs3.iter().all(|f| f.group != "Ψ外心垂心"), "X108 skip right");
+        assert!(fs3.iter().any(|f| f.group == "Ψ内心外心" && f.label == "X_{109}"));
+        // sin2B−sin2C = 0 when one angle is π/2 (2A+2B=π ⇒ sin2A=sin2B for complementary pair), so X112 skips.
+        assert!(fs3.iter().all(|f| f.group != "Ψ垂心对称中线"), "X112 skip right");
+
+        // Equilateral: all skipped.
+        let k4 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.group != "Ψ对称中线垂心"));
+        assert!(fs4.iter().all(|f| f.group != "Ψ外心垂心"));
+        assert!(fs4.iter().all(|f| f.group != "Ψ内心外心"));
+        assert!(fs4.iter().all(|f| f.group != "Ψ垂心对称中线"));
     }
 
     #[test]
