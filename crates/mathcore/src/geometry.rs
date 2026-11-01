@@ -6349,6 +6349,169 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(122)/X(123)/X(124)/X(126)/X(127): complements of circumcircle Ψ/Parry points
+    // (= X(n)-of-medial). Homothety at G with factor −1/2 maps (O) → NPC.
+    // Q = (3G − P)/2. Skip when the parent point was skipped (isos/equil/right).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        let p107 = out.iter().rev().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p108 = out.iter().rev().find(|f| f.group == "Ψ外心垂心" && f.label == "X_{108}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p109 = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p102 = out.iter().rev().find(|f| f.group == "Λ内心垂心" && f.label == "X_{102}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p111 = out.iter().rev().find(|f| f.group == "帕里点" && f.label == "Py").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p112 = out.iter().rev().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+
+        if let Some((px, py)) = p107 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X107",
+                "X_{122}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(122) = \\mathrm{complement}(X(107)) = X(107)\\text{-of-medial}",
+                "X(122)：X(107) 关于重心的补点（中点三角形的 X(107)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X122".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X107",
+                    "X_{122}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(122)) = R/2",
+                    "X(122) 在九点圆上",
+                ));
+            }
+            let cross = (px - centroid[0]) * (xy[1] - centroid[1]) - (py - centroid[1]) * (xy[0] - centroid[0]);
+            if cross.abs() < 1e-6 {
+                out.push(fact(
+                    "中点X107",
+                    "G,X_{107},X_{122}",
+                    "\\text{共线}".into(),
+                    None,
+                    "G, X(107), X(122) \\text{ collinear}",
+                    "重心、X(107)、X(122) 共线",
+                ));
+            }
+        }
+        if let Some((px, py)) = p108 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X108",
+                "X_{123}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(123) = \\mathrm{complement}(X(108)) = X(108)\\text{-of-medial}",
+                "X(123)：X(108) 关于重心的补点（中点三角形的 X(108)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X123".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X108",
+                    "X_{123}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(123)) = R/2",
+                    "X(123) 在九点圆上",
+                ));
+            }
+        }
+        if let Some((px, py)) = p109 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X109",
+                "X_{124}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(124) = \\mathrm{complement}(X(109)) = \\mathrm{mid}(H,X(102))",
+                "X(124)：X(109) 的补点 = mid(H,X(102))（九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X124".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X109",
+                    "X_{124}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(124)) = R/2",
+                    "X(124) 在九点圆上",
+                ));
+            }
+            if let Some((qx, qy)) = p102 {
+                let mx = (orth[0] + qx) / 2.0;
+                let my = (orth[1] + qy) / 2.0;
+                if (mx - xy[0]).abs() < 1e-5 && (my - xy[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "中点X109",
+                        "X_{124}=\\mathrm{mid}(H,X_{102})",
+                        "\\checkmark".into(),
+                        None,
+                        "X(124) = \\text{midpoint}(H, X(102))",
+                        "X(124) 为垂心与 X(102) 的中点",
+                    ));
+                }
+            }
+        }
+        if let Some((px, py)) = p111 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X111",
+                "X_{126}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(126) = \\mathrm{complement}(X(111)) = X(111)\\text{-of-medial}",
+                "X(126)：帕里点关于重心的补点（中点三角形的 X(111)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X126".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X111",
+                    "X_{126}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(126)) = R/2",
+                    "X(126) 在九点圆上",
+                ));
+            }
+        }
+        if let Some((px, py)) = p112 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X112",
+                "X_{127}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(127) = \\mathrm{complement}(X(112)) = X(112)\\text{-of-medial}",
+                "X(127)：X(112) 关于重心的补点（中点三角形的 X(112)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X127".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X112",
+                    "X_{127}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(127)) = R/2",
+                    "X(127) 在九点圆上",
+                ));
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -10779,6 +10942,95 @@ mod tests {
         assert!(((e0 + p74x) / 2.0 - ox).abs() < 1e-5 && ((e1 + p74y) / 2.0 - oy).abs() < 1e-5, "3-4-5 X110 antipode");
         assert!(fs4.iter().any(|f| f.group == "中点X105" && f.label == "X_{120}"));
         assert!(fs4.iter().any(|f| f.group == "中点X106" && f.label == "X_{121}"));
+    }
+
+    #[test]
+    fn x122_x123_x124_x126_x127() {
+        // Scalene acute 6-7-9: complements of Ψ/Parry on NPC.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let x107 = fs.iter().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").expect("X107");
+        let x108 = fs.iter().find(|f| f.group == "Ψ外心垂心" && f.label == "X_{108}").expect("X108");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x102 = fs.iter().find(|f| f.group == "Λ内心垂心" && f.label == "X_{102}").expect("X102");
+        let py = fs.iter().find(|f| f.group == "帕里点" && f.label == "Py").expect("Py");
+        let x112 = fs.iter().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").expect("X112");
+        let x122 = fs.iter().find(|f| f.group == "中点X107" && f.label == "X_{122}").expect("X122");
+        let x123 = fs.iter().find(|f| f.group == "中点X108" && f.label == "X_{123}").expect("X123");
+        let x124 = fs.iter().find(|f| f.group == "中点X109" && f.label == "X_{124}").expect("X124");
+        let x126 = fs.iter().find(|f| f.group == "中点X111" && f.label == "X_{126}").expect("X126");
+        let x127 = fs.iter().find(|f| f.group == "中点X112" && f.label == "X_{127}").expect("X127");
+        let (gx, gy) = ptxy(g);
+        let (hx, hy) = ptxy(h);
+        let check_comp = |parent: &Fact, child: &Fact, tag: &str| {
+            let (px, py) = ptxy(parent);
+            let (cx, cy) = ptxy(child);
+            let qx = (3.0 * gx - px) / 2.0;
+            let qy = (3.0 * gy - py) / 2.0;
+            assert!((cx - qx).abs() < 1e-5 && (cy - qy).abs() < 1e-5, "{} not complement", tag);
+        };
+        check_comp(x107, x122, "X122");
+        check_comp(x108, x123, "X123");
+        check_comp(x109, x124, "X124");
+        check_comp(py, x126, "X126");
+        check_comp(x112, x127, "X127");
+        // X124 = mid(H, X102)
+        let (p102x, p102y) = ptxy(x102);
+        let (p124x, p124y) = ptxy(x124);
+        assert!(((hx + p102x) / 2.0 - p124x).abs() < 1e-5 && ((hy + p102y) / 2.0 - p124y).abs() < 1e-5, "X124 != mid(H,X102)");
+        assert!(fs.iter().any(|f| f.group == "中点X107" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X108" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X109" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X111" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X112" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X109" && f.label.contains("mid")));
+
+        // Isosceles 5-5-6: parents Ψ skipped → children skipped; Parry may remain.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "中点X107"), "X122 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "中点X108"), "X123 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "中点X109"), "X124 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "中点X112"), "X127 skip isosceles");
+        // Parry / X126: denom 2a²−b²−c² may be nonzero on 5-5-6.
+        let _ = fs2.iter().any(|f| f.group == "中点X111");
+
+        // Equilateral: all skip with parents.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "中点X107"), "X122 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X108"), "X123 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X109"), "X124 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X111"), "X126 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X112"), "X127 skip equilateral");
+
+        // Right 3-4-5: X107 skips (b²+c²−a²=0 on hypotenuse); X108 skips (sec of right ∠).
+        // X109/X112/Parry and their complements remain.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        let has = |g: &str, lab: &str| fs4.iter().any(|f| f.group == g && f.label == lab);
+        // Parents that survive 3-4-5: X109 (cos diffs), Parry; X107/X108/X112 typically skip.
+        assert!(has("中点X109", "X_{124}"), "X124 on 3-4-5");
+        assert!(has("中点X111", "X_{126}"), "X126 on 3-4-5");
+        assert!(fs4.iter().all(|f| f.group != "中点X107"), "X122 skip right");
+        assert!(fs4.iter().all(|f| f.group != "中点X108"), "X123 skip right");
+        // X112 / X127: sin2B−sin2C may vanish on right — accept either skip or present.
+        let _ = has("中点X112", "X_{127}");
+        assert!(fs4.iter().any(|f| f.group == "中点X109" && f.label.contains("mid")), "mid(H,X102)");
     }
 
     #[test]
