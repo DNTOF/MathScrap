@@ -619,8 +619,104 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
         "外心与垂心的距离",
     ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
+    // Explicit Euler OH² identity (distinct from |OI|² = R(R−2r)).
+    {
+        let oh2 = oh * oh;
+        let oh2_form = 9.0 * rr * rr - (a * a + b * b + c * c);
+        out.push(fact(
+            "特殊点",
+            "|OH|^2",
+            nice(oh2),
+            Some(oh2),
+            "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+            "欧拉：外心与垂心距离的平方公式",
+        ));
+        if (oh2 - oh2_form).abs() < 1e-6 * (1.0 + oh2.abs()) {
+            out.push(fact(
+                "特殊点",
+                "9R^2 - (a^2+b^2+c^2)",
+                nice(oh2_form),
+                Some(oh2_form),
+                "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+                "与 |OH|^2 一致",
+            ));
+        }
+        let oi2_form = rr * (rr - 2.0 * r);
+        out.push(fact(
+            "特殊点",
+            "|OI|^2",
+            nice(oi * oi),
+            Some(oi * oi),
+            "|OI|^2 = R(R - 2r)",
+            "欧拉：外心与内心（勿与 |OH|^2 混淆）",
+        ));
+        let _ = oi2_form;
+    }
+    // Isogonal conjugates: O and H are isogonal conjugates of each other; I is self-conjugate.
+    out.push(fact(
+        "等角共轭",
+        "H \\leftrightarrow O",
+        "\\text{等角共轭}".into(),
+        None,
+        "\\text{反射角平分线}",
+        "垂心与外心互为等角共轭；内心是自身的等角共轭",
+    ));
+    out.push(fact(
+        "等角共轭",
+        "I \\leftrightarrow I",
+        "\\checkmark".into(),
+        None,
+        "",
+        "内心的等角共轭是自身",
+    ));
 
-    // Euler line: O, G, H collinear with OG:GH = 1:2 (and |OH| = 3|OG|).
+
+    // Carnot: signed distances from O to the three sides sum to R + r.
+    {
+        let mut sum_d = 0.0;
+        for i in 0..3 {
+            let q1 = v[(i + 1) % 3];
+            let q2 = v[(i + 2) % 3];
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 1e-12 {
+                continue;
+            }
+            // cross z-component for (q2-q1)×(P-q1)
+            let cross_o = dx * (circ[1] - q1[1]) - dy * (circ[0] - q1[0]);
+            let cross_v = dx * (v[i][1] - q1[1]) - dy * (v[i][0] - q1[0]);
+            let dist = cross_o.abs() / len;
+            let signed = if cross_o * cross_v >= 0.0 { dist } else { -dist };
+            sum_d += signed;
+            out.push(fact(
+                "卡诺定理",
+                &format!("\\delta_{{{}}}", SIDE[i]),
+                nice(signed),
+                Some(signed),
+                "d(O,\\text{边})\\text{（有向）}",
+                "外心到边的有向距离（与对顶同侧为正）",
+            ));
+        }
+        out.push(fact(
+            "卡诺定理",
+            "\\delta_a+\\delta_b+\\delta_c",
+            nice(sum_d),
+            Some(sum_d),
+            "\\delta_a+\\delta_b+\\delta_c = R+r",
+            "卡诺定理：外心到三边有向距离之和等于 R+r",
+        ));
+        out.push(fact(
+            "卡诺定理",
+            "R+r",
+            nice(rr + r),
+            Some(rr + r),
+            "R + r",
+            "与有向距离之和对照",
+        ));
+    }
+
+        // Euler line: O, G, H collinear with OG:GH = 1:2 (and |OH| = 3|OG|).
     // Note: |OI|^2 = R(R−2r) is the Euler distance formula for the incenter (already above);
     // it is not |OH|^2.
     {
@@ -1064,6 +1160,144 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[u]), nice(lu * lu / hyp), Some(lu * lu / hyp), &format!("\\frac{{{u}^2}}{{{c}}}", u = SIDE[u], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[w][0], y1: v[w][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[u]) }));
         out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[w]), nice(lw * lw / hyp), Some(lw * lw / hyp), &format!("\\frac{{{w}^2}}{{{c}}}", w = SIDE[w], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[u][0], y1: v[u][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[w]) }));
     }
+    // Morley: adjacent angle trisectors meet at an equilateral triangle.
+    {
+        let unit = |u: [f64; 2]| {
+            let l = u[0].hypot(u[1]);
+            if l < 1e-12 {
+                [0.0, 0.0]
+            } else {
+                [u[0] / l, u[1] / l]
+            }
+        };
+        let rot = |u: [f64; 2], ang: f64| {
+            let (c, s) = (ang.cos(), ang.sin());
+            [u[0] * c - u[1] * s, u[0] * s + u[1] * c]
+        };
+        let sang = |u: [f64; 2], w: [f64; 2]| (u[0] * w[1] - u[1] * w[0]).atan2(u[0] * w[0] + u[1] * w[1]);
+        let mut mverts = [[0.0; 2]; 3];
+        let mut ok = true;
+        for s in 0..3 {
+            let i = s;
+            let j = (s + 1) % 3;
+            let k = (s + 2) % 3;
+            let (pi, pj) = (v[i], v[j]);
+            let u_ij = unit([pj[0] - pi[0], pj[1] - pi[1]]);
+            let u_ik = unit([v[k][0] - pi[0], v[k][1] - pi[1]]);
+            let ai = sang(u_ij, u_ik);
+            let dir_i = rot(u_ij, ai / 3.0);
+            let u_ji = unit([pi[0] - pj[0], pi[1] - pj[1]]);
+            let u_jk = unit([v[k][0] - pj[0], v[k][1] - pj[1]]);
+            let aj = sang(u_ji, u_jk);
+            let dir_j = rot(u_ji, aj / 3.0);
+            let mat = vec![vec![dir_i[0], -dir_j[0]], vec![dir_i[1], -dir_j[1]]];
+            if let Some(st) = solve_linear_pub(mat, vec![pj[0] - pi[0], pj[1] - pi[1]]) {
+                if st[0].is_finite() && st[0] > 1e-9 {
+                    mverts[s] = [pi[0] + st[0] * dir_i[0], pi[1] + st[0] * dir_i[1]];
+                } else {
+                    ok = false;
+                }
+            } else {
+                ok = false;
+            }
+        }
+        if ok {
+            let e01 = dist2(mverts[0], mverts[1]);
+            let e12 = dist2(mverts[1], mverts[2]);
+            let e20 = dist2(mverts[2], mverts[0]);
+            if e01 > 1e-9 && near(e01, e12) && near(e12, e20) {
+                out.push(fact(
+                    "莫利定理",
+                    "\\text{Morley}",
+                    "\\text{等边}".into(),
+                    None,
+                    "\\text{邻角三等分线交点}",
+                    "相邻角的三等分线交出等边三角形",
+                ));
+                out.push(fact(
+                    "莫利定理",
+                    "|M_0M_1|",
+                    nice(e01),
+                    Some(e01),
+                    "",
+                    "莫利三角形边长",
+                ).with(Shape::Segment {
+                    x1: mverts[0][0],
+                    y1: mverts[0][1],
+                    x2: mverts[1][0],
+                    y2: mverts[1][1],
+                    label: "Morley".into(),
+                }));
+                for (ii, mv) in mverts.iter().enumerate() {
+                    out.push(fact(
+                        "莫利定理",
+                        &format!("M_{}", ii),
+                        pt(mv[0], mv[1]),
+                        None,
+                        "",
+                        "莫利三角形顶点",
+                    ).with(Shape::Point {
+                        x: mv[0],
+                        y: mv[1],
+                        label: format!("M{}", ii),
+                    }));
+                }
+            }
+        }
+    }
+    // Napoleon: outward equilateral on each side → centroids form an equilateral triangle.
+    {
+        // Orient: positive cross (pa→pb)×(pa→pc) means CCW; outward on edge B→C is clockwise (−60°).
+        let orient = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pb[1] - pa[1]) * (pc[0] - pa[0]);
+        let sign = if orient >= 0.0 { -1.0 } else { 1.0 }; // outward
+        let cos60 = 0.5;
+        let sin60 = sign * (3.0f64).sqrt() / 2.0;
+        let rot = |u: [f64; 2]| -> [f64; 2] {
+            [u[0] * cos60 - u[1] * sin60, u[0] * sin60 + u[1] * cos60]
+        };
+        let mut cents = [[0.0; 2]; 3];
+        for i in 0..3 {
+            let b = v[(i + 1) % 3];
+            let c = v[(i + 2) % 3];
+            let w = rot([c[0] - b[0], c[1] - b[1]]);
+            let dpt = [b[0] + w[0], b[1] + w[1]];
+            cents[i] = [(b[0] + c[0] + dpt[0]) / 3.0, (b[1] + c[1] + dpt[1]) / 3.0];
+        }
+        let e01 = dist2(cents[0], cents[1]);
+        let e12 = dist2(cents[1], cents[2]);
+        let e20 = dist2(cents[2], cents[0]);
+        if e01 > 1e-12 && near(e01, e12) && near(e12, e20) {
+            out.push(fact(
+                "拿破仑定理",
+                "\\text{Napoleon}",
+                "\\text{等边}".into(),
+                None,
+                "G_aG_bG_c\\text{ 等边}",
+                "各边向外作等边三角形，其重心连成等边三角形",
+            ));
+            out.push(fact(
+                "拿破仑定理",
+                "|G_aG_b|",
+                nice(e01),
+                Some(e01),
+                "",
+                "拿破仑三角形边长",
+            ).with(Shape::Segment {
+                x1: cents[0][0], y1: cents[0][1], x2: cents[1][0], y2: cents[1][1],
+                label: "Napoleon".into(),
+            }));
+            for (i, gcent) in cents.iter().enumerate() {
+                out.push(fact(
+                    "拿破仑定理",
+                    &format!("G_{{{}}}", SIDE[i]),
+                    pt(gcent[0], gcent[1]),
+                    None,
+                    "",
+                    "外侧等边三角形的重心",
+                ).with(Shape::Point { x: gcent[0], y: gcent[1], label: format!("G{}", SIDE[i]) }));
+            }
+        }
+    }
     out
 }
 
@@ -1366,6 +1600,53 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
                     Some(rhs),
                     "PA^2 + PC^2 = PB^2 + PD^2",
                     "英国国旗定理",
+                ));
+            }
+        }
+
+        // Cyclic quad: opposite angles sum to π → Ptolemy + Brahmagupta.
+        {
+            let cyclic = convex
+                && near(angles[0] + angles[2], PI)
+                && near(angles[1] + angles[3], PI);
+            if cyclic {
+                out.push(fact(
+                    "圆内接四边形",
+                    "\\text{共圆}",
+                    "\\checkmark".into(),
+                    None,
+                    "\\angle A + \\angle C = \\angle B + \\angle D = 180^\\circ",
+                    "对角互补 ⇒ 四点共圆",
+                ));
+                let (ab, bc, cd, da) = (sides[0], sides[1], sides[2], sides[3]);
+                let (ac, bd) = (d1, d2);
+                let lhs = ac * bd;
+                let rhs = ab * cd + da * bc;
+                out.push(fact(
+                    "托勒密定理",
+                    "AC \\cdot BD",
+                    nice(lhs),
+                    Some(lhs),
+                    "AC\\cdot BD = AB\\cdot CD + AD\\cdot BC",
+                    "圆内接四边形的托勒密定理",
+                ));
+                out.push(fact(
+                    "托勒密定理",
+                    "AB\\cdot CD + AD\\cdot BC",
+                    nice(rhs),
+                    Some(rhs),
+                    "AC\\cdot BD = AB\\cdot CD + AD\\cdot BC",
+                    "托勒密：对角线积 = 对边积之和",
+                ));
+                let ssemi = (ab + bc + cd + da) / 2.0;
+                let brahm = ((ssemi - ab) * (ssemi - bc) * (ssemi - cd) * (ssemi - da)).max(0.0).sqrt();
+                out.push(fact(
+                    "婆罗摩笈多公式",
+                    "S_{\\text{Brahmagupta}}",
+                    nice(brahm),
+                    Some(brahm),
+                    "S = \\sqrt{(s-a)(s-b)(s-c)(s-d)}",
+                    "圆内接四边形面积（婆罗摩笈多）",
                 ));
             }
         }
@@ -2737,6 +3018,67 @@ mod tests {
         let h_reg = (6.0f64).sqrt() / 3.0 * e;
         assert!((sum.num.unwrap() - h_reg).abs() < 1e-9, "sum={} expect {}", sum.value, h_reg);
         let _ = edge;
+    }
+
+
+    #[test]
+    fn ptolemy_and_brahmagupta_rectangle() {
+        // 3-4-5 rectangle: sides 4,3,4,3; diagonals 5,5; area 12
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.group == "圆内接四边形"));
+        let acbd = out.iter().find(|f| f.group == "托勒密定理" && f.label.contains("AC")).unwrap();
+        assert!((acbd.num.unwrap() - 25.0).abs() < 1e-9, "AC·BD = {}", acbd.value);
+        let rhs = out.iter().find(|f| f.group == "托勒密定理" && f.label.contains("AB")).unwrap();
+        assert!((rhs.num.unwrap() - 25.0).abs() < 1e-9);
+        let s = out.iter().find(|f| f.group == "婆罗摩笈多公式").unwrap();
+        assert!((s.num.unwrap() - 12.0).abs() < 1e-9, "Brahmagupta = {}", s.value);
+    }
+
+    #[test]
+    fn napoleon_equilateral_centroids() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.group == "拿破仑定理" && f.value.contains("等边")));
+        let side = fs.iter().find(|f| f.label == "|G_aG_b|").unwrap();
+        assert!(side.num.unwrap() > 0.0);
+        assert_eq!(fs.iter().filter(|f| f.group == "拿破仑定理" && f.label.starts_with("G_")).count(), 3);
+    }
+
+
+
+    #[test]
+    fn oh2_carnot_isogonal_morley() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let oh2 = fs.iter().find(|f| f.label == "|OH|^2").expect("|OH|^2");
+        assert!((oh2.num.unwrap() - 6.25).abs() < 1e-9, "OH² = {}", oh2.value);
+        let form = fs.iter().find(|f| f.label.starts_with("9R^2")).expect("9R^2 form");
+        assert!((form.num.unwrap() - 6.25).abs() < 1e-9);
+        let oi2 = fs.iter().find(|f| f.label == "|OI|^2").expect("|OI|^2");
+        assert!((oi2.num.unwrap() - 1.25).abs() < 1e-9, "OI² = {}", oi2.value);
+        assert!(fs.iter().any(|f| f.group == "等角共轭" && f.label.contains("H")));
+        let sum = fs
+            .iter()
+            .find(|f| f.group == "卡诺定理" && f.label.contains("delta_a") && f.label.contains('+'))
+            .expect("Carnot sum");
+        let rr = fs.iter().find(|f| f.group == "卡诺定理" && f.label == "R+r").unwrap();
+        assert!((sum.num.unwrap() - rr.num.unwrap()).abs() < 1e-6, "Carnot {} vs {}", sum.value, rr.value);
+        assert!(
+            fs.iter().any(|f| f.group == "莫利定理" && f.value.contains("等边")),
+            "Morley missing"
+        );
+        let ms = fs.iter().find(|f| f.group == "莫利定理" && f.label == "|M_0M_1|").unwrap();
+        assert!(ms.num.unwrap() > 0.0);
     }
 
 }
