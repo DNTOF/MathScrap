@@ -5652,6 +5652,290 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(102): Λ(I,H) = circumcircle-antipode of X(109). Skip isosceles (no X109).
+    {
+        let x109_xy = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x109_xy {
+            let x102 = [2.0 * circ[0] - px, 2.0 * circ[1] - py];
+            out.push(fact(
+                "Λ内心垂心",
+                "X_{102}",
+                pt(x102[0], x102[1]),
+                None,
+                "X(102) = 2O - X(109) = \\Lambda(I,H)",
+                "X(102)：Λ(I,H)（外接圆上；X(109) 对径）",
+            ).with(Shape::Point {
+                x: x102[0],
+                y: x102[1],
+                label: "X102".into(),
+            }));
+            out.push(fact(
+                "Λ内心垂心",
+                "X_{102}=2O-X_{109}",
+                "\\text{外接圆对径}".into(),
+                None,
+                "X(102) = 2O - X(109)",
+                "X(102) 与 X(109) 互为外接圆对径点",
+            ));
+        }
+    }
+
+    // X(103): circumcircle-antipode of X(101); bary a²/[(a−b)cot C+(a−c)cot B].
+    // Skip isosceles / when any denom≈0.
+    {
+        let cota = g[0].cos() / g[0].sin();
+        let cotb = g[1].cos() / g[1].sin();
+        let cotc = g[2].cos() / g[2].sin();
+        let da = (a - b) * cotc + (a - c) * cotb;
+        let db = (b - c) * cota + (b - a) * cotc;
+        let dc = (c - a) * cotb + (c - b) * cota;
+        let mut emitted = false;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x103 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "X101对径",
+                    "X_{103}",
+                    pt(x103[0], x103[1]),
+                    None,
+                    "X(103) = \\bigl(a^2/[(a-b)\\cot C+(a-c)\\cot B]:\\cdots\\bigr)",
+                    "X(103)：X(101) 在外接圆上的对径点",
+                ).with(Shape::Point {
+                    x: x103[0],
+                    y: x103[1],
+                    label: "X103".into(),
+                }));
+                emitted = true;
+                let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((px, py)) = x101_xy {
+                    let mid_dx = (x103[0] + px) / 2.0 - circ[0];
+                    let mid_dy = (x103[1] + py) / 2.0 - circ[1];
+                    if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                        out.push(fact(
+                            "X101对径",
+                            "X_{103}=2O-X_{101}",
+                            "\\text{外接圆对径}".into(),
+                            None,
+                            "X(103) = 2O - X(101)",
+                            "X(103) 与 X(101) 互为外接圆对径点",
+                        ));
+                    }
+                }
+            }
+        }
+        if !emitted {
+            // Fallback: pure antipode of X(101) when bary denoms vanish but partner exists.
+            let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((px, py)) = x101_xy {
+                let x103 = [2.0 * circ[0] - px, 2.0 * circ[1] - py];
+                out.push(fact(
+                    "X101对径",
+                    "X_{103}",
+                    pt(x103[0], x103[1]),
+                    None,
+                    "X(103) = 2O - X(101)",
+                    "X(103)：X(101) 在外接圆上的对径点",
+                ).with(Shape::Point {
+                    x: x103[0],
+                    y: x103[1],
+                    label: "X103".into(),
+                }));
+                out.push(fact(
+                    "X101对径",
+                    "X_{103}=2O-X_{101}",
+                    "\\text{外接圆对径}".into(),
+                    None,
+                    "X(103) = 2O - X(101)",
+                    "X(103) 与 X(101) 互为外接圆对径点",
+                ));
+            }
+        }
+    }
+
+    // X(116): midpoint(H, X(103)); on nine-point circle. Bary (b−c)²(b²+bc+c²−ab−ac).
+    // Skip isosceles (any (b−c)=0).
+    {
+        let da = (b - c).powi(2) * (b * b + b * c + c * c - a * b - a * c);
+        let db = (c - a).powi(2) * (c * c + c * a + a * a - b * c - b * a);
+        let dc = (a - b).powi(2) * (a * a + a * b + b * b - c * a - c * b);
+        let mut emitted = false;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = da;
+            let wb = db;
+            let wc = dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x116 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "九点X103中点",
+                    "X_{116}",
+                    pt(x116[0], x116[1]),
+                    None,
+                    "X(116) = \\bigl((b-c)^2(b^2+bc+c^2-ab-ac):\\cdots\\bigr)",
+                    "X(116)：H 与 X(103) 的中点（九点圆上）",
+                ).with(Shape::Point {
+                    x: x116[0],
+                    y: x116[1],
+                    label: "X116".into(),
+                }));
+                emitted = true;
+            }
+        }
+        if !emitted {
+            let x103_xy = out.iter().rev().find(|f| f.group == "X101对径" && f.label == "X_{103}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((px, py)) = x103_xy {
+                let x116 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+                out.push(fact(
+                    "九点X103中点",
+                    "X_{116}",
+                    pt(x116[0], x116[1]),
+                    None,
+                    "X(116) = \\text{midpoint}(H, X(103))",
+                    "X(116)：H 与 X(103) 的中点（九点圆上）",
+                ).with(Shape::Point {
+                    x: x116[0],
+                    y: x116[1],
+                    label: "X116".into(),
+                }));
+            }
+        } else if let Some((px, py)) = out.iter().rev().find(|f| f.group == "X101对径" && f.label == "X_{103}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        }) {
+            // annotate midpoint relation when bary path used
+            let x116_xy = out.iter().rev().find(|f| f.group == "九点X103中点" && f.label == "X_{116}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((mx, my)) = x116_xy {
+                let dx = (orth[0] + px) / 2.0 - mx;
+                let dy = (orth[1] + py) / 2.0 - my;
+                if dx * dx + dy * dy < 1e-6 {
+                    out.push(fact(
+                        "九点X103中点",
+                        "X_{116}=\\mathrm{mid}(H,X_{103})",
+                        "\\text{中点}".into(),
+                        None,
+                        "X(116) = \\text{midpoint}(H, X(103))",
+                        "X(116) 为垂心与 X(103) 的中点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(117): midpoint(H, X(109)); on nine-point circle. Skip when X109 absent.
+    {
+        let x109_xy = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x109_xy {
+            let x117 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "九点X109中点",
+                "X_{117}",
+                pt(x117[0], x117[1]),
+                None,
+                "X(117) = \\text{midpoint}(H, X(109))",
+                "X(117)：H 与 X(109) 的中点（九点圆上）",
+            ).with(Shape::Point {
+                x: x117[0],
+                y: x117[1],
+                label: "X117".into(),
+            }));
+        }
+    }
+
+    // X(118): midpoint(H, X(101)); on nine-point circle. Skip when X101 absent.
+    {
+        let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x101_xy {
+            let x118 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "九点X101中点",
+                "X_{118}",
+                pt(x118[0], x118[1]),
+                None,
+                "X(118) = \\text{midpoint}(H, X(101))",
+                "X(118)：H 与 X(101) 的中点（九点圆上）",
+            ).with(Shape::Point {
+                x: x118[0],
+                y: x118[1],
+                label: "X118".into(),
+            }));
+        }
+    }
+
+    // X(119): midpoint(H, X(100)) = nine-point antipode of Feuerbach X(11).
+    // Skip when X100 absent (isosceles).
+    {
+        let x100_xy = out.iter().rev().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x100_xy {
+            let x119 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "费尔巴哈九点对径",
+                "X_{119}",
+                pt(x119[0], x119[1]),
+                None,
+                "X(119) = \\text{midpoint}(H, X(100)) = 2N - Fe",
+                "X(119)：费尔巴哈点在九点圆上的对径点",
+            ).with(Shape::Point {
+                x: x119[0],
+                y: x119[1],
+                label: "X119".into(),
+            }));
+            // Verify reflection of Fe in N when both present.
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let fe_xy = out.iter().rev().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((fx, fy)) = fe_xy {
+                let mid_dx = (x119[0] + fx) / 2.0 - n9[0];
+                let mid_dy = (x119[1] + fy) / 2.0 - n9[1];
+                if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                    out.push(fact(
+                        "费尔巴哈九点对径",
+                        "X_{119}=2N-Fe",
+                        "\\text{九点圆对径}".into(),
+                        None,
+                        "X(119) = 2N - X(11)",
+                        "X(119) 与费尔巴哈点互为九点圆对径点",
+                    ));
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -9823,6 +10107,88 @@ mod tests {
         assert!(fs4.iter().all(|f| f.group != "Ψ内心外心"));
         assert!(fs4.iter().all(|f| f.group != "Ψ垂心对称中线"));
     }
+
+
+    #[test]
+    fn x102_x103_x116_x117_x118_x119() {
+        // Scalene acute 6-7-9: all six present; antipodes and nine-point midpoints hold.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x100 = fs.iter().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").expect("X100");
+        let x101 = fs.iter().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").expect("X101");
+        let x102 = fs.iter().find(|f| f.group == "Λ内心垂心" && f.label == "X_{102}").expect("X102");
+        let x103 = fs.iter().find(|f| f.group == "X101对径" && f.label == "X_{103}").expect("X103");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x116 = fs.iter().find(|f| f.group == "九点X103中点" && f.label == "X_{116}").expect("X116");
+        let x117 = fs.iter().find(|f| f.group == "九点X109中点" && f.label == "X_{117}").expect("X117");
+        let x118 = fs.iter().find(|f| f.group == "九点X101中点" && f.label == "X_{118}").expect("X118");
+        let x119 = fs.iter().find(|f| f.group == "费尔巴哈九点对径" && f.label == "X_{119}").expect("X119");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let fe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").expect("Fe");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x102.value, g.value);
+        assert_ne!(x103.value, g.value);
+        assert!(fs.iter().any(|f| f.group == "Λ内心垂心" && f.label.contains("2O")));
+        assert!(fs.iter().any(|f| f.group == "X101对径" && f.label.contains("2O")));
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let (ox, oy) = ptxy(o);
+        let (hx, hy) = ptxy(h);
+        let (nx, ny) = ptxy(n);
+        let (a1, b1) = ptxy(x101);
+        let (a2, b2) = ptxy(x102);
+        let (a3, b3) = ptxy(x103);
+        let (a9, b9) = ptxy(x109);
+        let (a0, b0) = ptxy(x100);
+        let (fx, fy) = ptxy(fe);
+        // X102 = 2O - X109; X103 = 2O - X101
+        assert!(((a2 + a9) / 2.0 - ox).abs() < 1e-6 && ((b2 + b9) / 2.0 - oy).abs() < 1e-6, "X102 not antipode of X109");
+        assert!(((a3 + a1) / 2.0 - ox).abs() < 1e-6 && ((b3 + b1) / 2.0 - oy).abs() < 1e-6, "X103 not antipode of X101");
+        // Midpoints with H
+        let (u6, v6) = ptxy(x116);
+        let (u7, v7) = ptxy(x117);
+        let (u8, v8) = ptxy(x118);
+        let (u9, v9) = ptxy(x119);
+        assert!(((hx + a3) / 2.0 - u6).abs() < 1e-6 && ((hy + b3) / 2.0 - v6).abs() < 1e-6, "X116 mid(H,X103)");
+        assert!(((hx + a9) / 2.0 - u7).abs() < 1e-6 && ((hy + b9) / 2.0 - v7).abs() < 1e-6, "X117 mid(H,X109)");
+        assert!(((hx + a1) / 2.0 - u8).abs() < 1e-6 && ((hy + b1) / 2.0 - v8).abs() < 1e-6, "X118 mid(H,X101)");
+        assert!(((hx + a0) / 2.0 - u9).abs() < 1e-6 && ((hy + b0) / 2.0 - v9).abs() < 1e-6, "X119 mid(H,X100)");
+        // X119 = 2N - Fe
+        assert!(((u9 + fx) / 2.0 - nx).abs() < 1e-6 && ((v9 + fy) / 2.0 - ny).abs() < 1e-6, "X119 not antipode of Fe on NPC");
+        assert!(fs.iter().any(|f| f.group == "费尔巴哈九点对径" && f.label.contains("2N")));
+
+        // Isosceles non-eq 5-5-6 (a=b): X100/X101/X109 absent → X102/X117/X118/X119 skip;
+        // X103 bary still finite, so X103/X116 remain via mid(H,X103).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "Λ内心垂心"), "X102 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "X101对径" && f.label == "X_{103}"), "X103 on a=b isosceles");
+        assert!(fs2.iter().any(|f| f.group == "九点X103中点" && f.label == "X_{116}"), "X116 on a=b isosceles");
+        assert!(fs2.iter().all(|f| f.group != "九点X109中点"), "X117 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "九点X101中点"), "X118 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "费尔巴哈九点对径"), "X119 skip isosceles");
+
+        // Equilateral: all skipped.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "Λ内心垂心"));
+        assert!(fs3.iter().all(|f| f.group != "X101对径"));
+        assert!(fs3.iter().all(|f| f.group != "九点X103中点"));
+        assert!(fs3.iter().all(|f| f.group != "九点X109中点"));
+        assert!(fs3.iter().all(|f| f.group != "九点X101中点"));
+        assert!(fs3.iter().all(|f| f.group != "费尔巴哈九点对径"));
+    }
+
 
     #[test]
     fn british_flag_on_rectangle() {
