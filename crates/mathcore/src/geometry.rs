@@ -1102,6 +1102,108 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // de Longchamps point L: reflection of H over O (so O midpoint of LH); on Euler line.
+    {
+        let longch = [2.0 * circ[0] - orth[0], 2.0 * circ[1] - orth[1]];
+        out.push(fact(
+            "德龙尚点",
+            "L",
+            pt(longch[0], longch[1]),
+            None,
+            "L = 2O - H",
+            "德龙尚点：垂心关于外心的对称点",
+        ).with(Shape::Point {
+            x: longch[0],
+            y: longch[1],
+            label: "L 德龙尚".into(),
+        }));
+        let mid = [(longch[0] + orth[0]) / 2.0, (longch[1] + orth[1]) / 2.0];
+        if dist2(mid, circ) < 1e-6 * (1.0 + dist2(circ, orth)) {
+            out.push(fact(
+                "德龙尚点",
+                "O = \\text{中点}(L,H)",
+                "\\checkmark".into(),
+                None,
+                "\\overrightarrow{OL} = -\\overrightarrow{OH}",
+                "外心是 LH 的中点（欧拉线上）",
+            ));
+        }
+    }
+
+    // Mittenpunkt Mi: perspector of medial and excentral triangles; bary a(s-a):b(s-b):c(s-c).
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        let wa = a * sa;
+        let wb = b * sb;
+        let wc = c * sc;
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let mi = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "米滕点",
+                "Mi",
+                pt(mi[0], mi[1]),
+                None,
+                "Mi = \\frac{a(s-a)A+b(s-b)B+c(s-c)C}{\\sum}",
+                "米滕点（Mittenpunkt）：旁心三角形与中点三角形的透视中心",
+            ).with(Shape::Point {
+                x: mi[0],
+                y: mi[1],
+                label: "Mi 米滕".into(),
+            }));
+        }
+    }
+
+    // Schiffler point: concurrence of Euler lines of ABC, IBC, ICA, IAB.
+    // Construct as Euler(ABC) ∩ Euler(IBC); cross-check with Euler(ICA).
+    if let Some((o_ibc, _)) = circum2(inc, pb, pc) {
+        let g_ibc = [
+            (inc[0] + pb[0] + pc[0]) / 3.0,
+            (inc[1] + pb[1] + pc[1]) / 3.0,
+        ];
+        if let Some(sf) = line_line_isect2(circ, orth, o_ibc, g_ibc) {
+            let cross = (orth[0] - circ[0]) * (sf[1] - circ[1]) - (orth[1] - circ[1]) * (sf[0] - circ[0]);
+            let scale = (1.0 + dist2(circ, orth)) * (1.0 + dist2(circ, sf));
+            if cross.abs() < 1e-5 * scale {
+                out.push(fact(
+                    "席弗勒点",
+                    "Sc",
+                    pt(sf[0], sf[1]),
+                    None,
+                    "\\text{Euler}(\\triangle ABC)\\cap\\text{Euler}(\\triangle IBC)",
+                    "席弗勒点：内心三角形与原三角形欧拉线的交点",
+                ).with(Shape::Point {
+                    x: sf[0],
+                    y: sf[1],
+                    label: "Sc 席弗勒".into(),
+                }));
+                if let Some((o_ica, _)) = circum2(inc, pc, pa) {
+                    let g_ica = [
+                        (inc[0] + pc[0] + pa[0]) / 3.0,
+                        (inc[1] + pc[1] + pa[1]) / 3.0,
+                    ];
+                    if let Some(sf2) = line_line_isect2(circ, orth, o_ica, g_ica) {
+                        if dist2(sf, sf2) < 1e-5 * (1.0 + dist2(circ, orth)) {
+                            out.push(fact(
+                                "席弗勒点",
+                                "\\text{Euler}(ICA)",
+                                "\\checkmark".into(),
+                                None,
+                                "\\text{Euler}(ICA)\\ni Sc",
+                                "与 △ICA 的欧拉线亦交于同一点",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -3896,6 +3998,48 @@ mod tests {
         assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\omega"));
         assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\Omega"));
         assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\Omega'"));
+    }
+
+
+    #[test]
+    fn longchamps_mittenpunkt_schiffler() {
+        // 3-4-5: H=C=(3.2,2.4), O=(2.5,0) → L=2O−H=(1.8,−2.4);
+        // Mi bary a(s−a):… → (28/11, 6/11); Sc on Euler line, matches Euler(ICA).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        assert!(
+            (l.value.contains("1.8") || l.value.contains("9/5") || l.value.contains("\\frac{9}{5}"))
+                && (l.value.contains("-2.4") || l.value.contains("-\\frac{12}{5}") || l.value.contains("-12/5")),
+            "L={}",
+            l.value
+        );
+        assert!(fs.iter().any(|f| f.group == "德龙尚点" && f.label.contains("中点")));
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        assert!(
+            mi.value.contains("28/11")
+                || mi.value.contains("\\frac{28}{11}")
+                || mi.value.contains("2.54"),
+            "Mi={}",
+            mi.value
+        );
+        assert!(fs.iter().any(|f| f.group == "席弗勒点" && f.label == "Sc"), "Sc missing");
+        assert!(
+            fs.iter().any(|f| f.group == "席弗勒点" && f.label.contains("ICA")),
+            "Schiffler ICA concurrence missing"
+        );
+        let sc = fs.iter().find(|f| f.group == "席弗勒点" && f.label == "Sc").unwrap();
+        // Sc ≈ (2.68421, 0.63158) = (51/19, 12/19)
+        assert!(
+            sc.value.contains("2.68")
+                || sc.value.contains("51/19")
+                || sc.value.contains("\\frac{51}{19}")
+                || sc.value.contains("0.63"),
+            "Sc={}",
+            sc.value
+        );
     }
 
     #[test]
