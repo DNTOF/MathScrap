@@ -7530,6 +7530,242 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
 
 
 
+
+    // X(157)–X(159), X(163)–X(165): tangential symmedian / sec-tan / X66-reflection /
+    // trilinear-product, and excentral incenter/centroid.
+    // X(157)=X(6)-of-tangential; bary a²(b³ cos B + c³ cos C − a³ cos A).
+    // X(158)=bary sec A tan A = sin A / cos² A; skip right (sec ∞).
+    // X(159)=X(9)-of-tangential = reflection of X(66) in X(141).
+    // X(163)=trilinear product X(6)·X(110); bary a³/(b²−c²); skip isosceles.
+    // X(164)=X(1)-of-excentral; bary a(sin(B/2)+sin(C/2)−sin(A/2)).
+    // X(165)=X(2)-of-excentral; bary a(tan(B/2)+tan(C/2)−tan(A/2));
+    //   = centroid(I, Na, L); on OI as {O, Be}-harmonic conjugate of I.
+    {
+        let ca = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let rightish = ca[0].abs() < 1e-9 || ca[1].abs() < 1e-9 || ca[2].abs() < 1e-9;
+        // X(157)
+        {
+            let fa = b * b * b * ca[1] + c * c * c * ca[2] - a * a * a * ca[0];
+            let fb = c * c * c * ca[2] + a * a * a * ca[0] - b * b * b * ca[1];
+            let fc = a * a * a * ca[0] + b * b * b * ca[1] - c * c * c * ca[2];
+            let wa = a * a * fa;
+            let wb = b * b * fb;
+            let wc = c * c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "切线对称中线",
+                    "X_{157}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(157) = \\bigl(a^2(b^3\\cos B+c^3\\cos C-a^3\\cos A):\\cdots\\bigr) = X(6)\\text{-of-tangential}",
+                    "X(157)：切线三角形的对称中线点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X157".into(),
+                }));
+            }
+        }
+        // X(158)
+        if !rightish {
+            let sa_ = [g[0].sin(), g[1].sin(), g[2].sin()];
+            let wa = sa_[0] / (ca[0] * ca[0]);
+            let wb = sa_[1] / (ca[1] * ca[1]);
+            let wc = sa_[2] / (ca[2] * ca[2]);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "正割正切点",
+                    "X_{158}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(158) = (\\sec A\\tan A:\\sec B\\tan B:\\sec C\\tan C)",
+                    "X(158)：正割–正切重心坐标点（X(19) 与 X(92) 的截共轭）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X158".into(),
+                }));
+            }
+        }
+        // X(159) = 2·X(141) − X(66) = X(9)-of-tangential.
+        {
+            let x66_xy = out.iter().rev().find(|f| f.group == "埃克塞特等角" && f.label == "X_{66}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            let x141_xy = out.iter().rev().find(|f| f.group == "对称中线补点" && f.label == "X_{141}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let (Some((qx, qy)), Some((mx, my))) = (x66_xy, x141_xy) {
+                let xy = [2.0 * mx - qx, 2.0 * my - qy];
+                out.push(fact(
+                    "切线米滕",
+                    "X_{159}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(159) = 2\\,X(141) - X(66) = X(9)\\text{-of-tangential}",
+                    "X(159)：切线三角形的米滕点（X(66) 关于 X(141) 的反射）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X159".into(),
+                }));
+            }
+        }
+        // X(163): bary a³/(b²−c²); skip isosceles (denom 0).
+        {
+            let a2 = a * a;
+            let b2 = b * b;
+            let c2 = c * c;
+            let da = b2 - c2;
+            let db = c2 - a2;
+            let dc = a2 - b2;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = a * a2 / da;
+                let wb = b * b2 / db;
+                let wc = c * c2 / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "对称中线X110积",
+                        "X_{163}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(163) = \\bigl(a^3/(b^2-c^2):\\cdots\\bigr) = X(6)\\cdot X(110)\\text{ (trilinear)}",
+                        "X(163)：对称中线点与 X(110) 的三线积",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X163".into(),
+                    }));
+                }
+            }
+        }
+        // X(164) / X(165): excentral incenter & centroid via half-angles.
+        {
+            let ha = g[0] / 2.0;
+            let hb = g[1] / 2.0;
+            let hc = g[2] / 2.0;
+            let s_ha = ha.sin();
+            let s_hb = hb.sin();
+            let s_hc = hc.sin();
+            // X(164)
+            {
+                let wa = a * (s_hb + s_hc - s_ha);
+                let wb = b * (s_hc + s_ha - s_hb);
+                let wc = c * (s_ha + s_hb - s_hc);
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "旁心内心",
+                        "X_{164}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(164) = \\bigl(a(\\sin\\tfrac{B}{2}+\\sin\\tfrac{C}{2}-\\sin\\tfrac{A}{2}):\\cdots\\bigr) = X(1)\\text{-of-excentral}",
+                        "X(164)：旁心三角形的内心",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X164".into(),
+                    }));
+                }
+            }
+            // X(165)
+            let t_ha = ha.tan();
+            let t_hb = hb.tan();
+            let t_hc = hc.tan();
+            if t_ha.is_finite() && t_hb.is_finite() && t_hc.is_finite() {
+                let wa = a * (t_hb + t_hc - t_ha);
+                let wb = b * (t_hc + t_ha - t_hb);
+                let wc = c * (t_ha + t_hb - t_hc);
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "旁心重心",
+                        "X_{165}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(165) = \\bigl(a(\\tan\\tfrac{B}{2}+\\tan\\tfrac{C}{2}-\\tan\\tfrac{A}{2}):\\cdots\\bigr) = X(2)\\text{-of-excentral}",
+                        "X(165)：旁心三角形的重心（在 OI 线上）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X165".into(),
+                    }));
+                    // Cross-check: centroid of I, Nagel, de Longchamps.
+                    let i_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "I").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let na_xy = out.iter().rev().find(|f| f.group == "奈格尔点" && f.label == "Na").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let l_xy = out.iter().rev().find(|f| f.group == "德龙尚点" && f.label == "L").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((ix, iy)), Some((nx, ny)), Some((lx, ly))) = (i_xy, na_xy, l_xy) {
+                        let cx = (ix + nx + lx) / 3.0;
+                        let cy = (iy + ny + ly) / 3.0;
+                        if (cx - xy[0]).abs() < 1e-5 && (cy - xy[1]).abs() < 1e-5 {
+                            out.push(fact(
+                                "旁心重心",
+                                "X_{165}=\\mathrm{cent}(I,Na,L)",
+                                "\\checkmark".into(),
+                                None,
+                                "X(165) = \\mathrm{centroid}(X(1),X(8),X(20))",
+                                "X(165) 为内心、奈格尔、德龙尚三点的重心",
+                            ));
+                        }
+                    }
+                    // Cross-check: on OI — {O, Be}-harmonic conjugate of I → (4/3)O − (1/3)I.
+                    let be_xy = out.iter().rev().find(|f| f.group == "贝万点" && f.label == "Be").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((ix, iy)), Some((_bx, _by))) = (i_xy, be_xy) {
+                        let hx = (4.0 * circ[0] - ix) / 3.0;
+                        let hy = (4.0 * circ[1] - iy) / 3.0;
+                        if (hx - xy[0]).abs() < 1e-5 && (hy - xy[1]).abs() < 1e-5 {
+                            out.push(fact(
+                                "旁心重心",
+                                "X_{165}\\in OI",
+                                "\\checkmark".into(),
+                                None,
+                                "X(165) = \\tfrac{4}{3}O - \\tfrac{1}{3}I = \\{O,X(40)\\}\\text{-harmonic of }I",
+                                "X(165) 为 I 关于 O 与贝万点的调和共轭（在 OI 上）",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -12340,7 +12576,83 @@ mod tests {
         assert!(fs4.iter().all(|f| f.group != "切线九点心"), "X156 skip right");
     }
 
-        #[test]
+    #[test]
+    fn x157_to_x165_tangential_excentral() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x157 = fs.iter().find(|f| f.group == "切线对称中线" && f.label == "X_{157}").expect("X157");
+        let x158 = fs.iter().find(|f| f.group == "正割正切点" && f.label == "X_{158}").expect("X158");
+        let x159 = fs.iter().find(|f| f.group == "切线米滕" && f.label == "X_{159}").expect("X159");
+        let x163 = fs.iter().find(|f| f.group == "对称中线X110积" && f.label == "X_{163}").expect("X163");
+        let x164 = fs.iter().find(|f| f.group == "旁心内心" && f.label == "X_{164}").expect("X164");
+        let x165 = fs.iter().find(|f| f.group == "旁心重心" && f.label == "X_{165}").expect("X165");
+        let x66 = fs.iter().find(|f| f.group == "埃克塞特等角" && f.label == "X_{66}").expect("X66");
+        let x141 = fs.iter().find(|f| f.group == "对称中线补点" && f.label == "X_{141}").expect("X141");
+        let (p66x, p66y) = ptxy(x66);
+        let (p141x, p141y) = ptxy(x141);
+        let (p159x, p159y) = ptxy(x159);
+        assert!((2.0 * p141x - p66x - p159x).abs() < 1e-5 && (2.0 * p141y - p66y - p159y).abs() < 1e-5, "X159 != 2·X141−X66");
+        assert!(fs.iter().any(|f| f.group == "旁心重心" && f.label.contains("cent")));
+        assert!(fs.iter().any(|f| f.group == "旁心重心" && f.label.contains("OI")));
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let (ix, iy) = ptxy(i);
+        let (ox, oy) = ptxy(o);
+        let (p165x, p165y) = ptxy(x165);
+        assert!(((4.0 * ox - ix) / 3.0 - p165x).abs() < 1e-5 && ((4.0 * oy - iy) / 3.0 - p165y).abs() < 1e-5, "X165 != (4O−I)/3");
+        let _ = (x157, x158, x163, x164);
+
+        // Isosceles 5-5-6: X163 skips; X157/158/164/165 remain; X159 if X66+X141.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "对称中线X110积"), "X163 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "切线对称中线" && f.label == "X_{157}"));
+        assert!(fs2.iter().any(|f| f.group == "正割正切点" && f.label == "X_{158}"));
+        assert!(fs2.iter().any(|f| f.group == "旁心内心" && f.label == "X_{164}"));
+        assert!(fs2.iter().any(|f| f.group == "旁心重心" && f.label == "X_{165}"));
+        let _ = fs2.iter().any(|f| f.group == "切线米滕");
+
+        // Equilateral: X163 skips; others finite; X165 = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "对称中线X110积"), "X163 skip equilateral");
+        assert!(fs3.iter().any(|f| f.group == "切线对称中线" && f.label == "X_{157}"));
+        assert!(fs3.iter().any(|f| f.group == "正割正切点" && f.label == "X_{158}"));
+        assert!(fs3.iter().any(|f| f.group == "旁心内心" && f.label == "X_{164}"));
+        assert!(fs3.iter().any(|f| f.group == "旁心重心" && f.label == "X_{165}"));
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let x165e = fs3.iter().find(|f| f.group == "旁心重心" && f.label == "X_{165}").expect("X165e");
+        let (gx, gy) = ptxy(g3);
+        let (ex, ey) = ptxy(x165e);
+        assert!((gx - ex).abs() < 1e-5 && (gy - ey).abs() < 1e-5, "equilateral X165 != G");
+
+        // Right 3-4-5: X158 skips; X163/164/165 ok; X157/X159 optional via parents.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.group != "正割正切点"), "X158 skip right");
+        assert!(fs4.iter().any(|f| f.group == "旁心内心" && f.label == "X_{164}"));
+        assert!(fs4.iter().any(|f| f.group == "旁心重心" && f.label == "X_{165}"));
+        assert!(fs4.iter().any(|f| f.group == "对称中线X110积" && f.label == "X_{163}"));
+        let _ = (
+            fs4.iter().any(|f| f.group == "切线对称中线"),
+            fs4.iter().any(|f| f.group == "切线米滕"),
+        );
+    }
+
+    #[test]
     fn etc_dual_labels_steiner_tarry_parry() {
         let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
         let r = triangle_solve(&k);
