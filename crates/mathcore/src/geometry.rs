@@ -3183,6 +3183,118 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(31) 2nd power point: bary a³; isogonal conjugate of Moses X(75).
+    // X(32) 3rd power point: bary a⁴; isogonal conjugate of 3rd Brocard X(76).
+    {
+        let wa = a * a * a;
+        let wb = b * b * b;
+        let wc = c * c * c;
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x31 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "第二幂点",
+                "X_{31}",
+                pt(x31[0], x31[1]),
+                None,
+                "X(31) = (a^3:b^3:c^3)",
+                "第二幂点 X(31)：摩西点的等角共轭",
+            ).with(Shape::Point {
+                x: x31[0],
+                y: x31[1],
+                label: "X31 幂点".into(),
+            }));
+            out.push(fact(
+                "第二幂点",
+                "X_{31} \\leftrightarrow Mo",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(75)",
+                "X(31) 与摩西点 X(75) 互为等角共轭",
+            ));
+        }
+        let wa = a * a * a * a;
+        let wb = b * b * b * b;
+        let wc = c * c * c * c;
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x32 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "第三幂点",
+                "X_{32}",
+                pt(x32[0], x32[1]),
+                None,
+                "X(32) = (a^4:b^4:c^4)",
+                "第三幂点 X(32)：第三布罗卡点的等角共轭",
+            ).with(Shape::Point {
+                x: x32[0],
+                y: x32[1],
+                label: "X32 幂点".into(),
+            }));
+            out.push(fact(
+                "第三幂点",
+                "X_{32} \\leftrightarrow X_{76}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(76)",
+                "X(32) 与第三布罗卡点 X(76) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(69): bary cot A = b²+c²−a²; isotomic of H; isogonal of X(25).
+    // Right △: the right-angle component vanishes (point on opposite side) — still emit.
+    {
+        let wa = b * b + c * c - a * a;
+        let wb = c * c + a * a - b * b;
+        let wc = a * a + b * b - c * c;
+        let den = wa + wb + wc;
+        // den = a²+b²+c² > 0 always for a non-degen △
+        if den.abs() > 1e-12 {
+            let x69 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "余切点",
+                "X_{69}",
+                pt(x69[0], x69[1]),
+                None,
+                "X(69) = (\\cot A:\\cot B:\\cot C) = (b^2+c^2-a^2:\\cdots)",
+                "X(69)：垂心的等截共轭（亦为 X(25) 的等角共轭）",
+            ).with(Shape::Point {
+                x: x69[0],
+                y: x69[1],
+                label: "X69".into(),
+            }));
+            out.push(fact(
+                "余切点",
+                "X_{69} \\leftrightarrow H",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }X(4)",
+                "X(69) 与垂心互为等截共轭",
+            ));
+            // Cross-check isotomic of H: H bary (tan A or cos? H has bary tan A? 
+            // Actually H bary = tan A : tan B : tan C = 1/cot = a²/(b²+c²-a²)? 
+            // Standard H bary = tan A : … = a²/(b²+c²−a²) wait no:
+            // H trilinear = sec A? Standard: H bary = tan A : tan B : tan C, or 
+            // (bc[b²+c²−a²])? Actually common: H = (a²(b²+c²−a²))? No —
+            // Orthocenter barycentrics: tan A : tan B : tan C, equivalently
+            // a²(b²+c²−a²) is wrong. Simple: tan A = sin/cos, and cos A = (b²+c²−a²)/(2bc),
+            // so tan A ∝ sin A / (b²+c²−a²) ∝ a / (b²+c²−a²).
+            // Bary of H = a² / (b²+c²−a²)? Trilinear sec A, bary a sec A = a/cos A ∝ a²/(b²+c²−a²).
+            // Isotomic of H: if H has bary x:y:z = a²/(b²+c²−a²) : …, then isotomic 1/x ∝ (b²+c²−a²)/a²,
+            // times a² gives (b²+c²−a²) — matches X(69). Good — note only.
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -6561,6 +6673,52 @@ mod tests {
             ("内心重心截点", "X_{86}"),
         ] {
             let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g.value, "{lab}");
+        }
+    }
+
+    #[test]
+    fn power_points_x31_x32_and_x69() {
+        // Scalene 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x31 = fs.iter().find(|f| f.group == "第二幂点" && f.label == "X_{31}").expect("X31");
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        assert_ne!(x31.value, mo.value);
+        assert!(fs.iter().any(|f| f.group == "第二幂点" && f.value.contains("等角")));
+        let x32 = fs.iter().find(|f| f.group == "第三幂点" && f.label == "X_{32}").expect("X32");
+        let x76 = fs.iter().find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}").expect("X76");
+        assert_ne!(x32.value, x76.value);
+        assert_ne!(x31.value, x32.value);
+        assert!(fs.iter().any(|f| f.group == "第三幂点" && f.value.contains("等角")));
+        let x69 = fs.iter().find(|f| f.group == "余切点" && f.label == "X_{69}").expect("X69");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        assert_ne!(x69.value, h.value);
+        assert!(fs.iter().any(|f| f.group == "余切点" && f.value.contains("等截")));
+
+        // Right 3-4-5: X69 still (on hypotenuse side of right vertex); powers fine.
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "第二幂点" && f.label == "X_{31}"));
+        assert!(fs2.iter().any(|f| f.group == "第三幂点" && f.label == "X_{32}"));
+        assert!(fs2.iter().any(|f| f.group == "余切点" && f.label == "X_{69}"));
+
+        // Equilateral: all = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("第二幂点", "X_{31}"),
+            ("第三幂点", "X_{32}"),
+            ("余切点", "X_{69}"),
+        ] {
+            let p = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
             assert_eq!(p.value, g.value, "{lab}");
         }
     }
