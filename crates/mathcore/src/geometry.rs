@@ -2216,6 +2216,18 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 y: hz[1],
                 label: "Hf0 霍夫".into(),
             }));
+            out.push(fact(
+                "霍夫斯塔特点",
+                "X_{360}",
+                pt(hz[0], hz[1]),
+                None,
+                "X(360) = (A:B:C)",
+                "X(360)：霍夫斯塔特零点",
+            ).with(Shape::Point {
+                x: hz[0],
+                y: hz[1],
+                label: "X360".into(),
+            }));
             let wa = (a * a) / g[0];
             let wb = (b * b) / g[1];
             let wc = (c * c) / g[2];
@@ -2236,6 +2248,18 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                     x: ho[0],
                     y: ho[1],
                     label: "Hf1 霍夫".into(),
+                }));
+                out.push(fact(
+                    "霍夫斯塔特点",
+                    "X_{359}",
+                    pt(ho[0], ho[1]),
+                    None,
+                    "X(359) = (a^2/A:b^2/B:c^2/C)",
+                    "X(359)：霍夫斯塔特一点（等角共轭于 X(360)）",
+                ).with(Shape::Point {
+                    x: ho[0],
+                    y: ho[1],
+                    label: "X359".into(),
                 }));
             }
         }
@@ -13032,6 +13056,196 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(351)–X(360): Parry/Weill/Fuhrmann/Morley/Hofstadter band (ETC).
+    // X(351)=Parry-circle center=crosspoint(X110,X111); bary a²(b²−c²)(b²+c²−2a²); skip equil (and den=0 isos).
+    // X(352)=circumcircle-inverse of X(353); bary a²(−a⁴−b⁴−c⁴−5b²c²+4a²b²+4a²c²); skip equil.
+    // X(353)=Brocard-circle-inverse of X(111); bary a²(4a⁴−2b⁴−2c⁴−b²c²−4a²b²−4a²c²).
+    // X(354)=Weill=centroid(intouch)=crosspoint(X1,X7); bary a[(b−c)²−ab−ac].
+    // X(355)=Fuhrmann=midpoint(X4,X8); bary a(a cos A−(b+c)cos(B−C)).
+    // X(356)=Morley center; bary sin A(cos A/3+2 cos B/3 cos C/3).
+    // X(357)=1st Morley–Taylor–Marr; bary sin A sec(A/3); isogonal of X(358).
+    // X(358)=2nd Morley–Taylor–Marr; bary sin A cos(A/3).
+    // X(359)/X(360)=Hofstadter one/zero: dual-labeled earlier as Hf_1/Hf_0 (a²/A and A:B:C).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(351): Parry circle center; skip equil (weights vanish)
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * aa * (bb * bb - cc_ * cc_) * (bb * bb + cc_ * cc_ - 2.0 * aa * aa)
+            };
+            push_bary(
+                &mut out,
+                "帕里圆心",
+                "X_{351}",
+                "X(351) = \\mathrm{crosspoint}(X_{110},X_{111});\\ a^2(b^2-c^2)(b^2+c^2-2a^2)",
+                "X(351)：帕里圆圆心（X(110) 与 X(111) 的交点）",
+                "X351",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(352): inverse-in-circumcircle of X(353); skip equil
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let aa2 = aa * aa;
+                aa2 * (-aa.powi(4)
+                    - bb.powi(4)
+                    - cc_.powi(4)
+                    - 5.0 * bb * bb * cc_ * cc_
+                    + 4.0 * aa2 * bb * bb
+                    + 4.0 * aa2 * cc_ * cc_)
+            };
+            push_bary(
+                &mut out,
+                "X353外接逆",
+                "X_{352}",
+                "X(352) = \\mathrm{circumcircle\\text{-}inverse}(X_{353});\\ a^2(-a^4-\\cdots)",
+                "X(352)：X(353) 关于外接圆的反演（帕里圆上）",
+                "X352",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(353): inverse-in-Brocard-circle of X(111)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let aa2 = aa * aa;
+                aa2 * (4.0 * aa.powi(4)
+                    - 2.0 * bb.powi(4)
+                    - 2.0 * cc_.powi(4)
+                    - bb * bb * cc_ * cc_
+                    - 4.0 * aa2 * bb * bb
+                    - 4.0 * aa2 * cc_ * cc_)
+            };
+            push_bary(
+                &mut out,
+                "X111Brocard逆",
+                "X_{353}",
+                "X(353) = \\mathrm{Brocard\\text{-}circle\\text{-}inverse}(X_{111});\\ a^2(4a^4-\\cdots)",
+                "X(353)：帕里点关于 Brocard 圆的反演（帕里圆上）",
+                "X353",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(354): Weill = centroid of intouch = crosspoint(I, Ge)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa * ((bb - cc_).powi(2) - aa * bb - aa * cc_);
+            push_bary(
+                &mut out,
+                "Weill点",
+                "X_{354}",
+                "X(354) = \\mathrm{crosspoint}(X_1,X_7);\\ a[(b-c)^2-ab-ac]",
+                "X(354)：Weill 点（内切三角形重心；内心与热尔贡点交点）",
+                "X354",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(355): Fuhrmann = midpoint(H, Na)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, caa: f64, ang_b: f64, ang_c: f64| {
+                aa * (aa * caa - (bb + cc_) * (ang_b - ang_c).cos())
+            };
+            push_bary(
+                &mut out,
+                "Fuhrmann心",
+                "X_{355}",
+                "X(355) = \\mathrm{midpoint}(X_4,X_8);\\ a(a\\cos A-(b+c)\\cos(B-C))",
+                "X(355)：Fuhrmann 圆心（垂心与奈格尔点的中点）",
+                "X355",
+                f(a, b, c, ca, g[1], g[2]),
+                f(b, c, a, cb, g[2], g[0]),
+                f(c, a, b, cc, g[0], g[1]),
+            );
+        }
+        // X(356): Morley center (centroid of Morley equilateral)
+        {
+            let f = |saa: f64, aa: f64, bb: f64, cc_: f64| {
+                saa * ((aa / 3.0).cos() + 2.0 * (bb / 3.0).cos() * (cc_ / 3.0).cos())
+            };
+            push_bary(
+                &mut out,
+                "莫利中心",
+                "X_{356}",
+                "X(356) = \\mathrm{centroid}(\\mathrm{Morley});\\ \\sin A(\\cos\\tfrac{A}{3}+2\\cos\\tfrac{B}{3}\\cos\\tfrac{C}{3})",
+                "X(356)：莫利三角形重心",
+                "X356",
+                f(sa, g[0], g[1], g[2]),
+                f(sb, g[1], g[2], g[0]),
+                f(sc, g[2], g[0], g[1]),
+            );
+        }
+        // X(357): 1st Morley–Taylor–Marr; bary sin A sec(A/3)
+        {
+            let f = |saa: f64, aa: f64| {
+                let c3 = (aa / 3.0).cos();
+                if c3.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa / c3
+            };
+            push_bary(
+                &mut out,
+                "莫利透视1",
+                "X_{357}",
+                "X(357) = \\mathrm{perspector}(\\mathrm{Morley});\\ \\sin A\\sec\\tfrac{A}{3}",
+                "X(357)：第一 Morley–Taylor–Marr 点（莫利三角形透视中心）",
+                "X357",
+                f(sa, g[0]),
+                f(sb, g[1]),
+                f(sc, g[2]),
+            );
+        }
+        // X(358): 2nd Morley–Taylor–Marr; bary sin A cos(A/3); isogonal of X(357)
+        {
+            let f = |saa: f64, aa: f64| saa * (aa / 3.0).cos();
+            push_bary(
+                &mut out,
+                "莫利透视2",
+                "X_{358}",
+                "X(358) = \\mathrm{isogonal}(X_{357});\\ \\sin A\\cos\\tfrac{A}{3}",
+                "X(358)：第二 Morley–Taylor–Marr 点（X(357) 的等角共轭）",
+                "X358",
+                f(sa, g[0]),
+                f(sb, g[1]),
+                f(sc, g[2]),
+            );
+        }
+        // X(359)/X(360) dual-labeled in the Hofstadter block above (Hf_1 / Hf_0).
+    }
 
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
@@ -19652,6 +19866,96 @@ mod tests {
         }
     }
 
+    #[test]
+    fn x351_to_x360_parry_weill_fuhrmann_morley_hofstadter() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("帕里圆心", "X_{351}", 11.85128205128205, 11.10255225912793),
+            ("X353外接逆", "X_{352}", 20.15527987178726, 19.87863244216875),
+            ("X111Brocard逆", "X_{353}", 4.447476932992233, 1.554796870948855),
+            ("Weill点", "X_{354}", 4.578125, 2.077694190934187),
+            ("Fuhrmann心", "X_{355}", 4.3125, 2.114003409804882),
+            ("莫利中心", "X_{356}", 4.509210790491602, 1.955745846402668),
+            ("莫利透视1", "X_{357}", 4.531119259517901, 1.998524871477102),
+            ("莫利透视2", "X_{358}", 4.467903088960554, 1.875087394301666),
+            ("霍夫斯塔特点", "X_{359}", 4.397629009565369, 1.746395448825259),
+            ("霍夫斯塔特点", "X_{360}", 4.592957569749832, 2.132793086433669),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: X351 den→0 (skip); keep X352–X360.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.label != "X_{351}"), "X351 should skip isos 5-5-6");
+        for (grp, lab, ..) in want {
+            if lab == "X_{351}" {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X351/X352 (weights vanish); keep X353–X360.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for lab in ["X_{351}", "X_{352}"] {
+            assert!(fs3.iter().all(|f| f.label != lab), "{} should skip equil", lab);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{351}" | "X_{352}") {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: all in this band finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
 
 
     #[test]
