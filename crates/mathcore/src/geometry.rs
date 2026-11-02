@@ -9333,6 +9333,294 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(211)–X(220): next classical Ceva-conjugate band (ETC).
+    // X(211)=X(4)-Ceva of X(39); bary a⁴(b²+c²)(a²b²−b⁴+a²c²+b²c²−c⁴).
+    // X(212)=X(9)-Ceva of X(41); bary (sin 2A)(1+cos A).
+    // X(213)=X(6)-Ceva of X(42); bary (b+c)a³.
+    // X(214)=X(2)-Ceva of X(44)=mid(I,X100)=comp(X80); bary a(b+c−2a)(b²+c²−a²−bc); skip equil.
+    // X(215)=X(1)-Ceva of X(50); bary (sin A)(sin 3A)(sin 3B+sin 3C−sin 3A); skip equil.
+    // X(216)=X(5)-Ceva of X(51); bary (sin A)(sin 2A)cos(B−C).
+    // X(217)=X(6)-Ceva of X(51); bary a⁴(a²−b²−c²)(a²b²−b⁴+a²c²+2b²c²−c⁴).
+    // X(218)=X(7)-Ceva of X(55); bary a²(a²+b²+c²−2ab−2ac).
+    // X(219)=X(8)-Ceva of X(55); bary sin 2A·cot(A/2)=2 cos A(1+cos A).
+    // X(220)=X(9)-Ceva of X(55)=bary-square of X(9); bary a²(b+c−a)².
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(211)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let a4 = a2 * a2;
+                a4 * (b2 + c2) * (a2 * b2 - b2 * b2 + a2 * c2 + b2 * c2 - c2 * c2)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "垂心布罗卡中点塞瓦",
+                "X_{211}",
+                "X(211) = X(4)\\text{-Ceva of }X(39);\\ a^4(b^2+c^2)(a^2b^2-b^4+a^2c^2+b^2c^2-c^4)",
+                "X(211)：垂心对布罗卡中点的塞瓦共轭",
+                "X211",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(212)
+        {
+            let wa = (2.0 * g[0]).sin() * (1.0 + ca);
+            let wb = (2.0 * g[1]).sin() * (1.0 + cb);
+            let wc = (2.0 * g[2]).sin() * (1.0 + cc);
+            push_bary(
+                &mut out,
+                "米滕第二幂截点塞瓦",
+                "X_{212}",
+                "X(212) = X(9)\\text{-Ceva of }X(41);\\ (\\sin 2A)(1+\\cos A)",
+                "X(212)：米滕阿列夫点对第二幂截点的塞瓦共轭",
+                "X212",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(213)
+        {
+            let wa = (b + c) * a * a * a;
+            let wb = (c + a) * b * b * b;
+            let wc = (a + b) * c * c * c;
+            push_bary(
+                &mut out,
+                "勒莫恩内心勒莫恩截点塞瓦",
+                "X_{213}",
+                "X(213) = X(6)\\text{-Ceva of }X(42);\\ (b+c)a^3",
+                "X(213)：勒莫恩点对内心–勒莫恩截点的塞瓦共轭（K 与 X(31) 的截点）",
+                "X213",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(214): also mid(I, X100) = complement of X(80)
+        {
+            let wa = a * (b + c - 2.0 * a) * (b * b + c * c - a * a - b * c);
+            let wb = b * (c + a - 2.0 * b) * (c * c + a * a - b * b - c * a);
+            let wc = c * (a + b - 2.0 * c) * (a * a + b * b - c * c - a * b);
+            push_bary(
+                &mut out,
+                "重心X44塞瓦",
+                "X_{214}",
+                "X(214) = X(2)\\text{-Ceva of }X(44) = \\mathrm{mid}(I,X_{100});\\ a(b+c-2a)(b^2+c^2-a^2-bc)",
+                "X(214)：重心对 X(44) 的塞瓦共轭（内心与 X(100) 中点；X(80) 的补点）",
+                "X214",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if let Some(x100) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{100}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let mid = [(inc[0] + x100[0]) / 2.0, (inc[1] + x100[1]) / 2.0];
+                    if dist2(xy, mid) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心X44塞瓦",
+                            "X_{214}=\\mathrm{mid}(I,X_{100})",
+                            "\\text{中点}".into(),
+                            None,
+                            "X(214) = \\mathrm{mid}(X(1),X(100))",
+                            "X(214) 是内心与 X(100) 的中点",
+                        ));
+                    }
+                }
+                if let Some(x80) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{80}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let comp = [
+                        (3.0 * centroid[0] - x80[0]) / 2.0,
+                        (3.0 * centroid[1] - x80[1]) / 2.0,
+                    ];
+                    if dist2(xy, comp) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心X44塞瓦",
+                            "X_{214}=\\mathrm{comp}(X_{80})",
+                            "\\text{补点}".into(),
+                            None,
+                            "X(214) = (3G - X(80))/2",
+                            "X(214) 是 X(80) 关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(215): skip equilateral (sin 3A = 0)
+        if !equil {
+            let s3a = (3.0 * g[0]).sin();
+            let s3b = (3.0 * g[1]).sin();
+            let s3c = (3.0 * g[2]).sin();
+            let wa = sa * s3a * (s3b + s3c - s3a);
+            let wb = sb * s3b * (s3c + s3a - s3b);
+            let wc = sc * s3c * (s3a + s3b - s3c);
+            push_bary(
+                &mut out,
+                "内心三倍角正弦塞瓦",
+                "X_{215}",
+                "X(215) = X(1)\\text{-Ceva of }X(50);\\ (\\sin A)(\\sin 3A)(\\sin 3B+\\sin 3C-\\sin 3A)",
+                "X(215)：内心对三倍角正弦点的塞瓦共轭",
+                "X215",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(216)
+        {
+            let wa = sa * (2.0 * g[0]).sin() * (g[1] - g[2]).cos();
+            let wb = sb * (2.0 * g[1]).sin() * (g[2] - g[0]).cos();
+            let wc = sc * (2.0 * g[2]).sin() * (g[0] - g[1]).cos();
+            push_bary(
+                &mut out,
+                "九点垂足重心塞瓦",
+                "X_{216}",
+                "X(216) = X(5)\\text{-Ceva of }X(51);\\ (\\sin A)(\\sin 2A)\\cos(B-C)",
+                "X(216)：九点中心对垂足三角形重心的塞瓦共轭（O 与 K 的截点）",
+                "X216",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(217)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let a4 = a2 * a2;
+                a4 * (a2 - b2 - c2) * (a2 * b2 - b2 * b2 + a2 * c2 + 2.0 * b2 * c2 - c2 * c2)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "勒莫恩垂足重心塞瓦",
+                "X_{217}",
+                "X(217) = X(6)\\text{-Ceva of }X(51);\\ a^4(a^2-b^2-c^2)(\\cdots)",
+                "X(217)：勒莫恩点对垂足三角形重心的塞瓦共轭（K 与 X(184) 的截点）",
+                "X217",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(218)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                a2 * (a2 + bb * bb + cc * cc - 2.0 * aa * bb - 2.0 * aa * cc)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "格尔巩外接内切相似塞瓦",
+                "X_{218}",
+                "X(218) = X(7)\\text{-Ceva of }X(55);\\ a^2(a^2+b^2+c^2-2ab-2ac)",
+                "X(218)：格尔巩点对 X(55) 的塞瓦共轭",
+                "X218",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(219)
+        {
+            let wa = 2.0 * ca * (1.0 + ca);
+            let wb = 2.0 * cb * (1.0 + cb);
+            let wc = 2.0 * cc * (1.0 + cc);
+            push_bary(
+                &mut out,
+                "奈格尔外接内切相似塞瓦",
+                "X_{219}",
+                "X(219) = X(8)\\text{-Ceva of }X(55);\\ \\sin 2A\\cot\\tfrac{A}{2}=2\\cos A(1+\\cos A)",
+                "X(219)：奈格尔点对 X(55) 的塞瓦共轭",
+                "X219",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(220): barycentric square of Mittenpunkt X(9)
+        {
+            let wa = a * a * (b + c - a) * (b + c - a);
+            let wb = b * b * (c + a - b) * (c + a - b);
+            let wc = c * c * (a + b - c) * (a + b - c);
+            push_bary(
+                &mut out,
+                "米滕外接内切相似塞瓦",
+                "X_{220}",
+                "X(220) = X(9)\\text{-Ceva of }X(55) = X(9)^2;\\ a^2(b+c-a)^2",
+                "X(220)：米滕阿列夫点对 X(55) 的塞瓦共轭（X(9) 的重心平方）",
+                "X220",
+                wa,
+                wb,
+                wc,
+            );
+        }
+    }
+
+
+
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
@@ -14677,6 +14965,83 @@ mod tests {
             } else {
                 assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
             }
+        }
+    }
+
+    #[test]
+    fn x211_to_x220_ceva_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("垂心布罗卡中点塞瓦", "X_{211}", 5.3174323110483765, 3.5273321313623947),
+            ("米滕第二幂截点塞瓦", "X_{212}", 3.799729364005413, 0.8385349599366532),
+            ("勒莫恩内心勒莫恩截点塞瓦", "X_{213}", 4.793033065723228, 2.301971867768948),
+            ("重心X44塞瓦", "X_{214}", 2.75, 2.9047375096555625),
+            ("内心三倍角正弦塞瓦", "X_{215}", 3.118293471234648, 3.204536963894954),
+            ("九点垂足重心塞瓦", "X_{216}", 4.153027823240589, 1.2850620179944163),
+            ("勒莫恩垂足重心塞瓦", "X_{217}", 4.634208909592487, 1.7187829379619926),
+            ("格尔巩外接内切相似塞瓦", "X_{218}", 5.0863099374565675, 2.6677561450735174),
+            ("奈格尔外接内切相似塞瓦", "X_{219}", 3.5044852627082443, 0.6948539108958203),
+            ("米滕外接内切相似塞瓦", "X_{220}", 3.8901257770709847, 1.1758370720016735),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "重心X44塞瓦" && f.label.contains("mid")));
+        assert!(fs.iter().any(|f| f.group == "重心X44塞瓦" && f.label.contains("comp")));
+        // mid(I,X100) Cartesian.
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let x100 = fs.iter().find(|f| f.label == "X_{100}").expect("X100");
+        let x214 = fs.iter().find(|f| f.group == "重心X44塞瓦" && f.label == "X_{214}").unwrap();
+        let (ix, iy) = ptxy(i);
+        let (p100x, p100y) = ptxy(x100);
+        let (p214x, p214y) = ptxy(x214);
+        assert!((p214x - (ix + p100x) / 2.0).abs() < 1e-6 && (p214y - (iy + p100y) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: X215 skips; others → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        assert!(fs3.iter().all(|f| f.group != "内心三倍角正弦塞瓦"), "X215 should skip equil");
+        // X214 bary vanishes identically on equilateral (b+c−2a=0).
+        assert!(fs3.iter().all(|f| !(f.group == "重心X44塞瓦" && f.label == "X_{214}")), "X214 should skip equil");
+        for (grp, lab, ..) in want {
+            if grp == "内心三倍角正弦塞瓦" || grp == "重心X44塞瓦" {
+                continue;
+            }
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: all finite in this band.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
         }
     }
 
