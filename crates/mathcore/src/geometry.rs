@@ -8373,6 +8373,359 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(182)–X(190): Brocard-diameter / orthic / circum-inverses / mid-arc / Yff.
+    // X(182)=mid(O,K)=Brocard-circle center; bary a cos(A−ω).
+    // X(183)=trilinear quotient X(75)/X(182); bary csc A cos(A−ω).
+    // X(184)=procircumcenter; bary a³ cos A (=X(63)-of-orthic when acute).
+    // X(185)=Nagel-of-orthic; bary (sin 2A)[1−cos A cos(B−C)]; skip right.
+    // X(186)=circum-inverse of H; bary sin A(4 cos A−sec A); skip equilateral.
+    // X(187)=Schoute=circum-inverse of K; bary a²(2a²−b²−c²); skip equilateral.
+    // X(188)=2nd mid-arc of anticomplementary; bary 2 cos(A/2)=sin A csc(A/2).
+    // X(189)=cyclocevian conjugate of Nagel X(8); bary 1/(cos B+cos C−cos A−1).
+    // X(190)=Yff parabolic point; bary 1/(b−c); skip isos/equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let rightish = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let isos = (a - b).abs() < 1e-9 || (b - c).abs() < 1e-9 || (c - a).abs() < 1e-9;
+        // K = Lemoine (recompute; always finite).
+        let k_den = a * a + b * b + c * c;
+        let kpt = if k_den > 1e-18 {
+            [
+                (a * a * pa[0] + b * b * pb[0] + c * c * pc[0]) / k_den,
+                (a * a * pa[1] + b * b * pb[1] + c * c * pc[1]) / k_den,
+            ]
+        } else {
+            centroid
+        };
+        // X(182): midpoint of Brocard diameter OK.
+        {
+            let xy = [(circ[0] + kpt[0]) / 2.0, (circ[1] + kpt[1]) / 2.0];
+            // Cross-check bary a cos(A−ω) when Brocard angle available.
+            let xyu = if area > 1e-12 && k_den > 1e-18 {
+                let tan_w = (4.0 * area) / k_den;
+                let sin_w = tan_w / (1.0 + tan_w * tan_w).sqrt();
+                let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+                let fa = ca * cos_w + sa * sin_w;
+                let fb = cb * cos_w + sb * sin_w;
+                let fc = cc * cos_w + sc * sin_w;
+                let wa = a * fa;
+                let wb = b * fb;
+                let wc = c * fc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xb = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if dist2(xb, xy) < 1e-5 * (1.0 + rr) { xb } else { xy }
+                } else {
+                    xy
+                }
+            } else {
+                xy
+            };
+            out.push(fact(
+                "布罗卡直径中点",
+                "X_{182}",
+                pt(xyu[0], xyu[1]),
+                None,
+                "X(182) = \\text{mid}(O,K);\\ \\text{bary }a\\cos(A-\\omega)",
+                "X(182)：布罗卡直径中点（布罗卡圆圆心）",
+            ).with(Shape::Point {
+                x: xyu[0],
+                y: xyu[1],
+                label: "X182".into(),
+            }));
+            // On OK
+            let cross = (kpt[0] - circ[0]) * (xyu[1] - circ[1]) - (kpt[1] - circ[1]) * (xyu[0] - circ[0]);
+            let scale = (kpt[0] - circ[0]).abs() + (kpt[1] - circ[1]).abs()
+                + (xyu[0] - circ[0]).abs() + (xyu[1] - circ[1]).abs() + 1e-12;
+            if cross.abs() / scale < 1e-5 {
+                out.push(fact(
+                    "布罗卡直径中点",
+                    "X_{182}\\in OK",
+                    "\\text{共线}".into(),
+                    None,
+                    "X(182)\\in OK",
+                    "X(182) 在外心与勒莫恩点的连线上",
+                ));
+            }
+        }
+        // X(183): bary csc A cos(A−ω)
+        if area > 1e-12 && k_den > 1e-18 && sa.abs() > 1e-12 && sb.abs() > 1e-12 && sc.abs() > 1e-12 {
+            let tan_w = (4.0 * area) / k_den;
+            let sin_w = tan_w / (1.0 + tan_w * tan_w).sqrt();
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let fa = (ca * cos_w + sa * sin_w) / sa;
+            let fb = (cb * cos_w + sb * sin_w) / sb;
+            let fc = (cc * cos_w + sc * sin_w) / sc;
+            let den = fa + fb + fc;
+            if den.abs() > 1e-12 && fa.is_finite() && fb.is_finite() && fc.is_finite() {
+                let xy = [
+                    (fa * pa[0] + fb * pb[0] + fc * pc[0]) / den,
+                    (fa * pa[1] + fb * pb[1] + fc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "摩西布罗卡商",
+                        "X_{183}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(183) = X(75)/X(182)\\text{ trilinear quotient};\\ \\text{bary }\\csc A\\cos(A-\\omega)",
+                        "X(183)：摩西点与布罗卡直径中点的三线商",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X183".into(),
+                    }));
+                }
+            }
+        }
+        // X(184): bary a³ cos A
+        {
+            let wa = a * a * a * ca;
+            let wb = b * b * b * cb;
+            let wc = c * c * c * cc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "准外心",
+                    "X_{184}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(184) = \\bigl(a^3\\cos A:\\cdots\\bigr)",
+                    "X(184)：准外心（垂足三角形的 X(63)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X184".into(),
+                }));
+            }
+        }
+        // X(185): Nagel of orthic; skip right
+        if !rightish {
+            let wa = (2.0 * g[0]).sin() * (1.0 - ca * (g[1] - g[2]).cos());
+            let wb = (2.0 * g[1]).sin() * (1.0 - cb * (g[2] - g[0]).cos());
+            let wc = (2.0 * g[2]).sin() * (1.0 - cc * (g[0] - g[1]).cos());
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "垂足奈格尔",
+                        "X_{185}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(185) = X(8)\\text{-of-orthic};\\ \\text{bary }(\\sin 2A)[1-\\cos A\\cos(B-C)]",
+                        "X(185)：垂足三角形的奈格尔点",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X185".into(),
+                    }));
+                }
+            }
+        }
+        // X(186): circum-inverse of H; skip equilateral (H=O)
+        {
+            let oh2 = {
+                let dx = orth[0] - circ[0];
+                let dy = orth[1] - circ[1];
+                dx * dx + dy * dy
+            };
+            if oh2 > 1e-12 {
+                let scale = (rr * rr) / oh2;
+                let mut xy = [
+                    circ[0] + scale * (orth[0] - circ[0]),
+                    circ[1] + scale * (orth[1] - circ[1]),
+                ];
+                // Prefer ETC bary when sec finite (non-right)
+                if !rightish {
+                    let wa = sa * (4.0 * ca - 1.0 / ca);
+                    let wb = sb * (4.0 * cb - 1.0 / cb);
+                    let wc = sc * (4.0 * cc - 1.0 / cc);
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                        let xb = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xb, xy) < 1e-4 * (1.0 + rr) {
+                            xy = xb;
+                        }
+                    }
+                }
+                out.push(fact(
+                    "反演垂心",
+                    "X_{186}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(186) = O + R^2(H-O)/|OH|^2",
+                    "X(186)：垂心关于外接圆的反演点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X186".into(),
+                }));
+                let cross = (orth[0] - circ[0]) * (xy[1] - circ[1]) - (orth[1] - circ[1]) * (xy[0] - circ[0]);
+                if cross.abs() < 1e-5 * (1.0 + oh2) * (1.0 + dist2(circ, xy)) {
+                    out.push(fact(
+                        "反演垂心",
+                        "X_{186}\\in OH",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(186)\\in OH",
+                        "X(186) 在欧拉线 OH 上",
+                    ));
+                }
+            }
+        }
+        // X(187): Schoute = circum-inverse of K; skip equilateral (K=O → weights 0)
+        {
+            let wa = a * a * (2.0 * a * a - b * b - c * c);
+            let wb = b * b * (2.0 * b * b - c * c - a * a);
+            let wc = c * c * (2.0 * c * c - a * a - b * b);
+            let den = wa + wb + wc;
+            let ok2 = {
+                let dx = kpt[0] - circ[0];
+                let dy = kpt[1] - circ[1];
+                dx * dx + dy * dy
+            };
+            if den.abs() > 1e-12 && ok2 > 1e-12 {
+                let xb = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let scale = (rr * rr) / ok2;
+                let xg = [
+                    circ[0] + scale * (kpt[0] - circ[0]),
+                    circ[1] + scale * (kpt[1] - circ[1]),
+                ];
+                let xy = if dist2(xb, xg) < 1e-4 * (1.0 + rr) { xb } else { xg };
+                out.push(fact(
+                    "肖特中心",
+                    "X_{187}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(187) = O + R^2(K-O)/|OK|^2;\\ \\text{bary }a^2(2a^2-b^2-c^2)",
+                    "X(187)：肖特中心（勒莫恩点关于外接圆的反演）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X187".into(),
+                }));
+                let cross = (kpt[0] - circ[0]) * (xy[1] - circ[1]) - (kpt[1] - circ[1]) * (xy[0] - circ[0]);
+                let scale_c = (kpt[0] - circ[0]).abs() + (kpt[1] - circ[1]).abs()
+                    + (xy[0] - circ[0]).abs() + (xy[1] - circ[1]).abs() + 1e-12;
+                if cross.abs() / scale_c < 1e-5 {
+                    out.push(fact(
+                        "肖特中心",
+                        "X_{187}\\in OK",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(187)\\in OK",
+                        "X(187) 在外心与勒莫恩点的连线上",
+                    ));
+                }
+            }
+        }
+        // X(188): bary 2 cos(A/2)
+        {
+            let wa = 2.0 * (g[0] / 2.0).cos();
+            let wb = 2.0 * (g[1] / 2.0).cos();
+            let wc = 2.0 * (g[2] / 2.0).cos();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "反补第二中弧",
+                    "X_{188}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(188) = \\bigl(2\\cos\\tfrac{A}{2}:\\cdots\\bigr) = \\text{anticomplement of }X(178)",
+                    "X(188)：反补三角形的第二中弧点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X188".into(),
+                }));
+            }
+        }
+        // X(189): cyclocevian conjugate of Nagel
+        {
+            let da = cb + cc - ca - 1.0;
+            let db = cc + ca - cb - 1.0;
+            let dc = ca + cb - cc - 1.0;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = 1.0 / da;
+                let wb = 1.0 / db;
+                let wc = 1.0 / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "奈格尔圆塞瓦共轭",
+                            "X_{189}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(189) = \\text{cyclocevian of }X(8);\\ \\text{bary }1/(\\cos B+\\cos C-\\cos A-1)",
+                            "X(189)：奈格尔点的圆塞瓦共轭",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X189".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(190): Yff parabolic; skip isos/equil
+        if !isos {
+            let da = b - c;
+            let db = c - a;
+            let dc = a - b;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = 1.0 / da;
+                let wb = 1.0 / db;
+                let wc = 1.0 / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "伊夫抛物点",
+                        "X_{190}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(190) = \\bigl(1/(b-c):\\cdots\\bigr)",
+                        "X(190)：伊夫抛物点（切 BC/CA/AB 且焦点为 X(101) 的抛物线的切点塞瓦交点）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X190".into(),
+                    }));
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -13437,6 +13790,116 @@ mod tests {
         assert!(fs4.iter().any(|f| f.group == "第二中弧点" && f.label == "X_{178}"));
         assert!(fs4.iter().any(|f| f.group == "第一阿吉马-马尔法蒂" && f.label == "X_{179}"));
         assert!(fs4.iter().any(|f| f.group == "第二阿吉马-马尔法蒂" && f.label == "X_{180}"));
+    }
+
+    #[test]
+    fn x182_to_x190_brocard_orthic_inverses() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x182 = fs.iter().find(|f| f.group == "布罗卡直径中点" && f.label == "X_{182}").expect("X182");
+        let x183 = fs.iter().find(|f| f.group == "摩西布罗卡商" && f.label == "X_{183}").expect("X183");
+        let x184 = fs.iter().find(|f| f.group == "准外心" && f.label == "X_{184}").expect("X184");
+        let x185 = fs.iter().find(|f| f.group == "垂足奈格尔" && f.label == "X_{185}").expect("X185");
+        let x186 = fs.iter().find(|f| f.group == "反演垂心" && f.label == "X_{186}").expect("X186");
+        let x187 = fs.iter().find(|f| f.group == "肖特中心" && f.label == "X_{187}").expect("X187");
+        let x188 = fs.iter().find(|f| f.group == "反补第二中弧" && f.label == "X_{188}").expect("X188");
+        let x189 = fs.iter().find(|f| f.group == "奈格尔圆塞瓦共轭" && f.label == "X_{189}").expect("X189");
+        let x190 = fs.iter().find(|f| f.group == "伊夫抛物点" && f.label == "X_{190}").expect("X190");
+        assert!(fs.iter().any(|f| f.group == "布罗卡直径中点" && f.label.contains("OK")));
+        assert!(fs.iter().any(|f| f.group == "反演垂心" && f.label.contains("OH")));
+        assert!(fs.iter().any(|f| f.group == "肖特中心" && f.label.contains("OK")));
+        let (p182x, p182y) = ptxy(x182);
+        assert!((p182x - 4.348993288590604).abs() < 1e-6 && (p182y - 1.6081112059420504).abs() < 1e-6, "X182 {:?}", (p182x, p182y));
+        let (p183x, p183y) = ptxy(x183);
+        assert!((p183x - 3.819745041145412).abs() < 1e-6 && (p183y - 1.1780332020797852).abs() < 1e-6, "X183 {:?}", (p183x, p183y));
+        let (p184x, p184y) = ptxy(x184);
+        assert!((p184x - 4.52074391988555).abs() < 1e-6 && (p184y - 1.41843166899728).abs() < 1e-6, "X184 {:?}", (p184x, p184y));
+        let (p185x, p185y) = ptxy(x185);
+        assert!((p185x - 4.7109375).abs() < 1e-6 && (p185y - 1.5592792326137148).abs() < 1e-6, "X185 {:?}", (p185x, p185y));
+        let (p186x, p186y) = ptxy(x186);
+        assert!((p186x - 7.014492753623188).abs() < 1e-6 && (p186y - 8.397076936125066).abs() < 1e-6, "X186 {:?}", (p186x, p186y));
+        let (p187x, p187y) = ptxy(x187);
+        assert!((p187x - 10.577249575551782).abs() < 1e-6 && (p187y - 11.875395455433948).abs() < 1e-6, "X187 {:?}", (p187x, p187y));
+        let (p188x, p188y) = ptxy(x188);
+        assert!((p188x - 4.181145447564104).abs() < 1e-6 && (p188y - 1.5551451021748157).abs() < 1e-6, "X188 {:?}", (p188x, p188y));
+        let (p189x, p189y) = ptxy(x189);
+        assert!((p189x - 4.8141694490818026).abs() < 1e-6 && (p189y - 4.675948486953883).abs() < 1e-6, "X189 {:?}", (p189x, p189y));
+        let (p190x, p190y) = ptxy(x190);
+        assert!((p190x - 0.5416666666666666).abs() < 1e-6 && (p190y - 3.38886042793149).abs() < 1e-6, "X190 {:?}", (p190x, p190y));
+        // mid(O,K) for X182
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").or_else(|| fs.iter().find(|f| f.label == "O")).expect("O");
+        let kk = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        let (ox, oy) = ptxy(o);
+        let (kx, ky) = ptxy(kk);
+        assert!((p182x - (ox + kx) / 2.0).abs() < 1e-6 && (p182y - (oy + ky) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: X190 skips; others finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab) in [
+            ("布罗卡直径中点", "X_{182}"),
+            ("摩西布罗卡商", "X_{183}"),
+            ("准外心", "X_{184}"),
+            ("垂足奈格尔", "X_{185}"),
+            ("反演垂心", "X_{186}"),
+            ("肖特中心", "X_{187}"),
+            ("反补第二中弧", "X_{188}"),
+            ("奈格尔圆塞瓦共轭", "X_{189}"),
+        ] {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+        assert!(fs2.iter().all(|f| f.group != "伊夫抛物点"), "X190 skip isos");
+
+        // Equilateral: X182/183/184/185/188/189 → G; X186/187/190 skip.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g3);
+        for (grp, lab) in [
+            ("布罗卡直径中点", "X_{182}"),
+            ("摩西布罗卡商", "X_{183}"),
+            ("准外心", "X_{184}"),
+            ("垂足奈格尔", "X_{185}"),
+            ("反补第二中弧", "X_{188}"),
+            ("奈格尔圆塞瓦共轭", "X_{189}"),
+        ] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx).abs() < 1e-5 && (y - gy).abs() < 1e-5, "equilateral {} != G", lab);
+        }
+        assert!(fs3.iter().all(|f| f.group != "反演垂心"), "X186 skip equil");
+        assert!(fs3.iter().all(|f| f.group != "肖特中心"), "X187 skip equil");
+        assert!(fs3.iter().all(|f| f.group != "伊夫抛物点"), "X190 skip equil");
+
+        // Right 3-4-5: X185 skips; X186 = H (on circumcircle); others finite; X190 ok.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "布罗卡直径中点" && f.label == "X_{182}"));
+        assert!(fs4.iter().any(|f| f.group == "摩西布罗卡商" && f.label == "X_{183}"));
+        assert!(fs4.iter().any(|f| f.group == "准外心" && f.label == "X_{184}"));
+        assert!(fs4.iter().all(|f| f.group != "垂足奈格尔"), "X185 skip right");
+        let x186r = fs4.iter().find(|f| f.group == "反演垂心" && f.label == "X_{186}").expect("X186 right");
+        let h4 = fs4.iter().find(|f| f.group == "特殊点" && f.label == "H").or_else(|| fs4.iter().find(|f| f.label == "H")).expect("H");
+        let (hx, hy) = ptxy(h4);
+        let (x6, y6) = ptxy(x186r);
+        assert!((x6 - hx).abs() < 1e-5 && (y6 - hy).abs() < 1e-5, "right X186 should = H");
+        assert!(fs4.iter().any(|f| f.group == "肖特中心" && f.label == "X_{187}"));
+        assert!(fs4.iter().any(|f| f.group == "反补第二中弧" && f.label == "X_{188}"));
+        assert!(fs4.iter().any(|f| f.group == "奈格尔圆塞瓦共轭" && f.label == "X_{189}"));
+        assert!(fs4.iter().any(|f| f.group == "伊夫抛物点" && f.label == "X_{190}"));
     }
 
     #[test]
