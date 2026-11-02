@@ -12053,6 +12053,233 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(311)–X(320): continue isotomic band (ETC).
+    // X(311)=isotomic(X54); bary csc A cos(B−C).
+    // X(312)=isotomic(X57); bary bc(b+c−a).
+    // X(313)=isotomic(X58); bary (b+c)b²c².
+    // X(314)=isotomic(X65); bary bc(b+c−a)/(b+c).
+    // X(315)=isotomic(X66); bary b⁴+c⁴−a⁴.
+    // X(316)=Droussent pivot=isotomic(X67); bary b⁴+c⁴−a⁴−b²c²; skip equil (all 0).
+    // X(317)=isotomic(X68); bary tan A cos 2A csc² A; skip right (tan∞).
+    // X(318)=isotomic(X77); bary (1+sec A)/a; skip right (sec∞).
+    // X(319)=isotomic(X79); bary (1+2 cos A)/a.
+    // X(320)=isotomic(X80); bary (1−2 cos A)/a; skip equilateral (all zero).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(311): isotomic of Kosnita X(54); bary csc A cos(B−C)
+        {
+            let f = |saa: f64, bb: f64, cc_: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (bb - cc_).cos()
+            };
+            push_bary(
+                &mut out,
+                "科斯尼塔等截",
+                "X_{311}",
+                "X(311) = \\mathrm{isotomic}(X_{54});\\ \\csc A\\cos(B-C)",
+                "X(311)：科斯尼塔点的等截共轭",
+                "X311",
+                f(sa, g[1], g[2]),
+                f(sb, g[2], g[0]),
+                f(sc, g[0], g[1]),
+            );
+        }
+        // X(312): isotomic of X(57); bary bc(b+c−a)
+        {
+            push_bary(
+                &mut out,
+                "X57等截",
+                "X_{312}",
+                "X(312) = \\mathrm{isotomic}(X_{57});\\ bc(b+c-a)",
+                "X(312)：X(57) 的等截共轭",
+                "X312",
+                b * c * (b + c - a),
+                c * a * (c + a - b),
+                a * b * (a + b - c),
+            );
+        }
+        // X(313): isotomic of X(58); bary (b+c)b²c²
+        {
+            push_bary(
+                &mut out,
+                "X58等截",
+                "X_{313}",
+                "X(313) = \\mathrm{isotomic}(X_{58});\\ (b+c)b^2 c^2",
+                "X(313)：X(58) 的等截共轭",
+                "X313",
+                (b + c) * b * b * c * c,
+                (c + a) * c * c * a * a,
+                (a + b) * a * a * b * b,
+            );
+        }
+        // X(314): isotomic of X(65); bary bc(b+c−a)/(b+c)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = bb + cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                bb * cc_ * (bb + cc_ - aa) / den
+            };
+            push_bary(
+                &mut out,
+                "X65等截",
+                "X_{314}",
+                "X(314) = \\mathrm{isotomic}(X_{65});\\ bc(b+c-a)/(b+c)",
+                "X(314)：X(65) 的等截共轭",
+                "X314",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(315): isotomic of X(66); bary b⁴+c⁴−a⁴
+        {
+            push_bary(
+                &mut out,
+                "X66等截",
+                "X_{315}",
+                "X(315) = \\mathrm{isotomic}(X_{66});\\ b^4+c^4-a^4",
+                "X(315)：X(66) 的等截共轭",
+                "X315",
+                b.powi(4) + c.powi(4) - a.powi(4),
+                c.powi(4) + a.powi(4) - b.powi(4),
+                a.powi(4) + b.powi(4) - c.powi(4),
+            );
+        }
+        // X(316): Droussent pivot = isotomic of X(67); bary b⁴+c⁴−a⁴−b²c²; skip equil
+        if !equil {
+            push_bary(
+                &mut out,
+                "德鲁桑枢轴",
+                "X_{316}",
+                "X(316) = \\mathrm{Droussent}=\\mathrm{isotomic}(X_{67});\\ b^4+c^4-a^4-b^2c^2",
+                "X(316)：德鲁桑枢轴（X(67) 等截）",
+                "X316",
+                b.powi(4) + c.powi(4) - a.powi(4) - b * b * c * c,
+                c.powi(4) + a.powi(4) - b.powi(4) - c * c * a * a,
+                a.powi(4) + b.powi(4) - c.powi(4) - a * a * b * b,
+            );
+        }
+        // X(317): isotomic of Prasolov X(68); bary tan A cos 2A csc² A; skip right
+        if !right {
+            let f = |aa: f64, saa: f64| {
+                let s2 = saa * saa;
+                if s2 < 1e-28 {
+                    return f64::NAN;
+                }
+                let c2a = (2.0 * aa).cos();
+                aa.tan() * c2a / s2
+            };
+            push_bary(
+                &mut out,
+                "普拉索洛夫等截",
+                "X_{317}",
+                "X(317) = \\mathrm{isotomic}(X_{68});\\ \\tan A\\cos 2A\\csc^2 A",
+                "X(317)：普拉索洛夫点的等截共轭",
+                "X317",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(318): isotomic of X(77); bary (1+sec A)/a; skip right
+        if !right {
+            let f = |aa: f64, side: f64| {
+                if side.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 + 1.0 / caa) / side
+            };
+            push_bary(
+                &mut out,
+                "X77等截",
+                "X_{318}",
+                "X(318) = \\mathrm{isotomic}(X_{77});\\ (1+\\sec A)/a",
+                "X(318)：X(77) 的等截共轭",
+                "X318",
+                f(g[0], a),
+                f(g[1], b),
+                f(g[2], c),
+            );
+        }
+        // X(319): isotomic of X(79); bary (1+2 cos A)/a
+        {
+            let f = |caa: f64, side: f64| {
+                if side.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 + 2.0 * caa) / side
+            };
+            push_bary(
+                &mut out,
+                "X79等截",
+                "X_{319}",
+                "X(319) = \\mathrm{isotomic}(X_{79});\\ (1+2\\cos A)/a",
+                "X(319)：X(79) 的等截共轭",
+                "X319",
+                f(ca, a),
+                f(cb, b),
+                f(cc, c),
+            );
+        }
+        // X(320): isotomic of X(80); bary (1−2 cos A)/a; skip equilateral
+        if !equil {
+            let f = |caa: f64, side: f64| {
+                if side.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 - 2.0 * caa) / side
+            };
+            push_bary(
+                &mut out,
+                "X80等截",
+                "X_{320}",
+                "X(320) = \\mathrm{isotomic}(X_{80});\\ (1-2\\cos A)/a",
+                "X(320)：X(80) 的等截共轭",
+                "X320",
+                f(ca, a),
+                f(cb, b),
+                f(cc, c),
+            );
+        }
+    }
+
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
@@ -18288,6 +18515,98 @@ mod tests {
         assert!(r4.error.is_none(), "{:?}", r4.error);
         let fs4 = &r4.cases[0].facts;
         for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x311_to_x320_isotomics() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("科斯尼塔等截", "X_{311}", 3.911819183019623, 1.532926653323435),
+            ("X57等截", "X_{312}", 3.522500000000000, 1.016658128379447),
+            ("X58等截", "X_{313}", 3.603790057518488, 1.140294449661418),
+            ("X65等截", "X_{314}", 3.657306007509387, 1.113361529827304),
+            ("X66等截", "X_{315}", 2.824048825869370, -0.260263437202232),
+            ("德鲁桑枢轴", "X_{316}", -8.341999151103565, -18.667500268970660),
+            ("普拉索洛夫等截", "X_{317}", 5.357551988453238, 3.916218055971332),
+            ("X77等截", "X_{318}", 4.358616504854369, 2.197354022271805),
+            ("X79等截", "X_{319}", 3.712500000000000, 1.085584103184833),
+            ("X80等截", "X_{320}", -25.687500000000011, -35.583034493280657),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X316/X320 (all weights 0); keep the rest.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{316}"), "X316 should skip equil");
+        assert!(fs3.iter().all(|f| f.label != "X_{320}"), "X320 should skip equil");
+        for (grp, lab, ..) in want {
+            if lab == "X_{316}" || lab == "X_{320}" {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: skip X317/X318 (tan/sec ∞); keep others.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{317}"), "X317 should skip right");
+        assert!(fs4.iter().all(|f| f.label != "X_{318}"), "X318 should skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{317}" || lab == "X_{318}" {
+                continue;
+            }
             assert!(
                 fs4.iter().any(|f| f.group == grp && f.label == lab),
                 "right missing {} {}",
