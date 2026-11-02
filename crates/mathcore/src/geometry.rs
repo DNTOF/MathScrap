@@ -11560,6 +11560,251 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     }
 
 
+    // X(291)–X(300): continue isogonal / Hirst / isotomic band (ETC).
+    // X(291)=isog(X238)=isotomic(X350); bary a/(a²−bc); skip equil.
+    // X(292)=isog(X239); bary a²/(a²−bc); X(1)-Hirst of X(291); skip equil.
+    // X(293)=isog(X240); bary sin 2A sec(A+ω); skip equil (A+ω→π/2).
+    // X(294)=isog(X241); bary a(b+c−a)/(b²+c²−ab−ac); skip equil.
+    // X(295)=isog(X242); bary sin 2A/(a²−bc); skip equil.
+    // X(296)=isog(X243); bary sin 2A/(cos²A−cos B cos C); skip equil.
+    // X(297)=isog(X248)=X(2)-Hirst of X(4)=isotomic(X287); bary sec A cos(A+ω); skip right/equil.
+    // X(298)=isotomic(X13); bary csc A sin(A+π/3).
+    // X(299)=isotomic(X14); bary csc A sin(A−π/3); skip equil (sin→0).
+    // X(300)=isotomic(X15); bary csc A csc(A+π/3); skip 120° (csc(A+π/3)→∞).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let has_120 = (g[0] - std::f64::consts::FRAC_PI_3 * 2.0).abs() < 1e-9
+            || (g[1] - std::f64::consts::FRAC_PI_3 * 2.0).abs() < 1e-9
+            || (g[2] - std::f64::consts::FRAC_PI_3 * 2.0).abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(291)/X(292)/X(295): skip equilateral (a²−bc → 0)
+        if !equil {
+            let da = a * a - b * c;
+            let db = b * b - c * a;
+            let dc = c * c - a * b;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                push_bary(
+                    &mut out,
+                    "X238等角",
+                    "X_{291}",
+                    "X(291) = \\mathrm{isog}(X_{238});\\ a/(a^2-bc)",
+                    "X(291)：X(238) 的等角共轭（X(350) 等截）",
+                    "X291",
+                    a / da,
+                    b / db,
+                    c / dc,
+                );
+                push_bary(
+                    &mut out,
+                    "X239等角",
+                    "X_{292}",
+                    "X(292) = \\mathrm{isog}(X_{239});\\ a^2/(a^2-bc)",
+                    "X(292)：X(239) 的等角共轭（内心对 X(291) 的 Hirst 逆）",
+                    "X292",
+                    a * a / da,
+                    b * b / db,
+                    c * c / dc,
+                );
+                push_bary(
+                    &mut out,
+                    "X242等角",
+                    "X_{295}",
+                    "X(295) = \\mathrm{isog}(X_{242});\\ \\sin 2A/(a^2-bc)",
+                    "X(295)：X(242) 的等角共轭",
+                    "X295",
+                    (2.0 * g[0]).sin() / da,
+                    (2.0 * g[1]).sin() / db,
+                    (2.0 * g[2]).sin() / dc,
+                );
+            }
+        }
+        // X(293): skip equilateral (A+ω → π/2)
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |aa: f64, saa: f64, caa: f64| {
+                let caw = caa * cos_w - saa * sin_w;
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (2.0 * aa).sin() / caw
+            };
+            push_bary(
+                &mut out,
+                "X240等角",
+                "X_{293}",
+                "X(293) = \\mathrm{isog}(X_{240});\\ \\sin 2A\\sec(A+\\omega)",
+                "X(293)：X(240) 的等角共轭",
+                "X293",
+                f(g[0], sa, ca),
+                f(g[1], sb, cb),
+                f(g[2], sc, cc),
+            );
+        }
+        // X(294): skip equilateral (b²+c²−ab−ac → 0)
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = bb * bb + cc_ * cc_ - aa * bb - aa * cc_;
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa * (bb + cc_ - aa) / den
+            };
+            push_bary(
+                &mut out,
+                "X241等角",
+                "X_{294}",
+                "X(294) = \\mathrm{isog}(X_{241});\\ a(b+c-a)/(b^2+c^2-ab-ac)",
+                "X(294)：X(241) 的等角共轭",
+                "X294",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(296): skip equilateral (cos²A−cos B cos C → 0)
+        if !equil {
+            let f = |saa2: f64, caa: f64, cbb: f64, ccc: f64| {
+                let den = caa * caa - cbb * ccc;
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa2 / den
+            };
+            push_bary(
+                &mut out,
+                "X243等角",
+                "X_{296}",
+                "X(296) = \\mathrm{isog}(X_{243});\\ \\sin 2A/(\\cos^2 A-\\cos B\\cos C)",
+                "X(296)：X(243) 的等角共轭",
+                "X296",
+                f((2.0 * g[0]).sin(), ca, cb, cc),
+                f((2.0 * g[1]).sin(), cb, cc, ca),
+                f((2.0 * g[2]).sin(), cc, ca, cb),
+            );
+        }
+        // X(297): skip right (sec) and equilateral (cos(A+ω)→0)
+        if !right && !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |saa: f64, caa: f64| {
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let caw = caa * cos_w - saa * sin_w;
+                (1.0 / caa) * caw
+            };
+            push_bary(
+                &mut out,
+                "X248等角",
+                "X_{297}",
+                "X(297) = \\mathrm{isog}(X_{248})=\\mathrm{isotomic}(X_{287});\\ \\sec A\\cos(A+\\omega)",
+                "X(297)：X(248) 的等角共轭（重心对垂心的 Hirst 逆）",
+                "X297",
+                f(sa, ca),
+                f(sb, cb),
+                f(sc, cc),
+            );
+        }
+        // X(298): isotomic of 1st isogonic center
+        {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (aa + pi3).sin()
+            };
+            push_bary(
+                &mut out,
+                "第一等角线等截",
+                "X_{298}",
+                "X(298) = \\mathrm{isotomic}(X_{13});\\ \\csc A\\sin(A+\\pi/3)",
+                "X(298)：第一等角线中心的等截共轭",
+                "X298",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(299): isotomic of 2nd isogonic; skip equilateral
+        if !equil {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (aa - pi3).sin()
+            };
+            push_bary(
+                &mut out,
+                "第二等角线等截",
+                "X_{299}",
+                "X(299) = \\mathrm{isotomic}(X_{14});\\ \\csc A\\sin(A-\\pi/3)",
+                "X(299)：第二等角线中心的等截共轭",
+                "X299",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(300): isotomic of 1st isodynamic; skip 120° angle
+        if !has_120 {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                let s = (aa + pi3).sin();
+                if saa.abs() < 1e-14 || s.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) / s
+            };
+            push_bary(
+                &mut out,
+                "第一等动力等截",
+                "X_{300}",
+                "X(300) = \\mathrm{isotomic}(X_{15});\\ \\csc A\\csc(A+\\pi/3)",
+                "X(300)：第一等动力点的等截共轭",
+                "X300",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+    }
+
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -17621,6 +17866,92 @@ mod tests {
         }
         for (grp, lab, ..) in want {
             if matches!(lab, "X_{281}" | "X_{286}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x291_to_x300_isogonals_hirst_isotomics() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X238等角", "X_{291}", 8.175675675675675, 0.2616880639329336),
+            ("X239等角", "X_{292}", 8.10232220609579, 0.2951112128822778),
+            ("X240等角", "X_{293}", 6.5180052846609176, -0.5979255705588283),
+            ("X241等角", "X_{294}", 7.5120924855491324, -0.432520452304782),
+            ("X242等角", "X_{295}", 8.37748344370861, 0.12824448166249725),
+            ("X243等角", "X_{296}", 6.061579621844016, -0.8560286714306778),
+            ("X248等角", "X_{297}", 7.708213417753903, 10.091807886017781),
+            ("第一等角线等截", "X_{298}", 3.831703156647867, 1.1917226177001814),
+            ("第二等角线等截", "X_{299}", -11.390595346800717, -16.234465552890185),
+            ("第一等动力等截", "X_{300}", 4.186903587004856, 1.7645719906151849),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X291–X297/X299 (denom/ω/sin); keep X298/X300.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for skip in [
+            "X_{291}", "X_{292}", "X_{293}", "X_{294}", "X_{295}", "X_{296}", "X_{297}", "X_{299}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != skip), "{} should skip equil", skip);
+        }
+        for keep in ["X_{298}", "X_{300}"] {
+            assert!(fs3.iter().any(|f| f.label == keep), "equil missing {}", keep);
+        }
+
+        // Right 3-4-5: X297 skips (sec); others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{297}"), "X297 should skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{297}" {
                 continue;
             }
             assert!(
