@@ -13247,6 +13247,166 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         // X(359)/X(360) dual-labeled in the Hofstadter block above (Hf_1 / Hf_0).
     }
 
+    // X(361)–X(370): Yff isoscelizer / sqrt-side band (ETC).
+    // X(361)=X(266)-Ceva conjugate of X(1); bary sin A(csc B/2+csc C/2−csc A/2).
+    // X(362)=congruent-circumcircles isoscelizer; bary a(b cos B/2+c cos C/2−a cos A/2).
+    // X(363)=equal-perimeters isoscelizer; bary a(b/(1+sin B/2)+c/(1+sin C/2)−a/(1+sin A/2)).
+    // X(364)=Wabash=equal-areas isoscelizer; bary a(√b+√c−√a); =X(366)-Ceva conjugate of X(1).
+    // X(365)=trilinear square-roots; bary a^{3/2}; isogonal of X(366); crosssum(X1,X364).
+    // X(366)=isogonal(X365); bary √a; cevapoint(X1,X364).
+    // X(367)=crosspoint(X1,X366); bary a(√b+√c); =crosssum(X1,X365).
+    // X(368) equi-Brocard / X(369) 1st trisected-perimeter / X(370) equilateral-cevian:
+    // no closed barycentrics in ETC (certified ETC also omits); skip this round.
+    {
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(361): X(266)-Ceva conjugate of I; isoscelizer au=bv=cw
+        {
+            let f = |saa: f64, aa: f64, bb: f64, cc_: f64| {
+                let ha = (aa / 2.0).sin();
+                let hb = (bb / 2.0).sin();
+                let hc = (cc_ / 2.0).sin();
+                if ha.abs() < 1e-12 || hb.abs() < 1e-12 || hc.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa * (1.0 / hb + 1.0 / hc - 1.0 / ha)
+            };
+            push_bary(
+                &mut out,
+                "等腰化点",
+                "X_{361}",
+                "X(361) = X(266)\\text{-Ceva conj. of }X_1;\\ \\sin A(\\csc\\tfrac{B}{2}+\\csc\\tfrac{C}{2}-\\csc\\tfrac{A}{2})",
+                "X(361)：X(266) 对内心的 Ceva 共轭（等腰化点）",
+                "X361",
+                f(sa, g[0], g[1], g[2]),
+                f(sb, g[1], g[2], g[0]),
+                f(sc, g[2], g[0], g[1]),
+            );
+        }
+        // X(362): congruent circumcircles isoscelizer
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (bb * (ang_b / 2.0).cos() + cc_ * (ang_c / 2.0).cos() - aa * (ang_a / 2.0).cos())
+            };
+            push_bary(
+                &mut out,
+                "等外接圆等腰化",
+                "X_{362}",
+                "X(362) = \\mathrm{isoscelizer};\\ a(b\\cos\\tfrac{B}{2}+c\\cos\\tfrac{C}{2}-a\\cos\\tfrac{A}{2})",
+                "X(362)：等外接圆等腰化点",
+                "X362",
+                f(a, b, c, g[0], g[1], g[2]),
+                f(b, c, a, g[1], g[2], g[0]),
+                f(c, a, b, g[2], g[0], g[1]),
+            );
+        }
+        // X(363): equal-perimeters isoscelizer
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (bb / (1.0 + (ang_b / 2.0).sin())
+                    + cc_ / (1.0 + (ang_c / 2.0).sin())
+                    - aa / (1.0 + (ang_a / 2.0).sin()))
+            };
+            push_bary(
+                &mut out,
+                "等周长等腰化",
+                "X_{363}",
+                "X(363) = \\mathrm{isoscelizer};\\ a\\big(\\tfrac{b}{1+\\sin B/2}+\\tfrac{c}{1+\\sin C/2}-\\tfrac{a}{1+\\sin A/2}\\big)",
+                "X(363)：等周长等腰化点",
+                "X363",
+                f(a, b, c, g[0], g[1], g[2]),
+                f(b, c, a, g[1], g[2], g[0]),
+                f(c, a, b, g[2], g[0], g[1]),
+            );
+        }
+        // X(364): Wabash = equal-areas isoscelizer
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa * (bb.sqrt() + cc_.sqrt() - aa.sqrt());
+            push_bary(
+                &mut out,
+                "Wabash点",
+                "X_{364}",
+                "X(364) = X(366)\\text{-Ceva conj. of }X_1;\\ a(\\sqrt{b}+\\sqrt{c}-\\sqrt{a})",
+                "X(364)：Wabash 点（等面积等腰化点）",
+                "X364",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(365): trilinear square-roots; bary a^{3/2}; isogonal of X(366)
+        {
+            let f = |aa: f64| aa * aa.sqrt();
+            push_bary(
+                &mut out,
+                "边根等角",
+                "X_{365}",
+                "X(365) = \\mathrm{isogonal}(X_{366})=\\mathrm{crosssum}(X_1,X_{364});\\ a^{3/2}",
+                "X(365)：边长平方根三线坐标点（X(366) 的等角共轭）",
+                "X365",
+                f(a),
+                f(b),
+                f(c),
+            );
+        }
+        // X(366): isogonal of X(365); bary √a; cevapoint(I, X364)
+        {
+            let f = |aa: f64| aa.sqrt();
+            push_bary(
+                &mut out,
+                "边根点",
+                "X_{366}",
+                "X(366) = \\mathrm{isogonal}(X_{365})=\\mathrm{cevapoint}(X_1,X_{364});\\ \\sqrt{a}",
+                "X(366)：边长平方根重心坐标点（X(365) 的等角共轭）",
+                "X366",
+                f(a),
+                f(b),
+                f(c),
+            );
+        }
+        // X(367): crosspoint(I, X366); bary a(√b+√c)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa * (bb.sqrt() + cc_.sqrt());
+            push_bary(
+                &mut out,
+                "X1X366交点",
+                "X_{367}",
+                "X(367) = \\mathrm{crosspoint}(X_1,X_{366})=\\mathrm{crosssum}(X_1,X_{365});\\ a(\\sqrt{b}+\\sqrt{c})",
+                "X(367)：内心与 X(366) 的交点",
+                "X367",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(368)/X(369)/X(370): deferred — no closed barycentrics in ETC.
+    }
+
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
@@ -19943,6 +20103,90 @@ mod tests {
         }
 
         // Right 3-4-5: all in this band finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x361_to_x367_isoscelizer_sqrt_side_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("等腰化点", "X_{361}", 5.0999110570327515, 2.653978761539622),
+            ("等外接圆等腰化", "X_{362}", 4.224941270860307, 1.7406232496876568),
+            ("等周长等腰化", "X_{363}", 4.254362495787133, 1.7084322657787965),
+            ("Wabash点", "X_{364}", 4.289582048035992, 1.6850063075553896),
+            ("边根等角", "X_{365}", 4.603067268271407, 2.0596746496290916),
+            ("边根点", "X_{366}", 4.389105555973576, 1.8145279194492863),
+            ("X1X366交点", "X_{367}", 4.44793644473969, 1.8742668386531587),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // X368–X370 deferred (no closed barycentrics).
+        for lab in ["X_{368}", "X_{369}", "X_{370}"] {
+            assert!(fs.iter().all(|f| f.label != lab), "{} should be skipped", lab);
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite in this band.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: all finite.
         let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
         let r4 = triangle_solve(&k4);
         assert!(r4.error.is_none(), "{:?}", r4.error);
