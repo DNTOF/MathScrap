@@ -8726,6 +8726,310 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(191)–X(200): classical Ceva-conjugate band (ETC).
+    // X(191)=X(10)-Ceva of I; bary a·f, f=(b+c−a)(bc+ca+ab)+b³+c³−a³.
+    // X(192)=X(1)-Ceva of G = anticomplement of Moses; bary ab+ac−bc.
+    // X(193)=X(4)-Ceva of G = anticomplement of X(69); bary 3a²−b²−c².
+    // X(194)=X(6)-Ceva of G = anticomplement of X(76); bary a²(b²+c²)−b²c².
+    // X(195)=X(5)-Ceva of O; bary 4 cos 2A + cot² A − cot A cot ω.
+    // X(196)=X(7)-Ceva of H; bary (cos B+cos C−cos A−1) tan A tan(A/2); skip right.
+    // X(197)=X(8)-Ceva of K; bary a²(S−2a² tan(A/2)), S=∑a² tan(A/2).
+    // X(198)=X(9)-Ceva of K (=isogonal of X(189)); bary a²(cos B+cos C−cos A−1).
+    // X(199)=X(10)-Ceva of K; bary a²[b⁴+c⁴−a⁴+(b²+c²−a²)(bc+ca+ab)].
+    // X(200)={X(8),X(78)}-harmonic of I; bary a(b+c−a)².
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let rightish = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(191)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                (bb + cc - aa) * (bb * cc + cc * aa + aa * bb) + bb * bb * bb + cc * cc * cc
+                    - aa * aa * aa
+            };
+            let wa = a * f(a, b, c);
+            let wb = b * f(b, c, a);
+            let wc = c * f(c, a, b);
+            push_bary(
+                &mut out,
+                "斯皮克内心塞瓦",
+                "X_{191}",
+                "X(191) = X(10)\\text{-Ceva of }X(1);\\ f=(b+c-a)(\\Sigma bc)+b^3+c^3-a^3",
+                "X(191)：斯皮克点对内心的塞瓦共轭",
+                "X191",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(192): anticomplement of Moses
+        {
+            let wa = a * b + a * c - b * c;
+            let wb = b * c + b * a - c * a;
+            let wc = c * a + c * b - a * b;
+            push_bary(
+                &mut out,
+                "内心重心塞瓦",
+                "X_{192}",
+                "X(192) = X(1)\\text{-Ceva of }X(2) = \\text{anticomplement of }X(75)",
+                "X(192)：内心对重心的塞瓦共轭（摩西点的反补）",
+                "X192",
+                wa,
+                wb,
+                wc,
+            );
+            if let Some(mo) = out.iter().rev().find(|f| f.group == "摩西点" && f.label == "Mo") {
+                if let Some(Shape::Point { x, y, .. }) = mo.shape.as_ref() {
+                    let aq = [3.0 * centroid[0] - 2.0 * *x, 3.0 * centroid[1] - 2.0 * *y];
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xy, aq) < 1e-6 * (1.0 + rr) {
+                            out.push(fact(
+                                "内心重心塞瓦",
+                                "X_{192}=\\mathrm{anti}(X_{75})",
+                                "\\text{反补}".into(),
+                                None,
+                                "X(192) = 3G - 2\\,X(75)",
+                                "X(192) 是摩西点关于重心的反补",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(193): anticomplement of X(69)
+        {
+            let wa = 3.0 * a * a - b * b - c * c;
+            let wb = 3.0 * b * b - c * c - a * a;
+            let wc = 3.0 * c * c - a * a - b * b;
+            push_bary(
+                &mut out,
+                "垂心重心塞瓦",
+                "X_{193}",
+                "X(193) = X(4)\\text{-Ceva of }X(2);\\ \\text{bary }3a^2-b^2-c^2",
+                "X(193)：垂心对重心的塞瓦共轭（余切点 X(69) 的反补）",
+                "X193",
+                wa,
+                wb,
+                wc,
+            );
+            if let Some(x69) = out.iter().rev().find(|f| f.group == "余切点" && f.label == "X_{69}") {
+                if let Some(Shape::Point { x, y, .. }) = x69.shape.as_ref() {
+                    let aq = [3.0 * centroid[0] - 2.0 * *x, 3.0 * centroid[1] - 2.0 * *y];
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xy, aq) < 1e-6 * (1.0 + rr) {
+                            out.push(fact(
+                                "垂心重心塞瓦",
+                                "X_{193}=\\mathrm{anti}(X_{69})",
+                                "\\text{反补}".into(),
+                                None,
+                                "X(193) = 3G - 2\\,X(69)",
+                                "X(193) 是余切点关于重心的反补",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(194): anticomplement of X(76)
+        {
+            let wa = a * a * b * b + a * a * c * c - b * b * c * c;
+            let wb = b * b * c * c + b * b * a * a - c * c * a * a;
+            let wc = c * c * a * a + c * c * b * b - a * a * b * b;
+            push_bary(
+                &mut out,
+                "勒莫恩重心塞瓦",
+                "X_{194}",
+                "X(194) = X(6)\\text{-Ceva of }X(2);\\ \\text{bary }a^2(b^2+c^2)-b^2c^2",
+                "X(194)：勒莫恩点对重心的塞瓦共轭（第三布罗卡点的反补）",
+                "X194",
+                wa,
+                wb,
+                wc,
+            );
+            if let Some(x76) = out
+                .iter()
+                .rev()
+                .find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}")
+            {
+                if let Some(Shape::Point { x, y, .. }) = x76.shape.as_ref() {
+                    let aq = [3.0 * centroid[0] - 2.0 * *x, 3.0 * centroid[1] - 2.0 * *y];
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xy, aq) < 1e-6 * (1.0 + rr) {
+                            out.push(fact(
+                                "勒莫恩重心塞瓦",
+                                "X_{194}=\\mathrm{anti}(X_{76})",
+                                "\\text{反补}".into(),
+                                None,
+                                "X(194) = 3G - 2\\,X(76)",
+                                "X(194) 是第三布罗卡点关于重心的反补",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(195): Iliev form with Brocard cot ω = (a²+b²+c²)/(4Δ)
+        if sa.abs() > 1e-12 && sb.abs() > 1e-12 && sc.abs() > 1e-12 && area > 1e-12 {
+            let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+            let cot_a = ca / sa;
+            let cot_b = cb / sb;
+            let cot_c = cc / sc;
+            let wa = 4.0 * (2.0 * g[0]).cos() + cot_a * cot_a - cot_a * cot_w;
+            let wb = 4.0 * (2.0 * g[1]).cos() + cot_b * cot_b - cot_b * cot_w;
+            let wc = 4.0 * (2.0 * g[2]).cos() + cot_c * cot_c - cot_c * cot_w;
+            push_bary(
+                &mut out,
+                "九点外心塞瓦",
+                "X_{195}",
+                "X(195) = X(5)\\text{-Ceva of }X(3);\\ 4\\cos 2A+\\cot^2 A-\\cot A\\cot\\omega",
+                "X(195)：九点中心对外心的塞瓦共轭",
+                "X195",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(196): skip right (tan A → ∞)
+        if !rightish {
+            let g_a = (cb + cc - ca - 1.0) * g[0].tan() * (g[0] / 2.0).tan();
+            let g_b = (cc + ca - cb - 1.0) * g[1].tan() * (g[1] / 2.0).tan();
+            let g_c = (ca + cb - cc - 1.0) * g[2].tan() * (g[2] / 2.0).tan();
+            push_bary(
+                &mut out,
+                "格尔巩垂心塞瓦",
+                "X_{196}",
+                "X(196) = X(7)\\text{-Ceva of }X(4);\\ (\\cos B+\\cos C-\\cos A-1)\\tan A\\tan\\tfrac{A}{2}",
+                "X(196)：格尔巩点对垂心的塞瓦共轭",
+                "X196",
+                g_a,
+                g_b,
+                g_c,
+            );
+        }
+        // X(197)
+        {
+            let t_a = (g[0] / 2.0).tan();
+            let t_b = (g[1] / 2.0).tan();
+            let t_c = (g[2] / 2.0).tan();
+            let sum = a * a * t_a + b * b * t_b + c * c * t_c;
+            let wa = a * a * (sum - 2.0 * a * a * t_a);
+            let wb = b * b * (sum - 2.0 * b * b * t_b);
+            let wc = c * c * (sum - 2.0 * c * c * t_c);
+            push_bary(
+                &mut out,
+                "奈格尔勒莫恩塞瓦",
+                "X_{197}",
+                "X(197) = X(8)\\text{-Ceva of }X(6);\\ a^2(S-2a^2\\tan\\tfrac{A}{2})",
+                "X(197)：奈格尔点对勒莫恩点的塞瓦共轭",
+                "X197",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(198): isogonal of X(189)
+        {
+            let da = cb + cc - ca - 1.0;
+            let db = cc + ca - cb - 1.0;
+            let dc = ca + cb - cc - 1.0;
+            let wa = a * a * da;
+            let wb = b * b * db;
+            let wc = c * c * dc;
+            push_bary(
+                &mut out,
+                "米滕阿列夫勒莫恩塞瓦",
+                "X_{198}",
+                "X(198) = X(9)\\text{-Ceva of }X(6) = \\text{isogonal of }X(189)",
+                "X(198)：米滕阿列夫点对勒莫恩点的塞瓦共轭（X(189) 的等角共轭）",
+                "X198",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(199)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let a2 = aa * aa;
+                aa * (b2 * b2 + c2 * c2 - a2 * a2 + (b2 + c2 - a2) * (bb * cc + cc * aa + aa * bb))
+            };
+            let wa = a * f(a, b, c);
+            let wb = b * f(b, c, a);
+            let wc = c * f(c, a, b);
+            push_bary(
+                &mut out,
+                "斯皮克莱莫恩塞瓦",
+                "X_{199}",
+                "X(199) = X(10)\\text{-Ceva of }X(6);\\ a[b^4+c^4-a^4+(b^2+c^2-a^2)\\Sigma bc]",
+                "X(199)：斯皮克点对勒莫恩点的塞瓦共轭",
+                "X199",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(200)
+        {
+            let wa = a * (b + c - a) * (b + c - a);
+            let wb = b * (c + a - b) * (c + a - b);
+            let wc = c * (a + b - c) * (a + b - c);
+            push_bary(
+                &mut out,
+                "半周长平方点",
+                "X_{200}",
+                "X(200) = \\bigl(a(b+c-a)^2:\\cdots\\bigr) = \\{X(8),X(78)\\}\\text{-harmonic of }X(1)",
+                "X(200)：半周长平方点（奈格尔与 X(78) 关于内心的调和共轭）",
+                "X200",
+                wa,
+                wb,
+                wc,
+            );
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -13900,6 +14204,92 @@ mod tests {
         assert!(fs4.iter().any(|f| f.group == "反补第二中弧" && f.label == "X_{188}"));
         assert!(fs4.iter().any(|f| f.group == "奈格尔圆塞瓦共轭" && f.label == "X_{189}"));
         assert!(fs4.iter().any(|f| f.group == "伊夫抛物点" && f.label == "X_{190}"));
+    }
+
+    #[test]
+    fn x191_to_x200_ceva_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("斯皮克内心塞瓦", "X_{191}", 3.9126984126984126, 1.1373046334101145),
+            ("内心重心塞瓦", "X_{192}", 4.783390410958904, 2.1586576698467708),
+            ("垂心重心塞瓦", "X_{193}", 5.979446308724833, 3.6504167696845915),
+            ("勒莫恩重心塞瓦", "X_{194}", 5.3385272071071626, 2.5938612436999215),
+            ("九点外心塞瓦", "X_{195}", 5.197905759162303, 2.661476304367596),
+            ("格尔巩垂心塞瓦", "X_{196}", 4.508977844505761, 0.46286739978970115),
+            ("奈格尔勒莫恩塞瓦", "X_{197}", 3.52023988005997, -0.6271097472119954),
+            ("米滕阿列夫勒莫恩塞瓦", "X_{198}", 3.803825404610103, 0.15955399758775038),
+            ("斯皮克莱莫恩塞瓦", "X_{199}", 3.856005538248529, 0.681023032147237),
+            ("半周长平方点", "X_{200}", 3.6020408163265305, 0.9880059556651574),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "内心重心塞瓦" && f.label.contains("anti")));
+        assert!(fs.iter().any(|f| f.group == "垂心重心塞瓦" && f.label.contains("anti")));
+        assert!(fs.iter().any(|f| f.group == "勒莫恩重心塞瓦" && f.label.contains("anti")));
+        // Anticomplement Cartesian: 3G − 2P.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        let x69 = fs.iter().find(|f| f.group == "余切点" && f.label == "X_{69}").expect("X69");
+        let x76 = fs.iter().find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}").expect("X76");
+        let (gx, gy) = ptxy(g);
+        let x192 = fs.iter().find(|f| f.group == "内心重心塞瓦" && f.label == "X_{192}").unwrap();
+        let x193 = fs.iter().find(|f| f.group == "垂心重心塞瓦" && f.label == "X_{193}").unwrap();
+        let x194 = fs.iter().find(|f| f.group == "勒莫恩重心塞瓦" && f.label == "X_{194}").unwrap();
+        let (mox, moy) = ptxy(mo);
+        let (p69x, p69y) = ptxy(x69);
+        let (p76x, p76y) = ptxy(x76);
+        let (p192x, p192y) = ptxy(x192);
+        let (p193x, p193y) = ptxy(x193);
+        let (p194x, p194y) = ptxy(x194);
+        assert!((p192x - (3.0 * gx - 2.0 * mox)).abs() < 1e-6 && (p192y - (3.0 * gy - 2.0 * moy)).abs() < 1e-6);
+        assert!((p193x - (3.0 * gx - 2.0 * p69x)).abs() < 1e-6 && (p193y - (3.0 * gy - 2.0 * p69y)).abs() < 1e-6);
+        assert!((p194x - (3.0 * gx - 2.0 * p76x)).abs() < 1e-6 && (p194y - (3.0 * gy - 2.0 * p76y)).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite (incl. X196).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: all → G; X196 present (not right).
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: X196 skips; others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            if grp == "格尔巩垂心塞瓦" {
+                assert!(fs4.iter().all(|f| f.group != grp), "X196 should skip right");
+            } else {
+                assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+            }
+        }
     }
 
     #[test]
