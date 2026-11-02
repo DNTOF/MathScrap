@@ -10279,6 +10279,319 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(241)–X(250): finish line-conjugate band + first isogonals (ETC).
+    // X(241)=X(1)-line conjugate of X(55); f=cos⁴(B/2)−cos²(A/2)(cos²(B/2)+cos²(C/2))+cos⁴(C/2); skip equil.
+    // X(242)=X(4)-line conjugate of X(71); f=sec A(sin²A−sin B sin C); skip right/equil.
+    // X(243)=X(4)-line conjugate of X(73); f=sec A(cos²A−cos B cos C); skip right/equil.
+    // X(244)=X(1)-line conjugate of X(100); f=[1−cos(B−C)]sin²(A/2); skip equil.
+    // X(245)=X(1)-line conjugate of X(110); csc-diff form; skip isos (csc→∞).
+    // X(246)=X(3)-line conjugate of X(110); csc/cos form; skip isos.
+    // X(247)=X(4)-line conjugate of X(110); csc/sec form; skip isos/right.
+    // X(248)=X(4)-line conjugate of X(132); bary sin A sin 2A sec(A+ω); skip equil (A+ω→π/2).
+    // X(249)=isogonal of X(115); bary cos²(B−C); →G on equil.
+    // X(250)=isogonal of X(125); bary tan A csc²(B−C); skip right/isos.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let isos = (a - b).abs() < 1e-12 || (b - c).abs() < 1e-12 || (c - a).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(241): skip equilateral (weights→0); on IO
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let cah2 = (aa * 0.5).cos().powi(2);
+                let cbh2 = (bb * 0.5).cos().powi(2);
+                let cch2 = (cc * 0.5).cos().powi(2);
+                cbh2 * cbh2 - cah2 * (cbh2 + cch2) + cch2 * cch2
+            };
+            let wa = sa * f(g[0], g[1], g[2]);
+            let wb = sb * f(g[1], g[2], g[0]);
+            let wc = sc * f(g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "内心X55线共轭",
+                "X_{241}",
+                "X(241) = X(1)\\text{-line conjugate of }X(55);\\ (\\sin A)f,\\ f=\\cos^4\\tfrac{B}{2}-\\cdots",
+                "X(241)：内心对 X(55) 的线共轭",
+                "X241",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if circ[0].is_finite()
+                    && circ[1].is_finite()
+                    && inc[0].is_finite()
+                    && inc[1].is_finite()
+                {
+                    let cross = (xy[0] - inc[0]) * (circ[1] - inc[1])
+                        - (xy[1] - inc[1]) * (circ[0] - inc[0]);
+                    if cross.abs() < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "内心X55线共轭",
+                            "X_{241}\\in IO",
+                            "\\text{共线}".into(),
+                            None,
+                            "X(241)\\in IO",
+                            "X(241) 在内心–外心连线上",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(242): skip right (sec) and equilateral
+        if !right && !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (aa.sin().powi(2) - bb.sin() * cc.sin()) / caa
+            };
+            push_bary(
+                &mut out,
+                "垂心X71线共轭",
+                "X_{242}",
+                "X(242) = X(4)\\text{-line conjugate of }X(71);\\ (\\sin A)\\sec A(\\sin^2 A-\\sin B\\sin C)",
+                "X(242)：垂心对 X(71) 的线共轭",
+                "X242",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(243): skip right/equilateral
+        if !right && !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (caa * caa - bb.cos() * cc.cos()) / caa
+            };
+            push_bary(
+                &mut out,
+                "垂心X73线共轭",
+                "X_{243}",
+                "X(243) = X(4)\\text{-line conjugate of }X(73);\\ (\\sin A)\\sec A(\\cos^2 A-\\cos B\\cos C)",
+                "X(243)：垂心对 X(73) 的线共轭",
+                "X243",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(244): skip equilateral
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                (1.0 - (bb - cc).cos()) * (aa * 0.5).sin().powi(2)
+            };
+            push_bary(
+                &mut out,
+                "内心X100线共轭",
+                "X_{244}",
+                "X(244) = X(1)\\text{-line conjugate of }X(100);\\ (\\sin A)[1-\\cos(B-C)]\\sin^2\\tfrac{A}{2}",
+                "X(244)：内心对 X(100) 的线共轭",
+                "X244",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(245): skip isosceles (angle-diff csc)
+        if !isos {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let d_ca = (cc - aa).sin();
+                let d_cb = (cc - bb).sin();
+                let d_ab = (aa - bb).sin();
+                let d_ba = (bb - aa).sin();
+                if d_ca.abs() < 1e-12 || d_cb.abs() < 1e-12 || d_ab.abs() < 1e-12 || d_ba.abs() < 1e-12
+                {
+                    return f64::NAN;
+                }
+                let csc_ca = 1.0 / d_ca;
+                let csc_cb = 1.0 / d_cb;
+                let csc_ab = 1.0 / d_ab;
+                let csc_ba = 1.0 / d_ba;
+                csc_ca * csc_ca + csc_cb * (csc_ca - csc_ba) + csc_ab * csc_ab
+            };
+            push_bary(
+                &mut out,
+                "内心X110线共轭",
+                "X_{245}",
+                "X(245) = X(1)\\text{-line conjugate of }X(110);\\ \\csc\\text{-diff form}",
+                "X(245)：内心对 X(110) 的线共轭",
+                "X245",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(246): skip isosceles
+        if !isos {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let d_ba = (bb - aa).sin();
+                let d_bc = (bb - cc).sin();
+                let d_ca = (cc - aa).sin();
+                let d_cb = (cc - bb).sin();
+                if d_ba.abs() < 1e-12 || d_bc.abs() < 1e-12 || d_ca.abs() < 1e-12 || d_cb.abs() < 1e-12
+                {
+                    return f64::NAN;
+                }
+                let csc_ba = 1.0 / d_ba;
+                let csc_bc = 1.0 / d_bc;
+                let csc_ca = 1.0 / d_ca;
+                let csc_cb = 1.0 / d_cb;
+                let u = aa.cos() * csc_ca + bb.cos() * csc_cb;
+                csc_ba * (aa.cos() * csc_ba + cc.cos() * csc_bc) - csc_ca * u
+            };
+            push_bary(
+                &mut out,
+                "外心X110线共轭",
+                "X_{246}",
+                "X(246) = X(3)\\text{-line conjugate of }X(110);\\ \\csc/\\cos\\text{ form}",
+                "X(246)：外心对 X(110) 的线共轭",
+                "X246",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(247): skip isosceles and right (sec)
+        if !isos && !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let caa = aa.cos();
+                let cbb = bb.cos();
+                let ccc = cc.cos();
+                if caa.abs() < 1e-12 || cbb.abs() < 1e-12 || ccc.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let d_ba = (bb - aa).sin();
+                let d_bc = (bb - cc).sin();
+                let d_ca = (cc - aa).sin();
+                let d_cb = (cc - bb).sin();
+                if d_ba.abs() < 1e-12 || d_bc.abs() < 1e-12 || d_ca.abs() < 1e-12 || d_cb.abs() < 1e-12
+                {
+                    return f64::NAN;
+                }
+                let csc_ba = 1.0 / d_ba;
+                let csc_bc = 1.0 / d_bc;
+                let csc_ca = 1.0 / d_ca;
+                let csc_cb = 1.0 / d_cb;
+                let seca = 1.0 / caa;
+                let secb = 1.0 / cbb;
+                let secc = 1.0 / ccc;
+                let u = seca * csc_ca + secb * csc_cb;
+                csc_ba * (seca * csc_ba + secc * csc_bc) - csc_ca * u
+            };
+            push_bary(
+                &mut out,
+                "垂心X110线共轭",
+                "X_{247}",
+                "X(247) = X(4)\\text{-line conjugate of }X(110);\\ \\csc/\\sec\\text{ form}",
+                "X(247)：垂心对 X(110) 的线共轭",
+                "X247",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(248): skip equilateral (A+ω→π/2)
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |aa: f64, saa: f64, caa: f64| {
+                let caw = caa * cos_w - saa * sin_w;
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa * (2.0 * aa).sin() / caw
+            };
+            push_bary(
+                &mut out,
+                "垂心X132线共轭",
+                "X_{248}",
+                "X(248) = X(4)\\text{-line conjugate of }X(132);\\ \\sin A\\sin 2A\\sec(A+\\omega)",
+                "X(248)：垂心对 X(132) 的线共轭",
+                "X248",
+                f(g[0], sa, ca),
+                f(g[1], sb, cb),
+                f(g[2], sc, cc),
+            );
+        }
+        // X(249): isogonal of X(115); finite on equilateral (=G)
+        {
+            let wa = (g[1] - g[2]).cos().powi(2);
+            let wb = (g[2] - g[0]).cos().powi(2);
+            let wc = (g[0] - g[1]).cos().powi(2);
+            push_bary(
+                &mut out,
+                "X115等角",
+                "X_{249}",
+                "X(249) = \\mathrm{isog}(X_{115});\\ \\cos^2(B-C)",
+                "X(249)：X(115) 的等角共轭",
+                "X249",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(250): skip right (tan) and isosceles (csc)
+        if !right && !isos {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let d = (bb - cc).sin();
+                if d.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.tan() / (d * d)
+            };
+            push_bary(
+                &mut out,
+                "X125等角",
+                "X_{250}",
+                "X(250) = \\mathrm{isog}(X_{125});\\ \\tan A\\csc^2(B-C)",
+                "X(250)：X(125) 的等角共轭",
+                "X250",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -15868,6 +16181,110 @@ mod tests {
                 continue;
             }
             assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+        }
+    }
+
+    #[test]
+    fn x241_to_x250_line_conjugates_isogonals() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("内心X55线共轭", "X_{241}", 9.9719387755102, 11.826431289311914),
+            ("垂心X71线共轭", "X_{242}", 6.437913907284766, 6.59497246949392),
+            ("垂心X73线共轭", "X_{243}", 6.642321785476351, 9.348636100085107),
+            ("内心X100线共轭", "X_{244}", 6.25, 0.968245836551854),
+            ("内心X110线共轭", "X_{245}", 5.908751393534002, 0.633335682459522),
+            ("外心X110线共轭", "X_{246}", 2.141120233091034, 5.041372798371628),
+            ("垂心X110线共轭", "X_{247}", 4.703399507007825, -1.249103798621572),
+            ("垂心X132线共轭", "X_{248}", 6.775670970419633, -0.719280998734576),
+            ("X115等角", "X_{249}", 4.079602071065873, 1.854246025083043),
+            ("X125等角", "X_{250}", 4.526900018908428, 4.296278811013081),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        assert!(fs.iter().any(|f| f.group == "内心X55线共轭" && f.label.contains("IO")));
+
+        // Isosceles 5-5-6: X245/246/247/250 skip; others finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for skip in ["X_{245}", "X_{246}", "X_{247}", "X_{250}"] {
+            assert!(
+                fs2.iter().all(|f| f.label != skip),
+                "{} should skip isos",
+                skip
+            );
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{245}" | "X_{246}" | "X_{247}" | "X_{250}") {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: most line-conjugates skip; X249 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        for skip in [
+            "X_{241}", "X_{242}", "X_{243}", "X_{244}", "X_{245}", "X_{246}", "X_{247}", "X_{248}",
+            "X_{250}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != skip), "{} should skip equil", skip);
+        }
+        let f249 = fs3
+            .iter()
+            .find(|f| f.group == "X115等角" && f.label == "X_{249}")
+            .expect("equil X249");
+        let (x, y) = ptxy(f249);
+        assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral X249 != G {:?}", (x, y));
+
+        // Right 3-4-5: X242/243/247/250 skip; X245/246 still finite (scalene).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{242}", "X_{243}", "X_{247}", "X_{250}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{242}" | "X_{243}" | "X_{247}" | "X_{250}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
         }
     }
 
