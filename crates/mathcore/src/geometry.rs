@@ -11058,6 +11058,247 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+
+    // X(271)–X(280): continue isogonal / cevapoint band (ETC).
+    // X(271)=isog(X208)=isotomic(X342); bary (sin A)(cot A cot A/2)/(-1-cos A+cos B+cos C); skip right.
+    // X(272)=isog(X209); bary (sin A)/[(sin A+sin(A−B)+sin(A−C))(sin B+sin C)].
+    // X(273)=isog(X212)=isotomic(X78)=polar(X9); bary tan A sec²(A/2); skip right.
+    // X(274)=isog(X213)=isotomic(X37); bary bc/(b+c).
+    // X(275)=cevapoint(H,K)=isog(X216)=polar(X5); bary sec A sec(B−C); skip right.
+    // X(276)=isog(X217)=Hofstadter −2; bary csc² A sec A sec(B−C); skip right.
+    // X(277)=isog(X218); bary 1/(a²+b²+c²−2ab−2ac).
+    // X(278)=isog(X219); bary 1−sec A [= tan A tan(A/2)]; skip right.
+    // X(279)=isog(X220); bary tan²(A/2).
+    // X(280)=X(1)-cross of X(8)=isog(X221); bary (sin A)csc²(A/2)/(-1-cos A+cos B+cos C).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(271): skip right (cot A → ∞)
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = -1.0 - aa.cos() + bb.cos() + cc.cos();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let half = aa * 0.5;
+                if half.tan().abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                // (sin A)(cot A cot A/2)/den = cos A · cot(A/2) / den
+                aa.cos() / half.tan() / den
+            };
+            push_bary(
+                &mut out,
+                "X208等角",
+                "X_{271}",
+                "X(271) = \\mathrm{isog}(X_{208});\\ (\\sin A)(\\cot A\\cot\\tfrac{A}{2})/(-1-\\cos A+\\cdots)",
+                "X(271)：X(208) 的等角共轭（X(342) 等截）",
+                "X271",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(272)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let num = aa.sin() + (aa - bb).sin() + (aa - cc).sin();
+                let den = (bb.sin() + cc.sin()) * num;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() / den
+            };
+            push_bary(
+                &mut out,
+                "X209等角",
+                "X_{272}",
+                "X(272) = \\mathrm{isog}(X_{209});\\ (\\sin A)/[(\\sin A+\\sin(A-B)+\\sin(A-C))(\\sin B+\\sin C)]",
+                "X(272)：X(209) 的等角共轭",
+                "X272",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(273): skip right (tan A → ∞)
+        if !right {
+            let f = |aa: f64| {
+                let c_half = (aa * 0.5).cos();
+                if c_half.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.tan() / (c_half * c_half)
+            };
+            push_bary(
+                &mut out,
+                "X212等角",
+                "X_{273}",
+                "X(273) = \\mathrm{isog}(X_{212})=\\mathrm{isotomic}(X_{78});\\ \\tan A\\sec^2\\tfrac{A}{2}",
+                "X(273)：X(212) 的等角共轭（X(78) 等截 / X(9) 极共轭）",
+                "X273",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(274)
+        {
+            push_bary(
+                &mut out,
+                "X213等角",
+                "X_{274}",
+                "X(274) = \\mathrm{isog}(X_{213})=\\mathrm{isotomic}(X_{37});\\ bc/(b+c)",
+                "X(274)：X(213) 的等角共轭（X(37) 等截）",
+                "X274",
+                b * c / (b + c),
+                c * a / (c + a),
+                a * b / (a + b),
+            );
+        }
+        // X(275): skip right (sec A → ∞); cevapoint of H and K
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let cbc = (bb - cc).cos();
+                if aa.cos().abs() < 1e-14 || cbc.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / (aa.cos() * cbc)
+            };
+            push_bary(
+                &mut out,
+                "垂心勒莫恩截点",
+                "X_{275}",
+                "X(275) = \\mathrm{cevapoint}(H,K)=\\mathrm{isog}(X_{216});\\ \\sec A\\sec(B-C)",
+                "X(275)：垂心与勒莫恩点的截点（X(216) 等角 / X(5) 极共轭）",
+                "X275",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(276): skip right (sec A → ∞); Hofstadter −2
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let saa = aa.sin();
+                let caa = aa.cos();
+                let cbc = (bb - cc).cos();
+                if saa.abs() < 1e-14 || caa.abs() < 1e-14 || cbc.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / (saa * saa * caa * cbc)
+            };
+            push_bary(
+                &mut out,
+                "X217等角",
+                "X_{276}",
+                "X(276) = \\mathrm{isog}(X_{217});\\ \\csc^2 A\\sec A\\sec(B-C)",
+                "X(276)：X(217) 的等角共轭（Hofstadter −2 点）",
+                "X276",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(277)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = aa * aa + bb * bb + cc * cc - 2.0 * aa * bb - 2.0 * aa * cc;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "X218等角",
+                "X_{277}",
+                "X(277) = \\mathrm{isog}(X_{218});\\ 1/(a^2+b^2+c^2-2ab-2ac)",
+                "X(277)：X(218) 的等角共轭",
+                "X277",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(278): skip right (sec A → ∞)
+        if !right {
+            push_bary(
+                &mut out,
+                "X219等角",
+                "X_{278}",
+                "X(278) = \\mathrm{isog}(X_{219});\\ 1-\\sec A\\ [=\\tan A\\tan\\tfrac{A}{2}]",
+                "X(278)：X(219) 的等角共轭",
+                "X278",
+                1.0 - 1.0 / ca,
+                1.0 - 1.0 / cb,
+                1.0 - 1.0 / cc,
+            );
+        }
+        // X(279)
+        {
+            push_bary(
+                &mut out,
+                "X220等角",
+                "X_{279}",
+                "X(279) = \\mathrm{isog}(X_{220});\\ \\tan^2\\tfrac{A}{2}",
+                "X(279)：X(220) 的等角共轭",
+                "X279",
+                (g[0] * 0.5).tan().powi(2),
+                (g[1] * 0.5).tan().powi(2),
+                (g[2] * 0.5).tan().powi(2),
+            );
+        }
+        // X(280)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = -1.0 - aa.cos() + bb.cos() + cc.cos();
+                let s_half = (aa * 0.5).sin();
+                if den.abs() < 1e-12 || s_half.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() / (s_half * s_half) / den
+            };
+            push_bary(
+                &mut out,
+                "内心奈格尔交叉共轭",
+                "X_{280}",
+                "X(280) = X(1)\\text{-cross of }X(8)=\\mathrm{isog}(X_{221});\\ (\\sin A)\\csc^2\\tfrac{A}{2}/(-1-\\cos A+\\cdots)",
+                "X(280)：内心对奈格尔点的交叉共轭（X(221) 等角）",
+                "X280",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -16938,6 +17179,93 @@ mod tests {
         }
         for (grp, lab, ..) in want {
             if matches!(lab, "X_{264}" | "X_{270}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x271_to_x280_isogonals_cevapoint() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X208等角", "X_{271}", 4.569633883704235, 3.829888413065841),
+            ("X209等角", "X_{272}", 0.7199770872986051, 0.18117854313016454),
+            ("X212等角", "X_{273}", 4.87699699243971, 3.3047981376409314),
+            ("X213等角", "X_{274}", 4.135283025518117, 1.5802419096832656),
+            ("垂心勒莫恩截点", "X_{275}", 4.749702779383263, 2.6734750735796546),
+            ("X217等角", "X_{276}", 4.385508246326592, 2.1596621974365897),
+            ("X218等角", "X_{277}", 3.5721756890576, 1.2223724154554005),
+            ("X219等角", "X_{278}", 4.9566122071516645, 3.5163083231866197),
+            ("X220等角", "X_{279}", 4.889986493974234, 2.7947888291577954),
+            ("内心奈格尔交叉共轭", "X_{280}", 4.756291946308725, 4.475700133725433),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite for this band.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: X271/X273/X275/X276/X278 skip (cot/tan/sec); others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{271}", "X_{273}", "X_{275}", "X_{276}", "X_{278}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{271}" | "X_{273}" | "X_{275}" | "X_{276}" | "X_{278}") {
                 continue;
             }
             assert!(
