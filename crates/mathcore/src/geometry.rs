@@ -13856,6 +13856,244 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     }
 
 
+    // X(391)–X(400): G–K / Spieker–mitten / tan²–cos² / Napoleon mates / Parry / Yff–Malfatti (ETC).
+    // X(391)=X(2)X(6) ∩ X(8)X(9); bary (3a+b+c)(b+c−a); {X8,X9}-harmonic of X346.
+    // X(392)=X(1)X(6) ∩ X(10)X(11); bary a[(b+c)(b²+c²−a²)+4abc]; =reflection(X354 in X551).
+    // X(393)=X(25)-cross conjugate of X(4); bary tan² A; skip right (tan∞).
+    // X(394)=X(69)-Ceva of X(3); bary cos² A.
+    // X(395)=midpoint(X14,X16); bary (sin A)[cos(B−C)+2 cos(A+π/3)]; equil→G (weights 0).
+    // X(396)=midpoint(X13,X15); bary (sin A)[cos(B−C)+2 cos(A−π/3)].
+    // X(397)=crosspoint(X4,X17); bary (sin A)[cos(B−C)−2 cos(A+π/3)].
+    // X(398)=crosspoint(X4,X18); bary (sin A)[cos(B−C)−2 cos(A−π/3)].
+    // X(399)=Parry reflection point; bary (sin A)[5 cos A−4 cos B cos C−8 sin B sin C cos 2A].
+    // X(400)=Yff–Malfatti; bary sin A csc⁴(A/4).
+    {
+        let right = g.iter().any(|ang| (*ang - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(391): X(2)X(6) ∩ X(8)X(9)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| (3.0 * aa + bb + cc_) * (bb + cc_ - aa);
+            push_bary(
+                &mut out,
+                "X2X6交X8X9",
+                "X_{391}",
+                "X(391) = X_2X_6\\cap X_8X_9;\\ (3a+b+c)(b+c-a)",
+                "X(391)：X(2)X(6) 与 X(8)X(9) 的交点（{X8,X9}-调和共轭于 X346）",
+                "X391",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(392): X(1)X(6) ∩ X(10)X(11)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * ((bb + cc_) * (bb * bb + cc_ * cc_ - aa * aa) + 4.0 * aa * bb * cc_)
+            };
+            push_bary(
+                &mut out,
+                "X1X6交X10X11",
+                "X_{392}",
+                "X(392) = X_1X_6\\cap X_{10}X_{11};\\ a[(b+c)(b^2+c^2-a^2)+4abc]",
+                "X(392)：X(1)X(6) 与 X(10)X(11) 的交点（= X354 关于 X551 的反射）",
+                "X392",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(393): tan² A; skip right
+        if !right {
+            let f = |ang: f64| {
+                let t = ang.tan();
+                t * t
+            };
+            push_bary(
+                &mut out,
+                "X25叉共轭X4",
+                "X_{393}",
+                "X(393) = X_{25}\\text{-cross conj of }X_4;\\ \\tan^2 A",
+                "X(393)：X(25) 关于 X(4) 的叉共轭（跳过直角）",
+                "X393",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(394): cos² A
+        {
+            let f = |ang: f64| {
+                let c0 = ang.cos();
+                c0 * c0
+            };
+            push_bary(
+                &mut out,
+                "X69塞瓦X3",
+                "X_{394}",
+                "X(394) = X_{69}\\text{-Ceva of }X_3;\\ \\cos^2 A",
+                "X(394)：X(69) 关于外心的塞瓦共轭",
+                "X394",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(395): midpoint(X14,X16); equilateral weights vanish → G
+        {
+            let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
+            if equil {
+                push_bary(
+                    &mut out,
+                    "X14X16中点",
+                    "X_{395}",
+                    "X(395) = \\mathrm{mid}(X_{14},X_{16});\\ \\mathrm{equil}\\to G",
+                    "X(395)：第二费马点与第二等动力点的中点（等边退化为重心）",
+                    "X395",
+                    1.0,
+                    1.0,
+                    1.0,
+                );
+            } else {
+                let pi3 = std::f64::consts::PI / 3.0;
+                let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                    ang_a.sin() * ((ang_b - ang_c).cos() + 2.0 * (ang_a + pi3).cos())
+                };
+                push_bary(
+                    &mut out,
+                    "X14X16中点",
+                    "X_{395}",
+                    "X(395) = \\mathrm{mid}(X_{14},X_{16});\\ (\\sin A)[\\cos(B-C)+2\\cos(A+\\pi/3)]",
+                    "X(395)：第二费马点与第二等动力点的中点",
+                    "X395",
+                    f(g[0], g[1], g[2]),
+                    f(g[1], g[2], g[0]),
+                    f(g[2], g[0], g[1]),
+                );
+            }
+        }
+        // X(396): midpoint(X13,X15)
+        {
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin() * ((ang_b - ang_c).cos() + 2.0 * (ang_a - pi3).cos())
+            };
+            push_bary(
+                &mut out,
+                "X13X15中点",
+                "X_{396}",
+                "X(396) = \\mathrm{mid}(X_{13},X_{15});\\ (\\sin A)[\\cos(B-C)+2\\cos(A-\\pi/3)]",
+                "X(396)：第一费马点与第一等动力点的中点",
+                "X396",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(397): crosspoint(X4,X17)
+        {
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin() * ((ang_b - ang_c).cos() - 2.0 * (ang_a + pi3).cos())
+            };
+            push_bary(
+                &mut out,
+                "X4X17截点",
+                "X_{397}",
+                "X(397) = \\mathrm{crosspoint}(X_4,X_{17});\\ (\\sin A)[\\cos(B-C)-2\\cos(A+\\pi/3)]",
+                "X(397)：垂心与第一拿破仑点的截点",
+                "X397",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(398): crosspoint(X4,X18)
+        {
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin() * ((ang_b - ang_c).cos() - 2.0 * (ang_a - pi3).cos())
+            };
+            push_bary(
+                &mut out,
+                "X4X18截点",
+                "X_{398}",
+                "X(398) = \\mathrm{crosspoint}(X_4,X_{18});\\ (\\sin A)[\\cos(B-C)-2\\cos(A-\\pi/3)]",
+                "X(398)：垂心与第二拿破仑点的截点",
+                "X398",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(399): Parry reflection point
+        {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin()
+                    * (5.0 * ang_a.cos()
+                        - 4.0 * ang_b.cos() * ang_c.cos()
+                        - 8.0 * ang_b.sin() * ang_c.sin() * (2.0 * ang_a).cos())
+            };
+            push_bary(
+                &mut out,
+                "帕里反射点",
+                "X_{399}",
+                "X(399) = \\mathrm{Parry\\ reflection};\\ (\\sin A)[5\\cos A-4\\cos B\\cos C-8\\sin B\\sin C\\cos 2A]",
+                "X(399)：帕里反射点（过顶点且平行于欧拉线的反射线共点）",
+                "X399",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(400): Yff–Malfatti; bary sin A csc⁴(A/4)
+        {
+            let f = |ang: f64| {
+                let s4 = (ang / 4.0).sin();
+                if s4.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                ang.sin() / s4.powi(4)
+            };
+            push_bary(
+                &mut out,
+                "伊夫马尔法蒂",
+                "X_{400}",
+                "X(400) = \\mathrm{Yff\\text{-}Malfatti};\\ \\sin A\\,\\csc^4(A/4)",
+                "X(400)：伊夫–马尔法蒂点（Ajima–Malfatti 的外切变体）",
+                "X400",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+    }
+
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -20857,6 +21095,115 @@ mod tests {
         assert!(r4.error.is_none(), "{:?}", r4.error);
         let fs4 = &r4.cases[0].facts;
         for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x391_to_x400_gk_napoleon_parry_yff_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X2X6交X8X9", "X_{391}", 3.920649931224209, 1.2935471372090626),
+            ("X1X6交X10X11", "X_{392}", 4.192708333333333, 1.5532276961352662),
+            ("X25叉共轭X4", "X_{393}", 4.959201648313755, 4.08647533176635),
+            ("X69塞瓦X3", "X_{394}", 3.130227001194743, 0.38868650069465116),
+            ("X14X16中点", "X_{395}", 12.101547673400342, 10.658878097393696),
+            ("X13X15中点", "X_{396}", 4.490398421676066, 1.945784012098527),
+            ("X4X17截点", "X_{397}", 4.725427515862568, 2.383344248128183),
+            ("X4X18截点", "X_{398}", 4.645290377716149, 1.7995155349172816),
+            ("帕里反射点", "X_{399}", 4.864265927977838, 1.999789738872749),
+            ("伊夫马尔法蒂", "X_{400}", 2.90668340537787, 0.6040116450051041),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-checks: X395=mid(F2,S2)=mid(X14,X16), X396=mid(F1,S1)=mid(X13,X15).
+        let find_lab = |lab: &str| {
+            fs.iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("missing {}", lab))
+        };
+        let (f1x, f1y) = ptxy(find_lab("F_1"));
+        let (f2x, f2y) = ptxy(find_lab("F_2"));
+        let (s1x, s1y) = ptxy(find_lab("S_{1}"));
+        let (s2x, s2y) = ptxy(find_lab("S_{2}"));
+        let (x395x, x395y) = ptxy(find_lab("X_{395}"));
+        let (x396x, x396y) = ptxy(find_lab("X_{396}"));
+        assert!((x395x - (f2x + s2x) / 2.0).abs() < 1e-9 && (x395y - (f2y + s2y) / 2.0).abs() < 1e-9);
+        assert!((x396x - (f1x + s1x) / 2.0).abs() < 1e-9 && (x396y - (f1y + s1y) / 2.0).abs() < 1e-9);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all collapse to G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            let f = fs3
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: skip X393 (tan∞); keep the rest.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{393}"), "X393 skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{393}" {
+                continue;
+            }
             assert!(
                 fs4.iter().any(|f| f.group == grp && f.label == lab),
                 "right missing {} {}",
