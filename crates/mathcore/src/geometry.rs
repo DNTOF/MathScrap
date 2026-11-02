@@ -2291,6 +2291,18 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 y: km[1],
                 label: "Km 肯莫图".into(),
             }));
+            out.push(fact(
+                "肯莫图点",
+                "X_{371}",
+                pt(km[0], km[1]),
+                None,
+                "X(371) = a\\cos(A-\\pi/4):\\cdots = \\mathrm{isogonal}(X_{485})",
+                "X(371)：肯莫图点（全等正方形点）",
+            ).with(Shape::Point {
+                x: km[0],
+                y: km[1],
+                label: "X371".into(),
+            }));
             let edge_den = a * a + b * b + c * c + 4.0 * area;
             if edge_den > 1e-12 {
                 let edge = std::f64::consts::SQRT_2 * a * b * c / edge_den;
@@ -13407,6 +13419,209 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         // X(368)/X(369)/X(370): deferred — no closed barycentrics in ETC.
     }
 
+    // X(371)–X(380): Kenmotu mates / pedal-centroids / Euler intercepts (ETC).
+    // X(371)=Kenmotu: dual-labeled earlier as Km; bary a cos(A−π/4)=isogonal(X485).
+    // X(372)={X3,X6}-harmonic of X371; bary a cos(A+π/4)=isogonal(X486); Brocard-inverse of X371.
+    // X(373)=centroid of pedal(G); bary 2abc+ca²cos C+ba²cos B (= a²(b⁴+c⁴−a²b²−a²c²−6b²c²)).
+    // X(374)=centroid of pedal(X9); bary a(2b+2c−3a+(c+a)cos C+(b+a)cos B).
+    // X(375)=centroid of pedal(X10); bary a(2bc(b+c)+ca(c+a)cos C+ab(a+b)cos B); =midpoint(X51,X210).
+    // X(376)=centroid of antipedal(G)=reflection(G in O)=midpoint(G,X20); bary 5sin2A−sin2B−sin2C.
+    // X(377)=Euler intercept of X7X8; bary b⁴+c⁴−a⁴−2b²c²−2abc(a+b+c).
+    // X(378)=reflection(X22 in O); bary tan A+sin2A; skip right (tan undefined).
+    // X(379)=Euler intercept of X6X7; bary a⁵+(b+c)(bca²−(bc+ca+ab)(b−c)²).
+    // X(380)=X1X19 ∩ X9X55; bary a(b+c−a)[3a³+(b+c)(3a²+(b−c)²+a(b+c))].
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let right = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let pi4 = std::f64::consts::FRAC_PI_4;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(371): dual-labeled in the Kenmotu block above (Km / X_{371}).
+        // X(372): {X3,X6}-harmonic conjugate of Kenmotu
+        {
+            let f = |aa: f64, ang: f64| aa * (ang + pi4).cos();
+            push_bary(
+                &mut out,
+                "肯莫图谐共轭",
+                "X_{372}",
+                "X(372) = \\{X_3,X_6\\}\\text{-harmonic of }X_{371};\\ a\\cos(A+\\pi/4)",
+                "X(372)：{X(3),X(6)} 关于肯莫图点的调和共轭（等角共轭于 X(486)）",
+                "X372",
+                f(a, g[0]),
+                f(b, g[1]),
+                f(c, g[2]),
+            );
+        }
+        // X(373): centroid of pedal triangle of G
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_b: f64, ang_c: f64| {
+                2.0 * aa * bb * cc_ + cc_ * aa * aa * ang_c.cos() + bb * aa * aa * ang_b.cos()
+            };
+            push_bary(
+                &mut out,
+                "重心垂足重心",
+                "X_{373}",
+                "X(373) = \\mathrm{centroid}(\\mathrm{pedal}(G));\\ 2abc+ca^2\\cos C+ba^2\\cos B",
+                "X(373)：重心的垂足三角形的重心",
+                "X373",
+                f(a, b, c, g[1], g[2]),
+                f(b, c, a, g[2], g[0]),
+                f(c, a, b, g[0], g[1]),
+            );
+        }
+        // X(374): centroid of pedal triangle of Mittenpunkt X(9)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_b: f64, ang_c: f64| {
+                aa * (2.0 * bb + 2.0 * cc_ - 3.0 * aa
+                    + (cc_ + aa) * ang_c.cos()
+                    + (bb + aa) * ang_b.cos())
+            };
+            push_bary(
+                &mut out,
+                "X9垂足重心",
+                "X_{374}",
+                "X(374) = \\mathrm{centroid}(\\mathrm{pedal}(X_9));\\ a(2b+2c-3a+\\cdots)",
+                "X(374)：米滕蓬特 X(9) 的垂足三角形的重心",
+                "X374",
+                f(a, b, c, g[1], g[2]),
+                f(b, c, a, g[2], g[0]),
+                f(c, a, b, g[0], g[1]),
+            );
+        }
+        // X(375): centroid of pedal triangle of Spieker X(10); = midpoint(X51,X210)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_b: f64, ang_c: f64| {
+                aa * (2.0 * bb * cc_ * (bb + cc_)
+                    + cc_ * aa * (cc_ + aa) * ang_c.cos()
+                    + aa * bb * (aa + bb) * ang_b.cos())
+            };
+            push_bary(
+                &mut out,
+                "X10垂足重心",
+                "X_{375}",
+                "X(375) = \\mathrm{centroid}(\\mathrm{pedal}(X_{10}))=\\mathrm{midpoint}(X_{51},X_{210})",
+                "X(375)：斯皮克点 X(10) 的垂足三角形的重心",
+                "X375",
+                f(a, b, c, g[1], g[2]),
+                f(b, c, a, g[2], g[0]),
+                f(c, a, b, g[0], g[1]),
+            );
+        }
+        // X(376): reflection of G in O (= midpoint(G, X20))
+        {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                5.0 * (2.0 * ang_a).sin() - (2.0 * ang_b).sin() - (2.0 * ang_c).sin()
+            };
+            push_bary(
+                &mut out,
+                "重心反足重心",
+                "X_{376}",
+                "X(376) = 2O-G = \\mathrm{midpoint}(G,X_{20});\\ 5\\sin 2A-\\sin 2B-\\sin 2C",
+                "X(376)：重心关于外心的反射（重心的反足三角形的重心）",
+                "X376",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(377): Euler-line intercept of X(7)X(8)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                bb.powi(4) + cc_.powi(4) - aa.powi(4) - 2.0 * bb * bb * cc_ * cc_
+                    - 2.0 * aa * bb * cc_ * (aa + bb + cc_)
+            };
+            push_bary(
+                &mut out,
+                "X7X8欧拉截",
+                "X_{377}",
+                "X(377) = X_7X_8 \\cap \\mathrm{Euler};\\ b^4+c^4-a^4-2b^2c^2-2abc(a+b+c)",
+                "X(377)：X(7)X(8) 与欧拉线的交点",
+                "X377",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(378): reflection of Exeter X(22) in O; skip right
+        if !right {
+            let f = |ang: f64| ang.tan() + (2.0 * ang).sin();
+            push_bary(
+                &mut out,
+                "X22外心反射",
+                "X_{378}",
+                "X(378) = 2O-X_{22};\\ \\tan A+\\sin 2A",
+                "X(378)：埃克塞特点关于外心的反射（跳过直角）",
+                "X378",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(379): Euler-line intercept of X(6)X(7)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa.powi(5)
+                    + (bb + cc_)
+                        * (bb * cc_ * aa * aa
+                            - (bb * cc_ + cc_ * aa + aa * bb) * (bb - cc_).powi(2))
+            };
+            push_bary(
+                &mut out,
+                "X6X7欧拉截",
+                "X_{379}",
+                "X(379) = X_6X_7 \\cap \\mathrm{Euler};\\ a^5+(b+c)(bca^2-(bc+ca+ab)(b-c)^2)",
+                "X(379)：X(6)X(7) 与欧拉线的交点",
+                "X379",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(380): X(1)X(19) ∩ X(9)X(55)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let s = bb + cc_;
+                aa * (s - aa)
+                    * (3.0 * aa.powi(3) + s * (3.0 * aa * aa + (bb - cc_).powi(2) + aa * s))
+            };
+            push_bary(
+                &mut out,
+                "X1X19交X9X55",
+                "X_{380}",
+                "X(380) = X_1X_{19}\\cap X_9X_{55};\\ a(b+c-a)[3a^3+(b+c)(3a^2+(b-c)^2+a(b+c))]",
+                "X(380)：X(1)X(19) 与 X(9)X(55) 的交点",
+                "X380",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+    }
+
 
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
@@ -20192,6 +20407,101 @@ mod tests {
         assert!(r4.error.is_none(), "{:?}", r4.error);
         let fs4 = &r4.cases[0].facts;
         for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x371_to_x380_kenmotu_pedal_euler_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("肯莫图点", "X_{371}", 4.451520875906775, 1.7771279955358747),
+            ("肯莫图谐共轭", "X_{372}", 5.536930298223856, 3.566426083563593),
+            ("重心垂足重心", "X_{373}", 4.440104166666667, 1.9734732849164527),
+            ("X9垂足重心", "X_{374}", 4.328343531468532, 1.8573561960778358),
+            ("X10垂足重心", "X_{375}", 4.37109375, 1.9213628319075857),
+            ("重心反足重心", "X_{376}", 3.7291666666666665, 0.3711609040115441),
+            ("X7X8欧拉截", "X_{377}", 4.344031531531532, 1.873250390986583),
+            ("X22外心反射", "X_{378}", 4.595135908440629, 2.4866880197108565),
+            ("X6X7欧拉截", "X_{379}", 4.533564305616659, 2.3362711353139662),
+            ("X1X19交X9X55", "X_{380}", 4.43520575654077, 1.7328059090328471),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Km dual-label agrees with X371.
+        let km = fs.iter().find(|f| f.group == "肯莫图点" && f.label == "Km").expect("Km");
+        let x371 = fs.iter().find(|f| f.group == "肯莫图点" && f.label == "X_{371}").expect("X371");
+        assert_eq!(ptxy(km), ptxy(x371));
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite; X371=X372=G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let x371e = fs3.iter().find(|f| f.group == "肯莫图点" && f.label == "X_{371}").unwrap();
+        let x372e = fs3.iter().find(|f| f.group == "肯莫图谐共轭" && f.label == "X_{372}").unwrap();
+        assert_eq!(ptxy(x371e), ptxy(g3));
+        assert!((ptxy(x372e).0 - ptxy(g3).0).abs() < 1e-9 && (ptxy(x372e).1 - ptxy(g3).1).abs() < 1e-9);
+
+        // Right 3-4-5: skip X378 (tan); keep the rest.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{378}"), "X378 skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{378}" {
+                continue;
+            }
             assert!(
                 fs4.iter().any(|f| f.group == grp && f.label == lab),
                 "right missing {} {}",
