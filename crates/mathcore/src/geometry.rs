@@ -14093,7 +14093,7 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
-    // X(401)–X(430): Bailey / Zeeman–Gossard / orthic-X36 / Euler intercepts / X21·X29 subst / Hirst / Ceva / X4-Hirst band / Euler 4th·5th (ETC).
+    // X(401)–X(440): Bailey / Zeeman–Gossard / orthic-X36 / Euler intercepts / X21·X29 subst / Hirst / Ceva / X4-Hirst / Euler 4th–10th subst / complement X27 (ETC).
     // X(401)=Bailey=X(2)-Hirst of X(3)=anticomplement(X297); bary sin2B sin2C−sin²(2A); skip equil (weights 0).
     // X(402)=Zeeman–Gossard perspector; bary p·y with p=2a⁴−a²b²−a²c²−(b²−c²)²,
     //   y=a⁸−a⁶(b²+c²)+a⁴(2b²−c²)(2c²−b²)+[(b²−c²)²][3a²(b²+c²)−b⁴−c⁴−3b²c²]; skip equil (p=0).
@@ -14125,6 +14125,16 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     // X(428)=Euler X(38)-5th-subst; bary (v+w)tan A, u:v:w=b²+c²; skip right.
     // X(429)=Euler X(58)-5th-subst; bary (v+w)tan A, u:v:w=a/(b+c); skip right.
     // X(430)=Euler X(81)-5th-subst; bary (v+w)tan A, u:v:w=1/(b+c); skip right.
+    // X(431)=Euler X(283)-5th-subst; bary (v+w)tan A, u:v:w=cosA/(cosB+cosC); skip right.
+    // X(432)=Euler X(155)-6th-subst; bary (v²+w²)tan A, u:v:w=cosA(cos²B+cos²C−cos²A); skip right.
+    // X(433)=Euler X(159)-6th-subst; bary (v²+w²)tan A, u:v:w=X(159) tril; skip right.
+    // X(434)=Euler X(195)-6th-subst; bary (v²+w²)tan A, u:v:w=X(195) tril; skip right.
+    // X(435)=Euler X(399)-6th-subst; bary (v²+w²)tan A, u:v:w=X(399) tril; skip right.
+    // X(436)=Euler X(48)-7th-subst; bary (u²+vw)tan A, u:v:w=sin2A; skip right.
+    // X(437)=Euler X(214)-8th-subst; bary (u²+vw)tan A, u:v:w=(b+c−2a)(b²+c²−a²−bc); skip right/equil.
+    // X(438)=Euler X(204)-9th-subst; bary u²+vw, u:v:w=tanA(tanB+tanC−tanA); skip right.
+    // X(439)=Euler X(193)-10th-subst; bary (3a²−b²−c²)².
+    // X(440)=complement of X(27); bary v+w, u:v:w=tanA/(b+c); skip right.
     {
         let right = g.iter().any(|ang| (*ang - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
         let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
@@ -14726,6 +14736,205 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
                 (u81b + v81b) * g[2].tan(),
             );
         }
+
+        // X(431)–X(440): Euler X283-5th; X155/X159/X195/X399-6th; X48-7th; X214-8th; X204-9th; X193-10th; complement X27 (ETC).
+        // X(431): Euler X(283)-5th-substitution; (v+w)tan A on cosA/(cosB+cosC); skip right
+        if !right {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let (u283b, v283b, w283b) = (ca / da, cb / db, cc / dc);
+                push_bary(
+                    &mut out,
+                    "X283五次替换",
+                    "X_{431}",
+                    "X(431) = \\mathrm{Euler}\\ X_{283}\\text{-5th-subst};\\ (v+w)\\tan A\\ (u:v:w=X_{283})",
+                    "X(431)：X(283) 的欧拉五次替换点（跳过直角）",
+                    "X431",
+                    (v283b + w283b) * g[0].tan(),
+                    (w283b + u283b) * g[1].tan(),
+                    (u283b + v283b) * g[2].tan(),
+                );
+            }
+        }
+        // X(432): Euler X(155)-6th-substitution; (v²+w²)tan A on cosA(cos²B+cos²C−cos²A); skip right
+        if !right {
+            let u155 = ca * (cb * cb + cc * cc - ca * ca);
+            let v155 = cb * (cc * cc + ca * ca - cb * cb);
+            let w155 = cc * (ca * ca + cb * cb - cc * cc);
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X155六次替换",
+                "X_{432}",
+                "X(432) = \\mathrm{Euler}\\ X_{155}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{155})",
+                "X(432)：X(155) 的欧拉六次替换点（跳过直角）",
+                "X432",
+                f(v155, w155, g[0]),
+                f(w155, u155, g[1]),
+                f(u155, v155, g[2]),
+            );
+        }
+        // X(433): Euler X(159)-6th-substitution; (v²+w²)tan A on X(159) tril; skip right
+        if !right {
+            let f159 = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * ((a * a + b * b + c * c) * (2.0 * ang_a).sin()
+                    + (cc_ * cc_ - bb * bb - aa * aa) * (2.0 * ang_b).sin()
+                    + (bb * bb - cc_ * cc_ - aa * aa) * (2.0 * ang_c).sin())
+            };
+            let u159 = f159(a, b, c, g[0], g[1], g[2]);
+            let v159 = f159(b, c, a, g[1], g[2], g[0]);
+            let w159 = f159(c, a, b, g[2], g[0], g[1]);
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X159六次替换",
+                "X_{433}",
+                "X(433) = \\mathrm{Euler}\\ X_{159}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{159})",
+                "X(433)：X(159) 的欧拉六次替换点（跳过直角）",
+                "X433",
+                f(v159, w159, g[0]),
+                f(w159, u159, g[1]),
+                f(u159, v159, g[2]),
+            );
+        }
+        // X(434): Euler X(195)-6th-substitution; (v²+w²)tan A on X(195) tril=bary/a; skip right
+        if !right && area > 1e-12 {
+            let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+            if sa.abs() > 1e-14 && sb.abs() > 1e-14 && sc.abs() > 1e-14 {
+                let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+                let bary195 = |ang: f64, cang: f64, sang: f64| {
+                    let cot = cang / sang;
+                    4.0 * (2.0 * ang).cos() + cot * cot - cot * cot_w
+                };
+                // tril = bary/a (homogeneous; use bary as tril weights)
+                let u195 = bary195(g[0], ca, sa) / a;
+                let v195 = bary195(g[1], cb, sb) / b;
+                let w195 = bary195(g[2], cc, sc) / c;
+                let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+                push_bary(
+                    &mut out,
+                    "X195六次替换",
+                    "X_{434}",
+                    "X(434) = \\mathrm{Euler}\\ X_{195}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{195})",
+                    "X(434)：X(195) 的欧拉六次替换点（跳过直角）",
+                    "X434",
+                    f(v195, w195, g[0]),
+                    f(w195, u195, g[1]),
+                    f(u195, v195, g[2]),
+                );
+            }
+        }
+        // X(435): Euler X(399)-6th-substitution; (v²+w²)tan A on Parry tril; skip right
+        if !right {
+            let f399 = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                5.0 * ang_a.cos()
+                    - 4.0 * ang_b.cos() * ang_c.cos()
+                    - 8.0 * ang_b.sin() * ang_c.sin() * (2.0 * ang_a).cos()
+            };
+            let u399 = f399(g[0], g[1], g[2]);
+            let v399 = f399(g[1], g[2], g[0]);
+            let w399 = f399(g[2], g[0], g[1]);
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X399六次替换",
+                "X_{435}",
+                "X(435) = \\mathrm{Euler}\\ X_{399}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{399})",
+                "X(435)：帕里反射点的欧拉六次替换点（跳过直角）",
+                "X435",
+                f(v399, w399, g[0]),
+                f(w399, u399, g[1]),
+                f(u399, v399, g[2]),
+            );
+        }
+        // X(436): Euler X(48)-7th-substitution; (u²+vw)tan A on sin2A; skip right
+        if !right {
+            let (u48, v48, w48) = ((2.0 * g[0]).sin(), (2.0 * g[1]).sin(), (2.0 * g[2]).sin());
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u + v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X48七次替换",
+                "X_{436}",
+                "X(436) = \\mathrm{Euler}\\ X_{48}\\text{-7th-subst};\\ (u^2+vw)\\tan A\\ (u:v:w=\\sin 2A)",
+                "X(436)：X(48) 的欧拉七次替换点（跳过直角）",
+                "X436",
+                f(u48, v48, w48, g[0]),
+                f(v48, w48, u48, g[1]),
+                f(w48, u48, v48, g[2]),
+            );
+        }
+        // X(437): Euler X(214)-8th-substitution; (u²+vw)tan A on (b+c−2a)(b²+c²−a²−bc); skip right/equil
+        if !right && !equil {
+            let u214 = (b + c - 2.0 * a) * (b * b + c * c - a * a - b * c);
+            let v214 = (c + a - 2.0 * b) * (c * c + a * a - b * b - c * a);
+            let w214 = (a + b - 2.0 * c) * (a * a + b * b - c * c - a * b);
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u + v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X214八次替换",
+                "X_{437}",
+                "X(437) = \\mathrm{Euler}\\ X_{214}\\text{-8th-subst};\\ (u^2+vw)\\tan A\\ (u:v:w=X_{214})",
+                "X(437)：X(214) 的欧拉八次替换点（跳过直角/等边）",
+                "X437",
+                f(u214, v214, w214, g[0]),
+                f(v214, w214, u214, g[1]),
+                f(w214, u214, v214, g[2]),
+            );
+        }
+        // X(438): Euler X(204)-9th-substitution; u²+vw on tanA(tanB+tanC−tanA); skip right
+        if !right {
+            let (ta, tb, tc) = (g[0].tan(), g[1].tan(), g[2].tan());
+            let u204 = ta * (tb + tc - ta);
+            let v204 = tb * (tc + ta - tb);
+            let w204 = tc * (ta + tb - tc);
+            let f = |u: f64, v: f64, w: f64| u * u + v * w;
+            push_bary(
+                &mut out,
+                "X204九次替换",
+                "X_{438}",
+                "X(438) = \\mathrm{Euler}\\ X_{204}\\text{-9th-subst};\\ u^2+vw\\ (u:v:w=X_{204})",
+                "X(438)：X(204) 的欧拉九次替换点（跳过直角）",
+                "X438",
+                f(u204, v204, w204),
+                f(v204, w204, u204),
+                f(w204, u204, v204),
+            );
+        }
+        // X(439): Euler X(193)-10th-substitution; bary (3a²−b²−c²)²
+        {
+            let u193 = 3.0 * a * a - b * b - c * c;
+            let v193 = 3.0 * b * b - c * c - a * a;
+            let w193 = 3.0 * c * c - a * a - b * b;
+            push_bary(
+                &mut out,
+                "X193十次替换",
+                "X_{439}",
+                "X(439) = \\mathrm{Euler}\\ X_{193}\\text{-10th-subst};\\ (3a^2-b^2-c^2)^2",
+                "X(439)：X(193) 的欧拉十次替换点",
+                "X439",
+                u193 * u193,
+                v193 * v193,
+                w193 * w193,
+            );
+        }
+        // X(440): complement of X(27); bary v+w on tanA/(b+c); skip right
+        if !right {
+            let (u28, v28, w28) = (g[0].tan() / (b + c), g[1].tan() / (c + a), g[2].tan() / (a + b));
+            push_bary(
+                &mut out,
+                "X27补点",
+                "X_{440}",
+                "X(440) = \\mathrm{complement}(X_{27});\\ v+w\\ (u:v:w=\\tan A/(b+c))",
+                "X(440)：X(27) 的补点（跳过直角）",
+                "X440",
+                v28 + w28,
+                w28 + u28,
+                u28 + v28,
+            );
+        }
+
 
     }
 
@@ -22150,6 +22359,102 @@ mod tests {
         ] {
             assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
         }
+    }
+
+
+    #[test]
+    fn x431_to_x440_euler_subst_complement_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X283五次替换", "X_{431}", 5.007963472381891, 3.495208719403091),
+            ("X155六次替换", "X_{432}", 4.563562407094006, 2.409555259083562),
+            ("X159六次替换", "X_{433}", 4.961581016976578, 3.381898295234162),
+            ("X195六次替换", "X_{434}", 4.470032407560555, 2.18106533057406),
+            ("X399六次替换", "X_{435}", 4.586088164307535, 2.986281947148511),
+            ("X48七次替换", "X_{436}", 4.723728445515073, 2.80083428026426),
+            ("X214八次替换", "X_{437}", 4.8125, 3.017699523919946),
+            ("X204九次替换", "X_{438}", 5.542568596434214, 4.801226972208073),
+            ("X193十次替换", "X_{439}", 5.318300993934079, 4.253350475705726),
+            ("X27补点", "X_{440}", 3.974902956722828, 0.9714845181161382),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X437 (X214 tril vanishes); keep X431–X436,X438–X440 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        assert!(fs3.iter().all(|f| f.label != "X_{437}"), "equil should skip X437");
+        for lab in [
+            "X_{431}", "X_{432}", "X_{433}", "X_{434}", "X_{435}",
+            "X_{436}", "X_{438}", "X_{439}", "X_{440}",
+        ] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: keep X439; skip tan/sec-dependent centers.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{431}", "X_{432}", "X_{433}", "X_{434}", "X_{435}",
+            "X_{436}", "X_{437}", "X_{438}", "X_{440}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        assert!(
+            fs4.iter().any(|f| f.label == "X_{439}"),
+            "right missing X439"
+        );
     }
 
     #[test]
