@@ -13623,6 +13623,239 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     }
 
 
+    // X(381)–X(390): orthocentroidal / Euler mates / Conway / Hirst / Taylor (ETC).
+    // X(381)=midpoint(G,H)=center of orthocentroidal circle; bary a(cos A+4 cos B cos C); =complement(X376).
+    // X(382)=reflection(O in H)=2H−O; bary a(cos A−4 cos B cos C).
+    // X(383)=Euler ∩ X(14)X(98); Brocard form with csc(B−C); skip isos (den0); equil→G.
+    // X(384)=Euler ∩ X(32)X(76) (Conway); bary a⁴+b²c².
+    // X(385)=X(2)-Hirst of X(6); bary a⁴−b²c²; skip equil (all zero).
+    // X(386)=Brocard-inverse of X(58)=ext. similitude(circum, Apollonius); bary a²(b²+c²+bc+ca+ab).
+    // X(387)=X(1)X(2) ∩ X(4)X(6); bary −a⁴+2a²(a+b+c)²+(b²−c²)².
+    // X(388)=X(1)X(4) ∩ X(7)X(8); bary a(1+cos B cos C) = [a²+(b+c)²]/(b+c−a).
+    // X(389)=Taylor-circle center; bary a[cos A−cos 2A cos(B−C)]; =midpoint(O,X52)=midpoint(H,X185).
+    // X(390)=reflection(Ge in I)=2I−X(7); bary (b+c−a)[3a²+(b−c)²].
+    {
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
+        let isos = (a - b).abs() < 1e-9 || (b - c).abs() < 1e-9 || (c - a).abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(381): midpoint of G and H (orthocentroidal-circle center)
+        {
+            let f = |aa: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (ang_a.cos() + 4.0 * ang_b.cos() * ang_c.cos())
+            };
+            push_bary(
+                &mut out,
+                "垂心重心圆圆心",
+                "X_{381}",
+                "X(381) = \\mathrm{mid}(G,H);\\ a(\\cos A+4\\cos B\\cos C)",
+                "X(381)：重心与垂心的中点（垂心–重心圆圆心；X(376) 的补点）",
+                "X381",
+                f(a, g[0], g[1], g[2]),
+                f(b, g[1], g[2], g[0]),
+                f(c, g[2], g[0], g[1]),
+            );
+        }
+        // X(382): reflection of O in H
+        {
+            let f = |aa: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (ang_a.cos() - 4.0 * ang_b.cos() * ang_c.cos())
+            };
+            push_bary(
+                &mut out,
+                "外心垂心反射",
+                "X_{382}",
+                "X(382) = 2H-O;\\ a(\\cos A-4\\cos B\\cos C)",
+                "X(382)：外心关于垂心的反射",
+                "X382",
+                f(a, g[0], g[1], g[2]),
+                f(b, g[1], g[2], g[0]),
+                f(c, g[2], g[0], g[1]),
+            );
+        }
+        // X(383): Euler ∩ X(14)X(98); Brocard form; skip isos; equil→G
+        if equil {
+            push_bary(
+                &mut out,
+                "X14X98欧拉截",
+                "X_{383}",
+                "X(383) = X_{14}X_{98}\\cap\\mathrm{Euler};\\ \\mathrm{equil}\\to G",
+                "X(383)：X(14)X(98) 与欧拉线的交点（等边退化为重心）",
+                "X383",
+                1.0,
+                1.0,
+                1.0,
+            );
+        } else if !isos && area > 1e-12 {
+            let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+            let tan_w = 1.0 / cot_w;
+            let omega = tan_w.atan();
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_b: f64, ang_c: f64| {
+                let dbc = ang_b - ang_c;
+                if dbc.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / dbc.sin())
+                    * ((2.0 * ang_b).sin() * (ang_c - omega).cos() * (ang_c + pi3).sin()
+                        - (2.0 * ang_c).sin() * (ang_b - omega).cos() * (ang_b + pi3).sin())
+            };
+            let fa = f(g[1], g[2]);
+            let fb = f(g[2], g[0]);
+            let fc = f(g[0], g[1]);
+            push_bary(
+                &mut out,
+                "X14X98欧拉截",
+                "X_{383}",
+                "X(383) = X_{14}X_{98}\\cap\\mathrm{Euler};\\ (\\sin A)f(A,B,C)",
+                "X(383)：X(14)X(98) 与欧拉线的交点（跳过等腰）",
+                "X383",
+                sa * fa,
+                sb * fb,
+                sc * fc,
+            );
+        }
+        // X(384): Conway Euler point; bary a⁴+b²c²
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa.powi(4) + bb * bb * cc_ * cc_;
+            push_bary(
+                &mut out,
+                "X32X76欧拉截",
+                "X_{384}",
+                "X(384) = X_{32}X_{76}\\cap\\mathrm{Euler};\\ a^4+b^2c^2",
+                "X(384)：X(32)X(76) 与欧拉线的交点（Conway）",
+                "X384",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(385): X(2)-Hirst inverse of X(6); skip equilateral
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| aa.powi(4) - bb * bb * cc_ * cc_;
+            push_bary(
+                &mut out,
+                "重心X6Hirst",
+                "X_{385}",
+                "X(385) = X_2\\text{-Hirst of }X_6;\\ a^4-b^2c^2",
+                "X(385)：重心关于 X(6) 的 Hirst 逆（跳过等边）",
+                "X385",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(386): Brocard-inverse of X(58)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * aa * (bb * bb + cc_ * cc_ + bb * cc_ + cc_ * aa + aa * bb)
+            };
+            push_bary(
+                &mut out,
+                "X58布罗卡反演",
+                "X_{386}",
+                "X(386) = \\mathrm{Brocard}^{-1}(X_{58});\\ a^2(b^2+c^2+bc+ca+ab)",
+                "X(386)：X(58) 在布罗卡圆上的反演（外接圆与阿波罗尼奥斯圆的外相似中心）",
+                "X386",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(387): X(1)X(2) ∩ X(4)X(6)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                -aa.powi(4) + 2.0 * aa * aa * (aa + bb + cc_).powi(2) + (bb * bb - cc_ * cc_).powi(2)
+            };
+            push_bary(
+                &mut out,
+                "X1X2交X4X6",
+                "X_{387}",
+                "X(387) = X_1X_2\\cap X_4X_6;\\ -a^4+2a^2(a+b+c)^2+(b^2-c^2)^2",
+                "X(387)：X(1)X(2) 与 X(4)X(6) 的交点",
+                "X387",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(388): X(1)X(4) ∩ X(7)X(8); bary a(1+cos B cos C)
+        {
+            let f = |aa: f64, ang_b: f64, ang_c: f64| aa * (1.0 + ang_b.cos() * ang_c.cos());
+            push_bary(
+                &mut out,
+                "X1X4交X7X8",
+                "X_{388}",
+                "X(388) = X_1X_4\\cap X_7X_8;\\ a(1+\\cos B\\cos C)",
+                "X(388)：X(1)X(4) 与 X(7)X(8) 的交点",
+                "X388",
+                f(a, g[1], g[2]),
+                f(b, g[2], g[0]),
+                f(c, g[0], g[1]),
+            );
+        }
+        // X(389): Taylor-circle center
+        {
+            let f = |aa: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (ang_a.cos() - (2.0 * ang_a).cos() * (ang_b - ang_c).cos())
+            };
+            push_bary(
+                &mut out,
+                "泰勒圆圆心",
+                "X_{389}",
+                "X(389) = \\mathrm{center}(\\mathrm{Taylor});\\ a[\\cos A-\\cos 2A\\cos(B-C)]",
+                "X(389)：泰勒圆圆心（= mid(O,X52) = mid(H,X185)）",
+                "X389",
+                f(a, g[0], g[1], g[2]),
+                f(b, g[1], g[2], g[0]),
+                f(c, g[2], g[0], g[1]),
+            );
+        }
+        // X(390): reflection of Gergonne in incenter
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                (bb + cc_ - aa) * (3.0 * aa * aa + (bb - cc_).powi(2))
+            };
+            push_bary(
+                &mut out,
+                "格尔巩内心反射",
+                "X_{390}",
+                "X(390) = 2I-X_7;\\ (b+c-a)[3a^2+(b-c)^2]",
+                "X(390)：格尔巩点关于内心的反射",
+                "X390",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+    }
+
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -20502,6 +20735,128 @@ mod tests {
             if lab == "X_{378}" {
                 continue;
             }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x381_to_x390_orthocentroidal_conway_taylor_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("垂心重心圆圆心", "X_{381}", 4.541666666666667, 2.356064868942845),
+            ("外心垂心反射", "X_{382}", 5.625, 5.002603488851246),
+            ("X14X98欧拉截", "X_{383}", 14.200845560311862, 25.953040233837722),
+            ("X32X76欧拉截", "X_{384}", 4.390294725611789, 1.986269464660785),
+            ("重心X6Hirst", "X_{385}", 20.3713921901528, 20.126033577087185),
+            ("X58布罗卡反演", "X_{386}", 4.634146341463414, 2.078186185769833),
+            ("X1X2交X4X6", "X_{387}", 4.691916961130742, 2.139207453371190),
+            ("X1X4交X7X8", "X_{388}", 4.559335443037975, 2.141784303005525),
+            ("泰勒圆圆心", "X_{389}", 4.76171875, 2.288489378266831),
+            ("格尔巩内心反射", "X_{390}", 4.362325174825175, 1.633491664812132),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-checks: X381=mid(G,H), X382=2H−O, X390=2I−Ge.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let ii = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let ge = fs
+            .iter()
+            .find(|f| f.group == "格尔巩点" && f.label == "Ge")
+            .expect("Ge");
+        let (gx, gy) = ptxy(g);
+        let (hx, hy) = ptxy(h);
+        let (ox, oy) = ptxy(o);
+        let (ix, iy) = ptxy(ii);
+        let (gex, gey) = ptxy(ge);
+        let x381 = fs.iter().find(|f| f.label == "X_{381}").unwrap();
+        let x382 = fs.iter().find(|f| f.label == "X_{382}").unwrap();
+        let x390 = fs.iter().find(|f| f.label == "X_{390}").unwrap();
+        let (x381x, x381y) = ptxy(x381);
+        let (x382x, x382y) = ptxy(x382);
+        let (x390x, x390y) = ptxy(x390);
+        assert!((x381x - (gx + hx) / 2.0).abs() < 1e-9 && (x381y - (gy + hy) / 2.0).abs() < 1e-9);
+        assert!((x382x - (2.0 * hx - ox)).abs() < 1e-9 && (x382y - (2.0 * hy - oy)).abs() < 1e-9);
+        assert!((x390x - (2.0 * ix - gex)).abs() < 1e-9 && (x390y - (2.0 * iy - gey)).abs() < 1e-9);
+
+        // Isosceles 5-5-6: skip X383 (csc(B−C)); keep the rest except maybe X385 ok.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.label != "X_{383}"), "X383 skip isos");
+        for (grp, lab, ..) in want {
+            if lab == "X_{383}" {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X385 (Hirst den0); X383→G; others finite at G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{385}"), "X385 skip equil");
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            if lab == "X_{385}" {
+                continue;
+            }
+            let f = fs3
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: all finite (no tan/sec singularity in this band).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
             assert!(
                 fs4.iter().any(|f| f.group == grp && f.label == lab),
                 "right missing {} {}",
