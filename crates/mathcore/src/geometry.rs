@@ -8059,6 +8059,320 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
+    // X(166)/X(167)/X(170): fill excentral gaps; then X(177)–X(180) mid-arc / Ajima-Malfatti.
+    // X(166)=X(7)-of-excentral (Gergonne): trilinear
+    //   f = tan(A/2)/d_a − tan(B/2)/d_b − tan(C/2)/d_c,
+    //   d_a = cos(B/2)+cos(C/2)−cos(A/2); bary a·f. On line X(165)X(168).
+    // X(167)=X(8)-of-excentral (Nagel): f = s_b t_b + s_c t_c − s_a t_a with
+    //   s_a=sin(A/2), t_a=d_a sec(A/2); on line X(164)X(165).
+    // X(170)=X(9)-aleph conjugate of X(9)=X(76)-of-excentral: trilinear
+    //   f = −tan(A/2)sec²(A/2)+tan(B/2)sec²(B/2)+tan(C/2)sec²(C/2); on IG.
+    // X(177)=1st mid-arc: bary a(cos(B/2)+cos(C/2))sec(A/2); =X(1)-of-intouch.
+    // X(178)=2nd mid-arc: bary cos(B/2)+cos(C/2).
+    // X(179)=1st Ajima-Malfatti: bary a sec⁴(A/4).
+    // X(180)=2nd Ajima-Malfatti: f=1/t_b+1/t_c−1/t_a,
+    //   t_a=1+2(sec(A/4)cos(B/4)cos(C/4))².
+    {
+        let ha = g[0] / 2.0;
+        let hb = g[1] / 2.0;
+        let hc = g[2] / 2.0;
+        let (s_ha, s_hb, s_hc) = (ha.sin(), hb.sin(), hc.sin());
+        let (c_ha, c_hb, c_hc) = (ha.cos(), hb.cos(), hc.cos());
+        let (t_ha, t_hb, t_hc) = (ha.tan(), hb.tan(), hc.tan());
+        let d_a = c_hb + c_hc - c_ha;
+        let d_b = c_hc + c_ha - c_hb;
+        let d_c = c_ha + c_hb - c_hc;
+        // X(166)
+        if d_a.abs() > 1e-12 && d_b.abs() > 1e-12 && d_c.abs() > 1e-12 {
+            let fa = t_ha / d_a - t_hb / d_b - t_hc / d_c;
+            let fb = t_hb / d_b - t_hc / d_c - t_ha / d_a;
+            let fc = t_hc / d_c - t_ha / d_a - t_hb / d_b;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "旁心格尔巩",
+                        "X_{166}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(166) = X(7)\\text{-of-excentral};\\ f=\\tan\\tfrac{A}{2}/d_A-\\tan\\tfrac{B}{2}/d_B-\\tan\\tfrac{C}{2}/d_C",
+                        "X(166)：旁心三角形的格尔巩点",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X166".into(),
+                    }));
+                    // Cross-check collinear with X165, X168 when both present.
+                    let x165 = out.iter().rev().find(|f| f.label == "X_{165}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let x168 = out.iter().rev().find(|f| f.label == "X_{168}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((x1, y1)), Some((x8, y8))) = (x165, x168) {
+                        let cross = (x8 - x1) * (xy[1] - y1) - (y8 - y1) * (xy[0] - x1);
+                        let scale = (x8 - x1).abs() + (y8 - y1).abs() + (xy[0] - x1).abs() + (xy[1] - y1).abs() + 1e-12;
+                        if cross.abs() / scale < 1e-5 {
+                            out.push(fact(
+                                "旁心格尔巩",
+                                "X_{166}\\in X_{165}X_{168}",
+                                "\\text{共线}".into(),
+                                None,
+                                "X(166)\\in X(165)X(168)",
+                                "X(166) 在旁心重心与旁心米滕的连线上",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(167)
+        if c_ha.abs() > 1e-12 && c_hb.abs() > 1e-12 && c_hc.abs() > 1e-12
+            && d_a.abs() > 1e-12 && d_b.abs() > 1e-12 && d_c.abs() > 1e-12
+        {
+            let ta = d_a / c_ha;
+            let tb = d_b / c_hb;
+            let tc = d_c / c_hc;
+            let fa = s_hb * tb + s_hc * tc - s_ha * ta;
+            let fb = s_hc * tc + s_ha * ta - s_hb * tb;
+            let fc = s_ha * ta + s_hb * tb - s_hc * tc;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "旁心奈格尔",
+                        "X_{167}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(167) = X(8)\\text{-of-excentral};\\ f=s_B t_B+s_C t_C-s_A t_A",
+                        "X(167)：旁心三角形的奈格尔点",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X167".into(),
+                    }));
+                    let x164 = out.iter().rev().find(|f| f.label == "X_{164}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let x165 = out.iter().rev().find(|f| f.label == "X_{165}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((x4, y4)), Some((x5, y5))) = (x164, x165) {
+                        let cross = (x5 - x4) * (xy[1] - y4) - (y5 - y4) * (xy[0] - x4);
+                        let scale = (x5 - x4).abs() + (y5 - y4).abs() + (xy[0] - x4).abs() + (xy[1] - y4).abs() + 1e-12;
+                        if cross.abs() / scale < 1e-5 {
+                            out.push(fact(
+                                "旁心奈格尔",
+                                "X_{167}\\in X_{164}X_{165}",
+                                "\\text{共线}".into(),
+                                None,
+                                "X(167)\\in X(164)X(165)",
+                                "X(167) 在旁心内心与旁心重心的连线上",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(170)
+        if c_ha.abs() > 1e-12 && c_hb.abs() > 1e-12 && c_hc.abs() > 1e-12 {
+            let ua = t_ha / (c_ha * c_ha);
+            let ub = t_hb / (c_hb * c_hb);
+            let uc = t_hc / (c_hc * c_hc);
+            let fa = -ua + ub + uc;
+            let fb = -ub + uc + ua;
+            let fc = -uc + ua + ub;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "米滕阿列夫自共轭",
+                        "X_{170}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(170) = X(9)\\text{-aleph of }X(9)=X(76)\\text{-of-excentral};\\ f=-\\tan\\tfrac{A}{2}\\sec^2\\tfrac{A}{2}+\\cdots",
+                        "X(170)：米滕点的 X(9)-阿列夫共轭（在 IG 上）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X170".into(),
+                    }));
+                    let i_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "I").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let ge_xy = out.iter().rev().find(|f| f.label == "X_{7}" || f.label == "Ge").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((ix, iy)), Some((gx, gy))) = (i_xy, ge_xy) {
+                        let cross = (gx - ix) * (xy[1] - iy) - (gy - iy) * (xy[0] - ix);
+                        let scale = (gx - ix).abs() + (gy - iy).abs() + (xy[0] - ix).abs() + (xy[1] - iy).abs() + 1e-12;
+                        if cross.abs() / scale < 1e-5 {
+                            out.push(fact(
+                                "米滕阿列夫自共轭",
+                                "X_{170}\\in IG",
+                                "\\text{共线}".into(),
+                                None,
+                                "X(170)\\in IG",
+                                "X(170) 在内心与格尔巩点的连线上",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(177) / X(178)
+        if c_ha.abs() > 1e-12 && c_hb.abs() > 1e-12 && c_hc.abs() > 1e-12 {
+            let fa = (c_hb + c_hc) / c_ha;
+            let fb = (c_hc + c_ha) / c_hb;
+            let fc = (c_ha + c_hb) / c_hc;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "第一中弧点",
+                    "X_{177}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(177) = \\bigl(a(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2})\\sec\\tfrac{A}{2}:\\cdots\\bigr) = X(1)\\text{-of-intouch}",
+                    "X(177)：第一中弧点（接触三角形的内心）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X177".into(),
+                }));
+            }
+            // X(178): bary cos(B/2)+cos(C/2) (no side factor)
+            let wa = c_hb + c_hc;
+            let wb = c_hc + c_ha;
+            let wc = c_ha + c_hb;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "第二中弧点",
+                    "X_{178}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(178) = \\bigl(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2}:\\cdots\\bigr)",
+                    "X(178)：第二中弧点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X178".into(),
+                }));
+            }
+        }
+        // X(179)
+        {
+            let c_qa = (g[0] / 4.0).cos();
+            let c_qb = (g[1] / 4.0).cos();
+            let c_qc = (g[2] / 4.0).cos();
+            if c_qa.abs() > 1e-12 && c_qb.abs() > 1e-12 && c_qc.abs() > 1e-12 {
+                let wa = a / (c_qa * c_qa * c_qa * c_qa);
+                let wb = b / (c_qb * c_qb * c_qb * c_qb);
+                let wc = c / (c_qc * c_qc * c_qc * c_qc);
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "第一阿吉马-马尔法蒂",
+                            "X_{179}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(179) = \\bigl(a\\sec^4\\tfrac{A}{4}:\\cdots\\bigr)",
+                            "X(179)：第一阿吉马-马尔法蒂点",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X179".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(180)
+        {
+            let qa = g[0] / 4.0;
+            let qb = g[1] / 4.0;
+            let qc = g[2] / 4.0;
+            let (c_qa, c_qb, c_qc) = (qa.cos(), qb.cos(), qc.cos());
+            if c_qa.abs() > 1e-12 && c_qb.abs() > 1e-12 && c_qc.abs() > 1e-12 {
+                let t_a = 1.0 + 2.0 * (c_qb * c_qc / c_qa).powi(2);
+                let t_b = 1.0 + 2.0 * (c_qc * c_qa / c_qb).powi(2);
+                let t_c = 1.0 + 2.0 * (c_qa * c_qb / c_qc).powi(2);
+                if t_a.abs() > 1e-12 && t_b.abs() > 1e-12 && t_c.abs() > 1e-12 {
+                    let fa = 1.0 / t_b + 1.0 / t_c - 1.0 / t_a;
+                    let fb = 1.0 / t_c + 1.0 / t_a - 1.0 / t_b;
+                    let fc = 1.0 / t_a + 1.0 / t_b - 1.0 / t_c;
+                    let wa = a * fa;
+                    let wb = b * fb;
+                    let wc = c * fc;
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if xy[0].is_finite() && xy[1].is_finite() {
+                            out.push(fact(
+                                "第二阿吉马-马尔法蒂",
+                                "X_{180}",
+                                pt(xy[0], xy[1]),
+                                None,
+                                "X(180) = 2\\text{nd Ajima-Malfatti};\\ f=1/t_B+1/t_C-1/t_A",
+                                "X(180)：第二阿吉马-马尔法蒂点",
+                            ).with(Shape::Point {
+                                x: xy[0],
+                                y: xy[1],
+                                label: "X180".into(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
     // Emit the classical families that are always concurrent from three sides alone.
     {
@@ -13028,6 +13342,101 @@ mod tests {
         assert!(fs4.iter().any(|f| f.group == "调和X238" && f.label == "X_{171}"));
         assert!(fs4.iter().any(|f| f.group == "对称中线X171积" && f.label == "X_{172}"));
         assert!(fs4.iter().any(|f| f.group == "等腰等化器" && f.label == "X_{173}"));
+    }
+
+    #[test]
+    fn x166_x167_x170_gaps_and_x177_to_x180() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x166 = fs.iter().find(|f| f.group == "旁心格尔巩" && f.label == "X_{166}").expect("X166");
+        let x167 = fs.iter().find(|f| f.group == "旁心奈格尔" && f.label == "X_{167}").expect("X167");
+        let x170 = fs.iter().find(|f| f.group == "米滕阿列夫自共轭" && f.label == "X_{170}").expect("X170");
+        let x177 = fs.iter().find(|f| f.group == "第一中弧点" && f.label == "X_{177}").expect("X177");
+        let x178 = fs.iter().find(|f| f.group == "第二中弧点" && f.label == "X_{178}").expect("X178");
+        let x179 = fs.iter().find(|f| f.group == "第一阿吉马-马尔法蒂" && f.label == "X_{179}").expect("X179");
+        let x180 = fs.iter().find(|f| f.group == "第二阿吉马-马尔法蒂" && f.label == "X_{180}").expect("X180");
+        assert!(fs.iter().any(|f| f.group == "旁心格尔巩" && f.label.contains("165")));
+        assert!(fs.iter().any(|f| f.group == "旁心奈格尔" && f.label.contains("164")));
+        assert!(fs.iter().any(|f| f.group == "米滕阿列夫自共轭" && f.label.contains("IG")));
+        let (p166x, p166y) = ptxy(x166);
+        assert!((p166x - 4.116074059198164).abs() < 1e-6 && (p166y - 1.3875764592887037).abs() < 1e-6, "X166 {:?}", (p166x, p166y));
+        let (p167x, p167y) = ptxy(x167);
+        assert!((p167x - 3.586801781111747).abs() < 1e-6 && (p167y - 0.024620487649944494).abs() < 1e-6, "X167 {:?}", (p167x, p167y));
+        let (p170x, p170y) = ptxy(x170);
+        assert!((p170x - 3.612326337570204).abs() < 1e-6 && (p170y + 0.017134392772165687).abs() < 1e-6, "X170 {:?}", (p170x, p170y));
+        let (p177x, p177y) = ptxy(x177);
+        assert!((p177x - 4.607015416275967).abs() < 1e-6 && (p177y - 2.1605390776490716).abs() < 1e-6, "X177 {:?}", (p177x, p177y));
+        let (p178x, p178y) = ptxy(x178);
+        assert!((p178x - 4.315677276217948).abs() < 1e-6 && (p178y - 1.7640727698612098).abs() < 1e-6, "X178 {:?}", (p178x, p178y));
+        let (p179x, p179y) = ptxy(x179);
+        assert!((p179x - 4.567591551964102).abs() < 1e-6 && (p179y - 2.0737600520097113).abs() < 1e-6, "X179 {:?}", (p179x, p179y));
+        let (p180x, p180y) = ptxy(x180);
+        assert!((p180x - 4.591012676125583).abs() < 1e-6 && (p180y - 2.1107123730916184).abs() < 1e-6, "X180 {:?}", (p180x, p180y));
+        // IG collinearity for X170.
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let ge = fs.iter().find(|f| f.label == "X_{7}" || f.label == "Ge").expect("Ge");
+        let (ix, iy) = ptxy(i);
+        let (gx, gy) = ptxy(ge);
+        let cross = (gx - ix) * (p170y - iy) - (gy - iy) * (p170x - ix);
+        assert!(cross.abs() < 1e-5, "X170 not on IG: cross={}", cross);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab) in [
+            ("旁心格尔巩", "X_{166}"),
+            ("旁心奈格尔", "X_{167}"),
+            ("米滕阿列夫自共轭", "X_{170}"),
+            ("第一中弧点", "X_{177}"),
+            ("第二中弧点", "X_{178}"),
+            ("第一阿吉马-马尔法蒂", "X_{179}"),
+            ("第二阿吉马-马尔法蒂", "X_{180}"),
+        ] {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: all coincide with G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g3);
+        for (grp, lab) in [
+            ("旁心格尔巩", "X_{166}"),
+            ("旁心奈格尔", "X_{167}"),
+            ("米滕阿列夫自共轭", "X_{170}"),
+            ("第一中弧点", "X_{177}"),
+            ("第二中弧点", "X_{178}"),
+            ("第一阿吉马-马尔法蒂", "X_{179}"),
+            ("第二阿吉马-马尔法蒂", "X_{180}"),
+        ] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx).abs() < 1e-5 && (y - gy).abs() < 1e-5, "equilateral {} != G", lab);
+        }
+
+        // Right 3-4-5: all finite (half-angle formulas stay defined).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "旁心格尔巩" && f.label == "X_{166}"));
+        assert!(fs4.iter().any(|f| f.group == "旁心奈格尔" && f.label == "X_{167}"));
+        assert!(fs4.iter().any(|f| f.group == "米滕阿列夫自共轭" && f.label == "X_{170}"));
+        assert!(fs4.iter().any(|f| f.group == "第一中弧点" && f.label == "X_{177}"));
+        assert!(fs4.iter().any(|f| f.group == "第二中弧点" && f.label == "X_{178}"));
+        assert!(fs4.iter().any(|f| f.group == "第一阿吉马-马尔法蒂" && f.label == "X_{179}"));
+        assert!(fs4.iter().any(|f| f.group == "第二阿吉马-马尔法蒂" && f.label == "X_{180}"));
     }
 
     #[test]
