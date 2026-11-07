@@ -31,17 +31,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Classify changes
+        id: scope
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: node scripts/ci-scope.mjs
+      - name: Check recorded versions
+        if: steps.scope.outputs.mode == 'light'
+        run: node scripts/ci-version-check.mjs
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.mode == 'full'
         with:
           toolchain: 1.90.0
       - uses: Swatinem/rust-cache@v2
+        if: steps.scope.outputs.mode == 'full'
         with:
           workspaces: crates/mathcore
+      - name: Classifier regression
+        if: steps.scope.outputs.mode == 'full'
+        run: node scripts/ci-scope-smoke.mjs
       - name: Chrome for sheet end-to-end
+        if: steps.scope.outputs.mode == 'full'
         run: |
           if ! command -v google-chrome >/dev/null 2>&1 && ! command -v google-chrome-stable >/dev/null 2>&1; then
             sudo apt-get update
@@ -50,14 +72,23 @@ jobs:
           fi
           (google-chrome --version || google-chrome-stable --version)
       - run: npm ci
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run lint
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run test:rust
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke:ocr
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke:ai
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run test:pack
+        if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke:ink
+        if: steps.scope.outputs.mode == 'full'
       - name: Start the dev server
+        if: steps.scope.outputs.mode == 'full'
         run: |
           npm run dev > dev-server.log 2>&1 &
           echo $! > dev-server.pid
@@ -71,14 +102,17 @@ jobs:
           cat dev-server.log
           exit 1
       - name: Sheet end-to-end
+        if: steps.scope.outputs.mode == 'full'
         env:
           SHOTS: e2e-shots
         run: npm run e2e:sheet
       - name: Ink gestures
+        if: steps.scope.outputs.mode == 'full'
         env:
           SHOTS: e2e-shots
         run: npm run e2e:ink
       - name: Per-formula plot end-to-end
+        if: steps.scope.outputs.mode == 'full'
         env:
           SHOTS: e2e-plots
         run: npm run e2e
