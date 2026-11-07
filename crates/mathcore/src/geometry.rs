@@ -14093,7 +14093,7 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         }
     }
 
-    // X(401)–X(450): Bailey / Zeeman–Gossard / orthic-X36 / Euler intercepts / X21·X29 subst / Hirst / Ceva / X4-Hirst / Euler 4th–11th subst / complements X27/X297/X21/X452 / crosspoint X98·X511 / X2-Hirst X27/X21/X452 / X3-Hirst X4 (ETC).
+    // X(401)–X(460): Bailey / Zeeman–Gossard / orthic-X36 / Euler intercepts / X21·X29 subst / Hirst / Ceva / X4-Hirst / Euler 4th–11th subst / complements X27/X297/X21/X452 / crosspoint X98·X511 / X2-Hirst X27/X21/X452 / X3-Hirst X4 / X4-Hirst-pair X451 / X452 / Alshain / Euler 11th X155·X159·X195·X399 / X458 / X459 / Antares X460 (ETC).
     // X(401)=Bailey=X(2)-Hirst of X(3)=anticomplement(X297); bary sin2B sin2C−sin²(2A); skip equil (weights 0).
     // X(402)=Zeeman–Gossard perspector; bary p·y with p=2a⁴−a²b²−a²c²−(b²−c²)²,
     //   y=a⁸−a⁶(b²+c²)+a⁴(2b²−c²)(2c²−b²)+[(b²−c²)²][3a²(b²+c²)−b⁴−c⁴−3b²c²]; skip equil (p=0).
@@ -14145,6 +14145,16 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     // X(448)=X(2)-Hirst of X(21); bary u²−vw, u:v:w=sinA/(cosB+cosC); skip equil.
     // X(449)=X(2)-Hirst of X(452); bary u²−vw, u:v:w=X(380) tril; skip equil.
     // X(450)=X(3)-Hirst of X(4); bary tanA(cos⁴A−(cosB cosC)²); skip right/equil.
+    // X(451)=X(4)-Hirst inverse of X(424); bary u tan A, u:v:w=X(191) tril; skip right.
+    // X(452)=X(2)-Hirst inverse of X(449); bary = X(380) tril (anticomplement of X443).
+    // X(453)=Alshain; bary sinA (cosB+cosC−cosA)²/(cosB+cosC).
+    // X(454)=Euler X(155)-11th-subst; bary u² tan A, u:v:w=X(155) tril; skip right.
+    // X(455)=Euler X(159)-11th-subst; bary u² tan A, u:v:w=X(159) tril; skip right.
+    // X(456)=Euler X(195)-11th-subst; bary u² tan A, u:v:w=X(195) tril; skip right.
+    // X(457)=Euler X(399)-11th-subst; bary u² tan A, u:v:w=X(399) tril; skip right.
+    // X(458)=Euler ∩ X(76)X(275); bary tanA+cot ω = secA cos(A−ω); skip right.
+    // X(459)=X(253)-Ceva of X(4); bary 1/(tanB tanC−2).
+    // X(460)=Antares; bary tanA[a²(2a²−b²−c²)+(b²−c²)²]; =X4*X230 bary product; skip right/equil.
     {
         let right = g.iter().any(|ang| (*ang - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
         let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
@@ -15162,9 +15172,215 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             );
         }
 
-
-
-
+        // X(451)–X(460): X4-Hirst-pair X451; X452; Alshain; Euler 11th X155/X159/X195/X399; X458; X459; Antares (ETC).
+        // X(451): X(4)-Hirst inverse of X(424); u tan A on X(191) tril; skip right
+        if !right {
+            let f191 = |aa: f64, bb: f64, cc_: f64| {
+                (bb + cc_ - aa) * (bb * cc_ + cc_ * aa + aa * bb) + bb.powi(3) + cc_.powi(3)
+                    - aa.powi(3)
+            };
+            let (u191, v191, w191) = (f191(a, b, c), f191(b, c, a), f191(c, a, b));
+            push_bary(
+                &mut out,
+                "垂心HirstX424",
+                "X_{451}",
+                "X(451) = X_4\\text{-Hirst of }X_{424};\\ u\\tan A\\ (u:v:w=X_{191})",
+                "X(451)：垂心对 X(424) 的 Hirst 逆（X191 三线坐标；跳过直角）",
+                "X451",
+                u191 * g[0].tan(),
+                v191 * g[1].tan(),
+                w191 * g[2].tan(),
+            );
+        }
+        // X(452): X(2)-Hirst inverse of X(449); bary = X(380) tril; =anticomplement(X443)
+        {
+            let f380 = |aa: f64, bb: f64, cc_: f64| {
+                let s = bb + cc_;
+                (s - aa) * (3.0 * aa.powi(3) + s * (3.0 * aa * aa + (bb - cc_).powi(2) + aa * s))
+            };
+            push_bary(
+                &mut out,
+                "重心HirstX449",
+                "X_{452}",
+                "X(452) = X_2\\text{-Hirst of }X_{449} = \\mathrm{anticomplement}(X_{443});\\ u:v:w=X_{380}\\text{ tril}",
+                "X(452)：重心对 X(449) 的 Hirst 逆（= X(443) 的反补；X380 三线坐标）",
+                "X452",
+                f380(a, b, c),
+                f380(b, c, a),
+                f380(c, a, b),
+            );
+        }
+        // X(453): Alshain; sinA (cosB+cosC−cosA)²/(cosB+cosC)
+        {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let f = |sang: f64, cang: f64, den: f64, cb_: f64, cc_: f64| {
+                    sang * (cb_ + cc_ - cang).powi(2) / den
+                };
+                push_bary(
+                    &mut out,
+                    "阿尔沙因点",
+                    "X_{453}",
+                    "X(453) = \\mathrm{Alshain};\\ \\sin A(\\cos B+\\cos C-\\cos A)^2/(\\cos B+\\cos C)",
+                    "X(453)：阿尔沙因点",
+                    "X453",
+                    f(g[0].sin(), ca, da, cb, cc),
+                    f(g[1].sin(), cb, db, cc, ca),
+                    f(g[2].sin(), cc, dc, ca, cb),
+                );
+            }
+        }
+        // X(454): Euler X(155)-11th-substitution; u² tan A on X(155) tril; skip right
+        if !right {
+            let u155 = ca * (cb * cb + cc * cc - ca * ca);
+            let v155 = cb * (cc * cc + ca * ca - cb * cb);
+            let w155 = cc * (ca * ca + cb * cb - cc * cc);
+            push_bary(
+                &mut out,
+                "X155十一次替换",
+                "X_{454}",
+                "X(454) = \\mathrm{Euler}\\ X_{155}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{155})",
+                "X(454)：X(155) 的欧拉十一次替换点（跳过直角）",
+                "X454",
+                u155 * u155 * g[0].tan(),
+                v155 * v155 * g[1].tan(),
+                w155 * w155 * g[2].tan(),
+            );
+        }
+        // X(455): Euler X(159)-11th-substitution; u² tan A on X(159) tril; skip right
+        if !right {
+            let f159 = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * ((a * a + b * b + c * c) * (2.0 * ang_a).sin()
+                    + (cc_ * cc_ - bb * bb - aa * aa) * (2.0 * ang_b).sin()
+                    + (bb * bb - cc_ * cc_ - aa * aa) * (2.0 * ang_c).sin())
+            };
+            let u159 = f159(a, b, c, g[0], g[1], g[2]);
+            let v159 = f159(b, c, a, g[1], g[2], g[0]);
+            let w159 = f159(c, a, b, g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "X159十一次替换",
+                "X_{455}",
+                "X(455) = \\mathrm{Euler}\\ X_{159}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{159})",
+                "X(455)：X(159) 的欧拉十一次替换点（跳过直角）",
+                "X455",
+                u159 * u159 * g[0].tan(),
+                v159 * v159 * g[1].tan(),
+                w159 * w159 * g[2].tan(),
+            );
+        }
+        // X(456): Euler X(195)-11th-substitution; u² tan A on X(195) tril; skip right
+        if !right && area > 1e-12 {
+            let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+            if sa.abs() > 1e-14 && sb.abs() > 1e-14 && sc.abs() > 1e-14 {
+                let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+                let bary195 = |ang: f64, cang: f64, sang: f64| {
+                    let cot = cang / sang;
+                    4.0 * (2.0 * ang).cos() + cot * cot - cot * cot_w
+                };
+                let u195 = bary195(g[0], ca, sa) / a;
+                let v195 = bary195(g[1], cb, sb) / b;
+                let w195 = bary195(g[2], cc, sc) / c;
+                push_bary(
+                    &mut out,
+                    "X195十一次替换",
+                    "X_{456}",
+                    "X(456) = \\mathrm{Euler}\\ X_{195}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{195})",
+                    "X(456)：X(195) 的欧拉十一次替换点（跳过直角）",
+                    "X456",
+                    u195 * u195 * g[0].tan(),
+                    v195 * v195 * g[1].tan(),
+                    w195 * w195 * g[2].tan(),
+                );
+            }
+        }
+        // X(457): Euler X(399)-11th-substitution; u² tan A on Parry tril; skip right
+        if !right {
+            let f399 = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                5.0 * ang_a.cos()
+                    - 4.0 * ang_b.cos() * ang_c.cos()
+                    - 8.0 * ang_b.sin() * ang_c.sin() * (2.0 * ang_a).cos()
+            };
+            let u399 = f399(g[0], g[1], g[2]);
+            let v399 = f399(g[1], g[2], g[0]);
+            let w399 = f399(g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "X399十一次替换",
+                "X_{457}",
+                "X(457) = \\mathrm{Euler}\\ X_{399}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{399})",
+                "X(457)：帕里反射点的欧拉十一次替换点（跳过直角）",
+                "X457",
+                u399 * u399 * g[0].tan(),
+                v399 * v399 * g[1].tan(),
+                w399 * w399 * g[2].tan(),
+            );
+        }
+        // X(458): Euler ∩ X(76)X(275); tanA+cot ω; skip right
+        if !right && area > 1e-12 {
+            let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+            push_bary(
+                &mut out,
+                "X76X275欧拉截",
+                "X_{458}",
+                "X(458) = \\mathrm{Euler}\\cap X_{76}X_{275};\\ \\tan A+\\cot\\omega",
+                "X(458)：X(76)X(275) 与欧拉线的交点（跳过直角）",
+                "X458",
+                g[0].tan() + cot_w,
+                g[1].tan() + cot_w,
+                g[2].tan() + cot_w,
+            );
+        }
+        // X(459): X(253)-Ceva of X(4); 1/(tanB tanC−2)
+        {
+            let tb = g[1].tan();
+            let tc = g[2].tan();
+            let ta = g[0].tan();
+            let da = tb * tc - 2.0;
+            let db = tc * ta - 2.0;
+            let dc = ta * tb - 2.0;
+            if da.abs() > 1e-14
+                && db.abs() > 1e-14
+                && dc.abs() > 1e-14
+                && ta.is_finite()
+                && tb.is_finite()
+                && tc.is_finite()
+            {
+                push_bary(
+                    &mut out,
+                    "X253垂心塞瓦",
+                    "X_{459}",
+                    "X(459) = X_{253}\\text{-Ceva of }X_4;\\ 1/(\\tan B\\tan C-2)",
+                    "X(459)：X(253) 对垂心的塞瓦共轭",
+                    "X459",
+                    1.0 / da,
+                    1.0 / db,
+                    1.0 / dc,
+                );
+            }
+        }
+        // X(460): Antares; tanA[a²(2a²−b²−c²)+(b²−c²)²]; skip right/equil
+        if !right && !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc_ * cc_;
+                a2 * (2.0 * a2 - b2 - c2) + (b2 - c2) * (b2 - c2)
+            };
+            push_bary(
+                &mut out,
+                "安塔瑞斯点",
+                "X_{460}",
+                "X(460) = \\mathrm{Antares}=X_4\\cdot X_{230};\\ \\tan A[a^2(2a^2-b^2-c^2)+(b^2-c^2)^2]",
+                "X(460)：安塔瑞斯点（X(4)·X(230) 重心积；跳过直角/等边）",
+                "X460",
+                g[0].tan() * f(a, b, c),
+                g[1].tan() * f(b, c, a),
+                g[2].tan() * f(c, a, b),
+            );
+        }
 
     }
 
@@ -22803,6 +23019,125 @@ mod tests {
             assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
         }
         for lab in ["X_{442}", "X_{443}", "X_{446}", "X_{448}", "X_{449}"] {
+            assert!(
+                fs4.iter().any(|f| f.label == lab),
+                "right missing {}",
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x451_to_x460_hirst_alshain_euler11_antares_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("垂心HirstX424", "X_{451}", 4.433130461922597, 2.090915400468877),
+            ("重心HirstX449", "X_{452}", 4.192330917874396, 1.502652053102817),
+            ("阿尔沙因点", "X_{453}", 5.295484278431903, 4.197610181469446),
+            ("X155十一次替换", "X_{454}", 5.155341031448409, 3.855246013351434),
+            ("X159十一次替换", "X_{455}", 4.403604538557236, 2.018784788338213),
+            ("X195十一次替换", "X_{456}", 5.234750870682093, 4.049240973043124),
+            ("X399十一次替换", "X_{457}", 5.232156804225402, 3.075932344762030),
+            ("X76X275欧拉截", "X_{458}", 4.564830921045434, 2.412654186310344),
+            ("X253垂心塞瓦", "X_{459}", 4.660705932529855, 6.571288767845640),
+            ("安塔瑞斯点", "X_{460}", 5.700709647677338, 5.187559033292232),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-check: X(452)=anticomplement(X443)=3G−2·X443; X(451) mutual X4-Hirst with X424.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g);
+        let f443 = fs.iter().find(|f| f.label == "X_{443}").expect("X443");
+        let (x443, y443) = ptxy(f443);
+        let f452 = fs.iter().find(|f| f.label == "X_{452}").expect("X452");
+        let (x452, y452) = ptxy(f452);
+        let ax = 3.0 * gx - 2.0 * x443;
+        let ay = 3.0 * gy - 2.0 * y443;
+        assert!(
+            (x452 - ax).abs() < 1e-9 && (y452 - ay).abs() < 1e-9,
+            "X452 should be anticomplement(X443): {:?} vs {:?}",
+            (x452, y452),
+            (ax, ay)
+        );
+        assert!(
+            fs.iter().any(|f| f.label == "X_{424}"),
+            "X424 should exist as mutual X4-Hirst of X451"
+        );
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip Antares (weights vanish); Euler/Alshain/X451/X452/X459 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        assert!(
+            fs3.iter().all(|f| f.label != "X_{460}"),
+            "equil should skip X460"
+        );
+        for lab in [
+            "X_{451}", "X_{452}", "X_{453}", "X_{454}", "X_{455}", "X_{456}", "X_{457}", "X_{458}",
+            "X_{459}",
+        ] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: skip tan/sec-dependent; keep X452/X453/X459.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{451}", "X_{454}", "X_{455}", "X_{456}", "X_{457}", "X_{458}", "X_{460}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for lab in ["X_{452}", "X_{453}", "X_{459}"] {
             assert!(
                 fs4.iter().any(|f| f.label == lab),
                 "right missing {}",
