@@ -1,0 +1,18 @@
+{
+  "identifier": "default",
+  "description": "MathScrap window. Sheet export can write only the file the person picks under Documents, Downloads, or Desktop.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "fs:allow-write-text-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DESKTOP/**" }
+      ]
+    }
+  ]
+}

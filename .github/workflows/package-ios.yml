@@ -1,0 +1,57 @@
+name: package-ios
+
+# Manual only. A macOS runner is required and this file does not run on push.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: simulator builds a .app for the iOS Simulator. device exports an IPA only when signing secrets are set.
+        type: choice
+        options:
+          - simulator
+          - device
+        default: simulator
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: CocoaPods
+        run: brew install cocoapods
+      - run: npm ci
+      - name: Simulator app
+        if: inputs.target == 'simulator'
+        run: bash scripts/package-ios.sh --simulator
+      - name: Signed IPA
+        if: inputs.target == 'device'
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
+        run: bash scripts/package-ios.sh --device
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('packaging/out/**') != ''
+        with:
+          name: mathscrap-ios
+          path: |
+            packaging/out/*
+            src-tauri/gen/apple/**/*.app
+          if-no-files-found: warn

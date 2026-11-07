@@ -9,6 +9,8 @@ import { pushPlotView } from '@/plot/remoteView'
 import { Board, type PenSettings } from '@/board/Board'
 import { strokeBounds } from '@/board/strokes'
 import { uid, type Card, type Doc, type Stroke, type Tool, type View } from '@/board/types'
+import { parseSheet } from '@/board/sheetFile'
+import { exportSheetFile, readSheetFile } from '@/board/sheetTransfer'
 import { blankDoc, useDocument } from '@/board/useDocument'
 import { SettingsSheet, type Prefs } from '@/components/SettingsSheet'
 import { Toolbar } from '@/components/Toolbar'
@@ -129,6 +131,7 @@ export default function App() {
   const dragBase = useRef<Doc | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
+  const importRef = useRef<HTMLInputElement>(null)
   const [sheet, setSheet] = useState({ w: window.innerWidth, h: window.innerHeight })
 
   // the docked pane takes a slice of the window; writing spots and fitting follow the paper
@@ -403,8 +406,34 @@ export default function App() {
   )
   useEffect(() => {
     ;(window as unknown as { mathscrap: { tools: typeof bridge } }).mathscrap = { tools: bridge }
+    // The dev bridge exists only while Vite is running. Packaged shells never call it.
+    if (!import.meta.env.DEV) return
     return startBrowserBridge((name, args) => bridge.call(name, args))
   }, [bridge])
+
+  const exportPage = useCallback(() => {
+    void exportSheetFile(docRef.current)
+      .then((kind) => {
+        if (kind === 'cancelled') return
+        toast.success(kind === 'shared' ? '已交给系统分享' : '已导出这一页')
+      })
+      .catch((e: unknown) => toast(e instanceof Error ? e.message : '没能导出'))
+  }, [docRef])
+
+  const importPage = useCallback(
+    async (file: File | undefined) => {
+      if (!file) return
+      try {
+        const next = parseSheet(await readSheetFile(file))
+        commit(next)
+        setSelected(null)
+        toast.success('已导入这一页', { action: { label: '撤销', onClick: undo } })
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '没能导入')
+      }
+    },
+    [commit, undo],
+  )
 
   const anchor = composer.at ? { left: composer.at.x * view.scale + view.x, top: composer.at.y * view.scale + view.y } : null
   const showHints = prefs.showHints && composer.open && composerFocused && (!compact || !composerText)
@@ -458,7 +487,22 @@ export default function App() {
           onClear={() => setConfirmClear(true)}
           onSettings={() => setSettingsOpen(true)}
           onAssist={() => setAssistOpen(true)}
+          onExport={exportPage}
+          onImport={() => importRef.current?.click()}
           onSample={writeSample}
+        />
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            void importPage(file)
+          }}
         />
 
         <Toolbar tool={tool} setTool={setTool} pen={pen} setPen={setPen} compact={compact} onRecognize={recognize} />
@@ -470,7 +514,9 @@ export default function App() {
             data-no-board
             className={cn(
               'absolute z-30 overflow-hidden rounded-2xl opacity-80 shadow-[0_10px_28px_rgba(60,40,20,0.22)]',
-              compact ? 'right-3 bottom-[calc(132px+env(safe-area-inset-bottom))] h-[200px] w-[min(300px,78vw)]' : 'right-5 bottom-[4.75rem] h-[240px] w-[360px]',
+              compact
+                ? 'right-[max(0.75rem,env(safe-area-inset-right))] bottom-[calc(132px+env(safe-area-inset-bottom))] h-[200px] w-[min(300px,78vw)]'
+                : 'right-[max(1.25rem,env(safe-area-inset-right))] bottom-[max(4.75rem,calc(4.75rem+env(safe-area-inset-bottom)))] h-[240px] w-[360px]',
             )}
           >
             <PlotPane cards={doc.cards} focusId={plot.focusId} variant="float" />

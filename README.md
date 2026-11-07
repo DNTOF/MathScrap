@@ -358,7 +358,7 @@ recognizeStrokes(strokes, encoder, decoder, vocab) → { text, latex, confidence
 
 出处和 Apache-2.0 说明在 `public/models/comer/NOTICE.md` 与同目录的 `LICENSE`。预处理和 ink-on 一致：大约每 3px 重采样，黑底白字，内容缩放到大约 128px 高，放在高 256、宽为 64 的倍数（128–1024）的左上角。
 
-WASM 运行时不进 git。`npm install` 之后，开发服务器和 `vite preview` 从 `node_modules/onnxruntime-web/dist` 提供 `/ort/ort-wasm-simd-threaded.wasm`（约 12 MB）和对应的 `.mjs`。线程数设为 1，所以不需要跨域隔离。
+WASM 运行时不进 git。`npm install` 之后，开发服务器和 `vite preview` 从 `node_modules/onnxruntime-web/dist` 提供 `/ort/ort-wasm-simd-threaded.wasm` 和对应的 `.mjs`。`npm run build` 把同一批文件复制进 `dist/ort/`，安装包读的是这份副本，不再去 `node_modules`，也不打开 Vite。线程数设为 1，所以不需要跨域隔离。
 
 ### 以后接到原生 ONNX Runtime
 
@@ -403,7 +403,30 @@ scripts/e2e-plots.ts      浏览器：每个用例的图都真的画出来
 scripts/e2e-sheet.ts      浏览器：在纸上写多个式子 → 同一个坐标系
 ```
 
-纸面内容自动保存在 localStorage（`mathscrap.doc.v2`）里，第一次打开是空白纸。旧版本（`v1`）的卡片页不会自动迁移，原数据仍留在浏览器里。「清空这页」可以撤销。
+纸面内容自动保存在 localStorage（`mathscrap.doc.v2`）里，第一次打开是空白纸。桌面外壳和手机 WebView 各自把这份 localStorage 留在应用数据目录里。右上角菜单的「导出这一页 / 导入一页」读写 `mathscrap.sheet` JSON：只保留笔迹、式子和字条里的字符串和数字，不执行文件内容。旧版本（`v1`）的卡片页不会自动迁移，原数据仍留在浏览器里。「清空这页」和导入都可以撤销。
+
+---
+
+## 安装包
+
+数学和手写识别仍走页面里的 Rust/WASM 与 CoMER ONNX。外壳是 [Tauri 2](https://v2.tauri.app/)：它把 `dist/` 打进系统 WebView，不换成云端 OCR，也不在安装后去连 Vite 或公共 CDN。仓库里没有 MathScrap 标志，安装图标用的是纸面已有的牛皮色 `#c9a473`，不用 Vite 模板里的 `public/favicon.svg`。
+
+| 命令 | 在哪台机器上 | 得到什么 |
+| --- | --- | --- |
+| `npm run pack:web` | 任何装了 Node 的机器 | `dist/`。这是被打进外壳的页面，不是安装包。 |
+| `npm run pack:windows` | Windows 10 1803+，已装 WebView2、VS C++ 生成工具、Rust 1.90、Node | `packaging/out/` 里的 NSIS 安装程序和 `MathScrap.exe`。默认不签名，SmartScreen 会提示。 |
+| `npm run pack:android` | Linux、macOS 或 Windows，JDK 17+、Android SDK、NDK、Rust Android 目标 | debug 签名的 APK，可以用 `adb install` 装到手机。不是 Play 商店包。 |
+| `npm run pack:ios` | 只有 macOS + 完整 Xcode | 见下。 |
+
+版本号在 `package.json`、`src/version.ts` 和 `src-tauri/tauri.conf.json`，目前是 `0.1.0`。`npm run test:pack` 会核对这三处。
+
+Windows 安装程序不附带 WebView2 下载器。Windows 11 和 2018 年之后更新过的 Windows 10 已经带有这个运行时。可选的代码签名只认环境变量 `WINDOWS_CERTIFICATE`（pfx 的 base64）和 `WINDOWS_CERTIFICATE_PASSWORD`，脚本不打印它们的值，也不在仓库里放证书。
+
+Android 调试包由 SDK 的 debug keystore 签名，可以侧载，不能当作正式版。正式签名要已有的 keystore，变量名是 `ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`、`ANDROID_KEY_BASE64`。脚本不会自己生成 keystore。外壳编译需要 Rust 1.90（仓库根目录的 `rust-toolchain.toml`）。数学核心的测试也可以用这一版。
+
+iOS 在非 Mac 上直接退出，不会造出一个 ipa 文件。模拟器产物是 `.app`，不能装到 iPhone。能装到别人手机上的 IPA 需要付费的 Apple Developer 证书和描述文件，变量名是 `IOS_CERTIFICATE`、`IOS_CERTIFICATE_PASSWORD`、`IOS_MOBILE_PROVISION`（或 `APPLE_API_ISSUER`、`APPLE_API_KEY`、`APPLE_API_KEY_PATH`）。最低系统是 iOS 16.4。本仓库不注册开发者账号，也不上传 TestFlight 或 App Store。
+
+GitHub Actions：`.github/workflows/package.yml` 在打包分支上构建网页、debug APK 和未签名的 Windows 安装程序。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。签名只在手动启动并且上面的 secrets 已配置时发生。这些 workflow 不创建 GitHub Release。
 
 ---
 

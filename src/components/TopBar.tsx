@@ -1,4 +1,5 @@
-import { Bot, Maximize, Minus, MoreHorizontal, Plus, Redo2, Settings2, Trash2, Undo2 } from 'lucide-react'
+import { Bot, Download, Maximize, Minus, MoreHorizontal, Plus, Redo2, Settings2, Trash2, Undo2, Upload } from 'lucide-react'
+import { APP_VERSION } from '@/version'
 import { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,6 +19,8 @@ interface Props {
   onClear: () => void
   onSettings: () => void
   onAssist: () => void
+  onExport: () => void
+  onImport: () => void
   onSample: (blocks: string[]) => void
 }
 
@@ -43,7 +46,7 @@ export function TopBar(p: Props) {
   const row = 'flex h-10 items-center gap-2 rounded-xl px-2.5 text-[13px] text-kraft-800 hover:bg-kraft-800/10'
   return (
     <>
-      <div className="paper-chrome absolute top-3 right-3 z-40 flex items-center gap-0.5 rounded-full p-1" data-no-board>
+      <div className="paper-chrome absolute top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] z-40 flex items-center gap-0.5 rounded-full p-1" data-no-board>
         <IconBtn label={`撤销 (${MOD} Z)`} onClick={p.onUndo} disabled={!p.canUndo} compact={p.compact}>
           <Undo2 className="size-[18px]" />
         </IconBtn>
@@ -55,7 +58,9 @@ export function TopBar(p: Props) {
             <MoreHorizontal className="size-5" />
           </PopoverTrigger>
           <PopoverContent align="end" className="paper-chrome w-[min(330px,calc(100vw-24px))] gap-0 bg-transparent p-1.5" data-no-board>
-            <div className="px-2.5 pt-1 pb-1.5 text-[12px] font-semibold tracking-tight text-kraft-800/70">MathScrap</div>
+            <div className="px-2.5 pt-1 pb-1.5 text-[12px] font-semibold tracking-tight text-kraft-800/70">
+              MathScrap <span className="font-normal tabular-nums">{APP_VERSION}</span>
+            </div>
             <div className="flex items-center gap-1 pb-1.5">
               <button onClick={() => p.onZoom(1 / 1.2)} className="grid size-10 place-items-center rounded-xl hover:bg-kraft-800/10" aria-label="缩小">
                 <Minus className="size-4" />
@@ -90,6 +95,24 @@ export function TopBar(p: Props) {
               </button>
             </div>
             <div className="mt-1 grid grid-cols-2 gap-1">
+              <button
+                onClick={() => {
+                  setMenu(false)
+                  p.onExport()
+                }}
+                className={row}
+              >
+                <Download className="size-4" /> 导出这一页
+              </button>
+              <button
+                onClick={() => {
+                  setMenu(false)
+                  p.onImport()
+                }}
+                className={row}
+              >
+                <Upload className="size-4" /> 导入一页
+              </button>
               <button onClick={p.onSettings} className={row}>
                 <Settings2 className="size-4" /> 设置
               </button>

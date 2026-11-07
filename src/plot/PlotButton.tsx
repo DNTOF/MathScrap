@@ -15,7 +15,9 @@ export function PlotButton({ count, compact, open, onOpen }: { count: number; co
       data-no-board
       className={cn(
         'paper-chrome absolute z-40 flex items-center gap-2 rounded-full text-kraft-800 transition hover:-translate-y-0.5 active:translate-y-0',
-        compact ? 'right-3 bottom-[calc(76px+env(safe-area-inset-bottom))] h-12 px-3.5' : 'right-5 bottom-5 h-12 px-4',
+        compact
+          ? 'right-[max(0.75rem,env(safe-area-inset-right))] bottom-[calc(76px+env(safe-area-inset-bottom))] h-12 px-3.5'
+          : 'right-[max(1.25rem,env(safe-area-inset-right))] bottom-[max(1.25rem,env(safe-area-inset-bottom))] h-12 px-4',
         count ? 'opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
         open && 'bg-kraft-800 text-kraft-50',
       )}

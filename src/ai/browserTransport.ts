@@ -8,6 +8,8 @@ import { directTransport, type AiTransport } from './client'
  */
 export function browserTransport(): AiTransport {
   const direct = directTransport()
+  // The packaged shell has no Vite forwarder. Call the address the person typed.
+  if (import.meta.env.PROD) return direct
   return {
     async request(url, init) {
       try {

@@ -1047,7 +1047,7 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
 
   // Right circular cone x²+y² = z² (α = 45°) ∩ plane → conic eccentricity e = cosβ / cosα.
   {
-    const coneItems = good.filter((i) => i.st.kind === 'implicit3')
+    const coneItems = good.filter((i): i is Item & { st: Extract<Statement, { kind: 'implicit3' }> } => i.st.kind === 'implicit3')
     const facts: RustFact[] = []
     for (const item of coneItems) {
       const F = item.st.F.replace(/\s+/g, '')
