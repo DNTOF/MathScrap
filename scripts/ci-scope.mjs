@@ -6,7 +6,6 @@
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const LOCAL_CRATES = new Set(['mathscrap', 'mathcore'])
 
 const VERSION_FILES = new Set([

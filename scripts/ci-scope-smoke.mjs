@@ -77,12 +77,6 @@ check('rename', classifyEntries([
 
 check('docs only', classifyEntries([
   entry('README.md', '版本 `0.0.1`\n', '版本 `0.0.1`\n\n更多说明。\n'),
-]).mode, 'full' === 'light' ? 'full' : classifyEntries([
-  entry('README.md', '版本 `0.0.1`\n', '版本 `0.0.1`\n\n更多说明。\n'),
-]).mode)
-
-check('docs only mode', classifyEntries([
-  entry('README.md', '版本 `0.0.1`\n', '版本 `0.0.1`\n\n更多说明。\n'),
 ]).mode, 'light')
 
 check('invalid json is full', classifyEntries([
