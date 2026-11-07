@@ -109,7 +109,102 @@ async function drawMouse(page: Page, x: number, y: number) {
   await page.waitForTimeout(40)
 }
 
+async function cdp(page: Page) {
+  return page.context().newCDPSession(page)
+}
+
+/** Two real touch contacts. The second finger has to drop the unfinished stroke instead of leaving it on the paper. */
+async function twoFinger(page: Page, label: string) {
+  const before = await ink(page)
+  const x = Math.round(before.left + before.vx + 160)
+  const y = Math.round(before.top + 200)
+  const session = await cdp(page)
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      { x, y, id: 1, radiusX: 4, radiusY: 4, force: 0.5 },
+      { x: x + 100, y: y + 12, id: 2, radiusX: 4, radiusY: 4, force: 0.5 },
+    ],
+  })
+  await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await session.detach()
+  const s = await ink(page)
+  check(s.total === before.total && s.paths === s.total, `${label}: a second real touch drops the unfinished stroke and leaves no ghost`)
+}
+
+/**
+ * Trusted pen events, then a trusted touch while the pen is still down.
+ * Synthetic PointerEvents never enter the browser's capture and hit-testing path.
+ */
+async function penPlusPalm(page: Page, label: string) {
+  const before = await ink(page)
+  const x = Math.round(before.left + 220)
+  const y = Math.round(before.top + 210)
+  const session = await cdp(page)
+  const pen = async (type: 'mousePressed' | 'mouseMoved' | 'mouseReleased', px: number, py: number) => {
+    await session.send('Input.dispatchMouseEvent', {
+      type,
+      x: px,
+      y: py,
+      button: 'left',
+      buttons: type === 'mouseReleased' ? 0 : 1,
+      clickCount: type === 'mouseMoved' ? 0 : 1,
+      pointerType: 'pen',
+      force: 0.6,
+    })
+  }
+  await pen('mousePressed', x, y)
+  await pen('mouseMoved', x + 80, y + 6)
+  const captured = await page.evaluate(() => {
+    const el = document.querySelector('.kraft-page') as HTMLElement
+    for (let id = 1; id <= 32; id++) if (el.hasPointerCapture(id)) return true
+    return false
+  })
+  check(captured, `${label}: the pen down takes pointer capture`)
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: x + 30, y: y + 110, id: 7, radiusX: 10, radiusY: 10, force: 0.3 }],
+  })
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: x + 30, y: y + 150, id: 7, radiusX: 10, radiusY: 10, force: 0.3 }],
+  })
+  await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await pen('mouseMoved', x + 150, y + 10)
+  await pen('mouseReleased', x + 150, y + 10)
+  await session.detach()
+  const s = await ink(page)
+  const stroke = s.strokes[s.strokes.length - 1]
+  const ys: number[] = []
+  if (stroke) for (let i = 1; i < stroke.pts.length; i += 3) ys.push(stroke.pts[i])
+  const span = ys.length ? Math.max(...ys) - Math.min(...ys) : Infinity
+  check(s.total === before.total + 1 && s.paths === s.total, `${label}: a palm touch does not swallow or ghost the pen stroke`)
+  check(span < 40, `${label}: the palm does not pull the pen stroke (${span.toFixed(1)} world px tall)`)
+  check(Math.abs(s.vx - before.vx) < 1 && Math.abs(s.vy - before.vy) < 1 && Math.abs(s.scale - before.scale) < 0.001, `${label}: the palm does not pan the sheet`)
+}
+
+/** Real mouse capture: release over a toolbar button, which sits outside the sheet hit target. */
+async function releaseOverToolbar(page: Page, label: string) {
+  const before = (await ink(page)).total
+  const board = await page.locator('.kraft-page').boundingBox()
+  const eraser = await page.locator('[aria-label="橡皮（整笔擦除）"]').boundingBox()
+  if (!board || !eraser) throw new Error('board or eraser missing')
+  const x = Math.round(board.x + board.width * 0.32)
+  const y = Math.round(board.y + Math.min(220, board.height * 0.35))
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(eraser.x + eraser.width / 2, eraser.y + eraser.height / 2, { steps: 6 })
+  await page.mouse.up()
+  const s = await ink(page)
+  const penPressed = await page.locator('[aria-label="笔"]').getAttribute('aria-pressed')
+  check(s.total === before + 1 && s.paths === s.total, `${label}: releasing the mouse over the toolbar still commits the stroke`)
+  check(penPressed === 'true', `${label}: that release does not activate the button under the cursor`)
+}
+
 async function gestureLoop(page: Page, label: string) {
+  await twoFinger(page, label)
+  await penPlusPalm(page, label)
+  await releaseOverToolbar(page, label)
   const origin = await ink(page)
   const x = Math.round(origin.left + origin.vx + 180)
   const y = Math.round(origin.top + 220)
@@ -133,7 +228,7 @@ async function gestureLoop(page: Page, label: string) {
   s = await ink(page)
   check(s.total === before && s.paths === before, `${label}: mouse pointercancel leaves no stroke and no ghost path`)
 
-  for (const kind of ['pen', 'touch'] as const) {
+  for (const kind of ['touch', 'pen'] as const) {
     const n = (await ink(page)).total
     const id = kind === 'pen' ? 7 : 8
     await raw(page, 'down', x + 20, y + 120, id, kind)
@@ -186,8 +281,9 @@ async function eraseAtZoom(page: Page, label: string) {
   await page.keyboard.press('p')
   const board = await page.locator('.kraft-page').boundingBox()
   if (!board) throw new Error('board missing')
-  const x = Math.round(board.x + board.width * 0.45)
-  const y = Math.round(board.y + board.height * 0.42)
+  // A band above the earlier samples and still on screen after the menu zoom.
+  const x = Math.round(board.x + board.width * 0.34)
+  const y = Math.round(board.y + 140)
   await drawMouse(page, x, y)
   let s = await ink(page)
   const stroke = s.strokes[s.strokes.length - 1]
@@ -201,6 +297,8 @@ async function eraseAtZoom(page: Page, label: string) {
   const maxX = Math.max(...xs)
   const midY = ys[Math.floor(ys.length / 2)]
 
+  // The pen-detected toast sits on top of the menu on a narrow viewport and stays while the pointer hovers it.
+  await settleToasts(page)
   await page.getByRole('button', { name: '更多' }).click()
   await page.getByRole('button', { name: '放大' }).click()
   await page.keyboard.press('Escape')
@@ -233,6 +331,12 @@ async function eraseAtZoom(page: Page, label: string) {
   await page.keyboard.press('p')
 }
 
+/** Move off a toast so it is not paused by hover, then wait until it leaves. Do not edit the toaster DOM. */
+async function settleToasts(page: Page) {
+  await page.mouse.move(6, 420)
+  await page.waitForFunction(() => !document.querySelector('[data-sonner-toast]'), null, { timeout: 8000 }).catch(() => undefined)
+}
+
 async function formulaHistory(page: Page, label: string) {
   await page.keyboard.press('v')
   await page.keyboard.press('/')
@@ -248,10 +352,13 @@ async function formulaHistory(page: Page, label: string) {
   const start = await formula.getAttribute('style')
   await page.keyboard.press('Delete')
   check((await formula.count()) === 0, `${label}: delete removes the formula`)
+  await settleToasts(page)
   await page.keyboard.press('Control+z')
+  await formula.waitFor()
   check((await formula.count()) === 1 && (await selected()), `${label}: undo restores the formula and its selection`)
 
   await page.keyboard.press('v')
+  await settleToasts(page)
   const box = await formula.boundingBox()
   if (!box) throw new Error('formula box missing')
   const px = box.x + 24
@@ -264,8 +371,11 @@ async function formulaHistory(page: Page, label: string) {
   await page.keyboard.press('Control+z')
   check((await formula.count()) === 0, `${label}: dragging a formula back to its start does not add an undo step`)
 
+  await settleToasts(page)
   await page.keyboard.press('Control+Shift+z')
+  await formula.waitFor()
   check((await formula.count()) === 1, `${label}: redo brings the formula back`)
+  await settleToasts(page)
   const again = await formula.boundingBox()
   if (!again) throw new Error('formula box missing after redo')
   await page.mouse.move(again.x + 24, again.y + 16)
@@ -290,6 +400,12 @@ async function run(viewport: { width: number; height: number }, dpr: number, lab
   await gestureLoop(page, label)
   await eraseAtZoom(page, label)
   await formulaHistory(page, label)
+  if (label === 'desktop') {
+    await page.keyboard.press('p')
+    await page.locator('[aria-label="把手写收成公式"]').click()
+    const ocr = await page.evaluate(() => document.documentElement.dataset.ocr ?? '')
+    check(ocr === 'run' || ocr === 'idle', `desktop: the recognize button starts a reading (${ocr || 'unset'})`)
+  }
   check(errors.length === 0, `${label}: no page errors (${errors.join(' | ')})`)
   await page.screenshot({ path: `${SHOTS}/${shot}.png` })
   await browser.close()
