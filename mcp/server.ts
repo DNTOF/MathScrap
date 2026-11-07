@@ -35,7 +35,7 @@ async function bridgeCall(name: string, args: Record<string, unknown>) {
   return data.result
 }
 
-const server = new Server({ name: 'mathscrap', version: '0.1.0' }, { capabilities: { tools: {} } })
+const server = new Server({ name: 'mathscrap', version: '0.0.1' }, { capabilities: { tools: {} } })
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOL_SPECS.map((tool) => ({

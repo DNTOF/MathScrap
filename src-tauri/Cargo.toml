@@ -1,6 +1,6 @@
 [package]
 name = "mathscrap"
-version = "0.1.0"
+version = "0.0.1"
 description = "Kraft-paper math scrapbook: Freeform-like sheet, shared plot, geometry inference (Rust/WASM)."
 authors = ["DNTOF"]
 license = "Apache-2.0"
