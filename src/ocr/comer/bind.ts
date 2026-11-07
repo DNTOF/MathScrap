@@ -41,7 +41,38 @@ function arrowReading(squashed: string): boolean {
 }
 
 /** A flat stroke sitting above the rest of the ink, wider than the letter. */
+/**
+ * ∑ drawn as a top bar, a zigzag, and a bottom bar. The top bar is flat and
+ * high, so it used to count as an over-arrow and a letter reading became a vector.
+ */
+export function looksLikeSumBars(strokes: InkStroke[]): boolean {
+  const drawn = strokes.filter((s) => s.points.length >= 2)
+  if (drawn.length < 3) return false
+  const all = bounds(drawn.flatMap((s) => s.points))
+  if (all.h < 24 || all.w < 16) return false
+  const flats = drawn.filter((s) => {
+    const b = bounds(s.points)
+    return b.w > all.w * 0.55 && b.h < Math.max(8, b.w * 0.35)
+  })
+  if (flats.length < 2) return false
+  const boxes = flats.map((s) => bounds(s.points)).sort((a, b) => a.cy - b.cy)
+  const top = boxes[0]
+  const bot = boxes[boxes.length - 1]
+  if (top.cy > all.y0 + all.h * 0.4) return false
+  if (bot.cy < all.y0 + all.h * 0.6) return false
+  const gap = bot.y0 - top.y1
+  if (gap < all.h * 0.35) return false
+  const overlap = Math.min(top.x1, bot.x1) - Math.max(top.x0, bot.x0)
+  if (overlap < Math.min(top.w, bot.w) * 0.5) return false
+  return drawn.some((s) => {
+    if (flats.includes(s)) return false
+    const b = bounds(s.points)
+    return b.h > gap * 0.45 && b.y0 < top.y1 + gap * 0.35 && b.y1 > bot.y0 - gap * 0.35
+  })
+}
+
 export function findOverArrow(strokes: InkStroke[]): { x: number; y: number } | null {
+  if (looksLikeSumBars(strokes)) return null
   const drawn = strokes.filter((s) => s.points.length >= 2)
   if (drawn.length < 2) return null
   const all = bounds(drawn.flatMap((s) => s.points))

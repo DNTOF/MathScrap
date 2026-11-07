@@ -28,6 +28,10 @@ log_2(8)    log_{2}(8)    log₂(8)    log2(8)    log(2, 8)
 
 `log(2)` and `log 2` stay log₁₀(2). They are not “base 2”. `lg` does not take a base glued to the name: `lg2(3)` is lg(2)·3. The base must be greater than 0 and not 1, and the argument must be greater than 0. Otherwise there is no real value, and the plot does not draw a fake segment across a gap or an asymptote.
 
+解三角形时还会给出 X(91) 和 X(92)，分别是 X(47) 和 X(48) 的等角共轭。直角三角形里没有 X(92)。
+
+Solving a triangle also reports X(91) and X(92), the isogonal conjugates of X(47) and X(48). A right triangle has no X(92).
+
 ## 快速开始
 
 ## Quick start
@@ -50,7 +54,7 @@ The dev server is `http://127.0.0.1:47321`. `npm run preview` serves the product
 | `npm run dev` | 本机开发服务器，含 MCP 桥和 AI 转发。 / Local dev server, including the MCP bridge and the AI forwarder. |
 | `npm run build` | 类型检查并构建 `dist/`。 / Typecheck and build `dist/`. |
 | `npm run lint` | oxlint，有警告也失败。 / oxlint. Warnings fail the command. |
-| `npm test:pack` 或 `npm run test:i18n` | 打包元数据，以及中英词条、语言记忆。 / Packaging metadata, plus Chinese/English keys and saved language. |
+| `npm run test:pack` 或 `npm run test:i18n` | 打包元数据，以及中英词条、语言记忆。 / Packaging metadata, plus Chinese/English keys and saved language. |
 | `npm run smoke` | 用真实 WASM 检查数值、对数和图上有没有点。 / Real WASM: numbers, logarithms, and whether a curve has points. |
 | `npm run smoke:ocr` | 手写预处理和假的编码器/解码器，不加载 ONNX。 / Ink preprocess and a fake encoder/decoder. No ONNX. |
 | `npm run ocr:live` | 本机用仓库里的 CoMER INT8 读几笔样例。 / Run the bundled CoMER INT8 on a few sample strokes. |
@@ -105,6 +109,10 @@ Recognition is on by default. About a second after the ink settles, a text gate 
 模型是 CoMER（ECCV 2022）的 INT8 ONNX，权重由 [ink-on](https://github.com/kimseungdae/ink-on) 以 Apache-2.0 分发。它能读一些清楚的短式，不能当作任意手写的完整识别器：认不出就保持笔迹，不会用 `y = x` 充数。单独的 `sigma` 是符号，求和与积分留在纸上，不因此打开坐标系。
 
 The model is CoMER (ECCV 2022) INT8 ONNX. The weights are distributed by [ink-on](https://github.com/kimseungdae/ink-on) under Apache-2.0. It can read some clear short formulas. It is not a complete recognizer for arbitrary handwriting: a miss leaves the ink, and it does not substitute `y = x`. A lone `sigma` is the symbol. Sums and integrals stay on the paper and do not open the coordinate view by themselves.
+
+模型把单独的 σ 读成 `0`、`Y` 或 `u`，而且笔迹本身像 σ 时，才改写成 `sigma`。公式、闭合的 0、u 形的碗和 Y 的分叉不会被改。求和号上下的两道横杠不当成字母上的箭头。
+
+A lone σ that the model reads as `0`, `Y`, or `u` is rewritten to `sigma` only when the ink itself looks like σ. A formula, a closed 0, a u-shaped bowl, and a Y fork are left alone. The two bars of a summation are not treated as an arrow over a letter.
 
 | 文件 File | 内容 / Contents |
 | --- | --- |
@@ -168,9 +176,9 @@ iOS 最低系统是 16.4。能装到别人手机上的 IPA 需要 Apple Develope
 
 The iOS minimum is 16.4. An IPA that installs on someone else's phone needs an Apple Developer certificate and profile: `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD`, `IOS_MOBILE_PROVISION`, or `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_PATH`. This repository does not enroll a developer account, does not upload to TestFlight or the App Store, and has not been installed on an iPhone.
 
-`.github/workflows/package.yml` 里的 `test` 作业在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`，然后拉起 dev 服务器，依次跑 `npm run e2e:sheet` 和 `npm run e2e`（逐条作图）。失败时上传 `e2e-shots`、`e2e-plots` 和 `dev-server.log`。这些步骤不需要密钥。推到 `cursor/mathscrap-packaging-*` 时，测试通过后同一 workflow 再构建网页、debug APK 和未签名的 Windows 安装程序。指向 `main` 的 pull request 只跑 `test`。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
+`.github/workflows/package.yml` 在推送到 `main` 或 `cursor/mathscrap-packaging-*` 时，以及指向 `main` 的 pull request 上运行。`test` 作业没有额外的跳过条件：这三种情况都会在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`，然后拉起 dev 服务器，依次跑 `npm run e2e:sheet` 和 `npm run e2e`（逐条作图）。失败时上传 `e2e-shots`、`e2e-plots` 和 `dev-server.log`。这些步骤不需要密钥。网页、debug APK 和未签名 Windows 安装程序仍只在 push 上、并且 `test` 通过之后构建；pull request 不打安装包。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
 
-The `test` job in `.github/workflows/package.yml` runs on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, then starts the dev server and runs `npm run e2e:sheet` and `npm run e2e` (one plot per formula). On failure it uploads `e2e-shots`, `e2e-plots`, and `dev-server.log`. Those steps need no secrets. A push to `cursor/mathscrap-packaging-*` builds the web bundle, a debug APK, and an unsigned Windows installer in the same workflow after that job passes. A pull request into `main` runs only `test`. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
+`.github/workflows/package.yml` runs on a push to `main` or `cursor/mathscrap-packaging-*`, and on a pull request into `main`. The `test` job has no extra skip condition, so all three of those runs execute it on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, then a dev server, then `npm run e2e:sheet` and `npm run e2e` (one plot per formula). On failure it uploads `e2e-shots`, `e2e-plots`, and `dev-server.log`. Those steps need no secrets. The web bundle, debug APK, and unsigned Windows installer still build only on a push, and only after `test` passes. A pull request does not build installers. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
 
 ## 许可和作者
 

@@ -14,11 +14,12 @@ import { readFileSync } from 'node:fs'
 import type { Stroke } from '../src/board/types.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
 import { bindInk, findOverArrow } from '../src/ocr/comer/bind.ts'
-import { classifyInk, looksLikeIsolatedSigma } from '../src/ocr/gate.ts'
+import { classifyInk, looksLikeIsolatedSigma, mathCues } from '../src/ocr/gate.ts'
 import { agreeConfidence, recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
 import { isInkMeaningful, preprocessStrokes, resamplePoints, type InkStroke } from '../src/ocr/comer/preprocess.ts'
-import { arrowLetter, inkFixtures, isolatedSigma, proseNote, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
+import { arrowLetter, bowlU, closedZero, forkY, inkFixtures, isolatedSigma, proseNote, sigmaHook, sigmaLoop, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
+import { looksLikeIsolatedSigma as sigmaGlyph, repairIsolatedSigma } from '../src/ocr/comer/sigma.ts'
 import { tokensToSource, vocabFromJson } from '../src/ocr/comer/source.ts'
 import { filterAbsurd, hasParenGeometry, recognizeInk } from '../src/ocr/inkShape.ts'
 
@@ -443,6 +444,13 @@ const boundVec = bindInk(arrowed, 'a')
 assert.match(boundVec, /^\\vec\{a\} = \([0-9.-]+, [0-9.-]+\)$/)
 assert.equal(bindInk(arrowed, 'a = (1, 2, 2)'), boundVec)
 assert.doesNotMatch(boundVec, /1,\s*2,\s*2/)
+assert.equal(findOverArrow(sumBar()), null, 'Σ bars are not an over-arrow')
+assert.equal(bindInk(sumBar(), 'a'), '')
+assert.equal(bindInk(sumBar(), '\\vec{a}'), '')
+assert.equal(bindInk(sumBar(), '\\sum'), '\\sum')
+assert.equal(bindInk(sumBar(), '\\sum_{i = 1}^{n} i'), '\\sum_{i = 1}^{n} i')
+assert.equal(agreeConfidence(sumBar(), '\\vec{a} = (1, 0)', 0.48), 0.48)
+assert.equal(agreeConfidence(sumBar(), '\\sum', 0.45), 0.78)
 assert.equal(bindInk(arrowed, '\\sum'), '\\sum')
 assert.equal(bindInk(arrowed, '\\sum_{i = 1}^{n} i'), '\\sum_{i = 1}^{n} i')
 assert.equal(bindInk(arrowed, 'y = 2'), 'y = 2')
@@ -501,6 +509,44 @@ assert.equal(plain[0]?.text, 'y = 2')
 assert.ok((plain[0]?.confidence ?? 1) < OCR_ACCEPT, `ordinary formula is not lifted (${plain[0]?.confidence})`)
 console.log('ocr agreement ok', { arrow: agreed[0], sum: sumAgreed[0], faint: faintArrow[0]?.confidence, plain: plain[0]?.confidence })
 
+const loop = sigmaLoop()
+const hook = sigmaHook()
+const zero = closedZero()
+const bowl = bowlU()
+const fork = forkY()
+assert.equal(sigmaGlyph(loop), true)
+assert.equal(sigmaGlyph(hook), true)
+assert.equal(sigmaGlyph(zero), false, 'a closed 0 is not σ')
+assert.equal(sigmaGlyph(bowl), false, 'a u bowl is not σ')
+assert.equal(sigmaGlyph(fork), false, 'a Y fork is not σ')
+assert.equal(sigmaGlyph(proseNote()), false)
+assert.equal(sigmaGlyph(y2strokes), false)
+assert.equal(repairIsolatedSigma(loop, '0'), 'sigma')
+assert.equal(repairIsolatedSigma(loop, 'Y'), 'sigma')
+assert.equal(repairIsolatedSigma(hook, 'u'), 'sigma')
+assert.equal(repairIsolatedSigma(loop, 'y = 0'), null, 'a formula is not rewritten')
+assert.equal(repairIsolatedSigma(zero, '0'), null)
+assert.equal(repairIsolatedSigma(bowl, 'u'), null)
+assert.equal(repairIsolatedSigma(fork, 'Y'), null)
+assert.equal(repairIsolatedSigma(proseNote(), '0'), null)
+for (const [ink, token] of [[loop, '0'], [hook, 'u'], [loop, 'Y']] as const) {
+  const read = await recognizeStrokes(ink, scripted([id(token)], weak), scripted([id(token)], weak), vocab, 1)
+  assert.equal(read[0]?.text, 'sigma', `${token} on σ → ${JSON.stringify(read)}`)
+  assert.ok((read[0]?.confidence ?? 0) >= OCR_ACCEPT, `${token} on σ confidence ${read[0]?.confidence}`)
+}
+const faintZero = await recognizeStrokes(loop, scripted([id('0')], faint), scripted([id('0')], faint), vocab, 1)
+assert.notEqual(faintZero[0]?.text, 'sigma', 'a faint 0 is not promoted to σ')
+assert.ok((faintZero[0]?.confidence ?? 1) < OCR_ACCEPT)
+const realZero = await recognizeStrokes(zero, scripted([id('0')], 6), scripted([id('0')], 6), vocab, 1)
+assert.equal(realZero[0]?.text, '0', JSON.stringify(realZero))
+const realU = await recognizeStrokes(bowl, scripted([id('u')], 6), scripted([id('u')], 6), vocab, 1)
+assert.ok(!realU.some((c) => c.text === 'sigma'), JSON.stringify(realU))
+const realY = await recognizeStrokes(fork, scripted([id('Y')], 6), scripted([id('Y')], 6), vocab, 1)
+assert.ok(!realY.some((c) => c.text === 'sigma'), JSON.stringify(realY))
+const formulaZero = await recognizeStrokes(loop, scripted([id('y'), id('='), id('0')], weak), scripted([id('y'), id('='), id('0')], weak), vocab, 1)
+assert.equal(formulaZero[0]?.text, 'y = 0', JSON.stringify(formulaZero))
+console.log('ocr sigma glyph ok')
+
 function sumLikeSigma(): InkStroke[] {
   return [
     {
@@ -523,9 +569,14 @@ function sumLikeSigma(): InkStroke[] {
 assert.equal(classifyInk(y2strokes), 'formula')
 assert.equal(classifyInk(arrowLetter()), 'formula')
 assert.equal(classifyInk(proseNote()), 'text', 'a line of letters is not a formula')
+assert.equal(classifyInk(sigmaLoop()), 'formula', 'an isolated σ still reaches the model')
+assert.equal(classifyInk(closedZero()), 'formula')
 assert.equal(classifyInk(sumLikeSigma()), 'formula', 'Σ with limits is a formula')
 assert.equal(classifyInk(sumGlyph()), 'formula')
 assert.equal(classifyInk(sumBar()), 'formula')
+assert.ok(mathCues(sumBar()).includes('sum'), 'barred Σ is a sum, not only an arrow')
+assert.ok(!mathCues(sumBar()).includes('arrow'))
+assert.ok(mathCues(arrowLetter()).includes('arrow'))
 assert.equal(classifyInk(inkFixtures(3).find((s) => s.name === 'frac')!.strokes), 'formula')
 console.log('ocr gate ok', { prose: classifyInk(proseNote()), formula: classifyInk(y2strokes) })
 assert.equal(tokensToSource(['\\ln', '(', 'x', ')']).replace(/\s+/g, ''), 'ln(x)')
