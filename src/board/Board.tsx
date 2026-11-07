@@ -209,6 +209,11 @@ export function Board(props: Props) {
       active.current = null
       return
     }
+    // A palm or a second contact must not steal a stroke that is already on the paper.
+    if ((mode.current?.kind === 'draw' || mode.current?.kind === 'erase') && active.current !== null && e.pointerId !== active.current) {
+      capture(e)
+      return
+    }
     const palm = e.pointerType === 'touch' && (penOnly || penSeen.current)
     if (e.button === 1 || space || tool === 'select' || tool === 'type' || palm) {
       capture(e)
@@ -249,6 +254,7 @@ export function Board(props: Props) {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType })
     const m = mode.current
     if (!m) return
+    if (m.kind !== 'pinch' && active.current !== null && e.pointerId !== active.current) return
     if (m.kind === 'pinch' && pinch.current) {
       const touches = [...pointers.current.values()].filter((p) => p.type === 'touch')
       if (touches.length < 2) return
