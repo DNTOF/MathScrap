@@ -1,0 +1,17 @@
+{
+  "name": "mathcore",
+  "type": "module",
+  "description": "Fast math helpers (parse, sample, solve, geometry inference) for the MathScrap kraft notebook, compiled to WASM.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "mathcore_bg.wasm",
+    "mathcore.js",
+    "mathcore.d.ts"
+  ],
+  "main": "mathcore.js",
+  "types": "mathcore.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
