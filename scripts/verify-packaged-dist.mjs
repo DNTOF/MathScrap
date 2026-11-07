@@ -28,7 +28,7 @@ need('models/comer/decoder_int8.onnx', 1_000_000)
 need('models/comer/vocab.json', 100)
 need('models/comer/LICENSE', 100)
 need('models/comer/NOTICE.md', 50)
-need('favicon.svg', 50)
+need('favicon.png', 50)
 
 const ortDir = path.join(dist, 'ort')
 if (!existsSync(ortDir)) fail('dist/ort is missing. ONNX Runtime WASM was not copied into the bundle.')
