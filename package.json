@@ -23,8 +23,10 @@
     "smoke:ocr": "tsx scripts/ocr-smoke.ts",
     "ocr:live": "tsx scripts/ocr-live.ts",
     "mcp": "tsx mcp/server.ts",
+    "smoke:ink": "tsx scripts/ink-geom-smoke.ts",
     "e2e": "tsx scripts/e2e-plots.ts",
-    "e2e:sheet": "tsx scripts/e2e-sheet.ts"
+    "e2e:sheet": "tsx scripts/e2e-sheet.ts",
+    "e2e:ink": "tsx scripts/e2e-ink.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

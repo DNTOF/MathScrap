@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { InkFormula } from './InkFormula'
-import { hitStroke } from './strokeGeom'
+import { hitStroke, hitStrokeCapsule } from './strokeGeom'
 import { StrokeDefs, StrokeShape } from './strokes'
 import { uid, type Doc, type PenStyle, type Stroke, type Tool, type View } from './types'
+import { clientToWorld, eraserWorldRadius } from './viewGeom'
 
 export interface PenSettings {
   color: string
@@ -29,6 +30,7 @@ interface Props {
   onCardDragStart: (id: string) => void
   onCardDrag: (id: string, dx: number, dy: number) => void
   onCardDragEnd: (id: string) => void
+  onCardDragCancel: (id: string) => void
   onPlot: (id: string) => void
   onEdit: (id: string) => void
   onDelete: (id: string) => void
@@ -54,11 +56,26 @@ export function Board(props: Props) {
     viewRef.current = view
   }, [view])
   const penSeen = useRef(false)
+  const active = useRef<number | null>(null)
+  const lastErase = useRef<{ x: number; y: number } | null>(null)
 
   const toWorld = useCallback((cx: number, cy: number) => {
     const r = ref.current!.getBoundingClientRect()
-    const v = viewRef.current
-    return { x: (cx - r.left - v.x) / v.scale, y: (cy - r.top - v.y) / v.scale }
+    return clientToWorld(cx, cy, r, viewRef.current)
+  }, [])
+
+  const abortLive = useCallback(() => {
+    const busy = mode.current !== null || liveRef.current !== null || erasingRef.current.size > 0 || active.current !== null
+    liveRef.current = null
+    erasingRef.current = new Set()
+    lastErase.current = null
+    pinch.current = null
+    mode.current = null
+    active.current = null
+    pointers.current.clear()
+    if (!busy) return
+    setLive(null)
+    setErasing(new Set())
   }, [])
 
   useEffect(() => {
@@ -101,6 +118,18 @@ export function Board(props: Props) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [setView])
 
+  // A gesture that is cancelled, loses capture, or is interrupted must not become ink.
+  // Layout, not a passive effect: the tool button updates before this returns, and pointerup must already see an empty gesture.
+  useLayoutEffect(() => {
+    const kind = mode.current?.kind
+    if (kind === 'draw' || kind === 'erase') abortLive()
+  }, [tool, abortLive])
+  useEffect(() => {
+    const onBlur = () => abortLive()
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [abortLive])
+
   // a lone dot waits a moment before it is inked, so the two clicks of a double-click leave no marks
   const pendingDots = useRef<{ s: Stroke; t: ReturnType<typeof setTimeout> }[]>([])
   const [dots, setDots] = useState<Stroke[]>([])
@@ -128,50 +157,76 @@ export function Board(props: Props) {
     const ids = [...erasingRef.current]
     erasingRef.current = new Set()
     setErasing(new Set())
+    lastErase.current = null
     if (ids.length) props.onErase(ids)
   }
 
   const eraseAt = (cx: number, cy: number) => {
     const w = toWorld(cx, cy)
-    const r = 12 / viewRef.current.scale
+    const r = eraserWorldRadius(viewRef.current.scale)
+    const prev = lastErase.current
+    lastErase.current = w
     let changed = false
     for (const s of doc.strokes) {
-      if (!erasingRef.current.has(s.id) && hitStroke(s, w.x, w.y, r)) {
+      if (erasingRef.current.has(s.id)) continue
+      const hit = prev ? hitStrokeCapsule(s, prev.x, prev.y, w.x, w.y, r) : hitStroke(s, w.x, w.y, r)
+      if (hit) {
         erasingRef.current.add(s.id)
         changed = true
       }
     }
-    if (changed) setErasing(new Set(erasingRef.current))
+    if (changed) setErasing(() => new Set(erasingRef.current))
+  }
+
+  const capture = (e: React.PointerEvent) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* synthetic events and a pointer the browser already took */
+    }
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('[data-no-board]')) return
     if (e.pointerType === 'pen' && !penSeen.current) {
       penSeen.current = true
       props.onPenDetected()
     }
-    e.currentTarget.setPointerCapture?.(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType })
-    props.onSelectCard(null)
 
     const touches = [...pointers.current.values()].filter((p) => p.type === 'touch')
     if (touches.length >= 2) {
-      // second finger: abandon the stroke and start pinch-zooming
+      // second finger: drop the unfinished stroke and pinch-zoom
+      capture(e)
       liveRef.current = null
       setLive(null)
+      erasingRef.current = new Set()
+      setErasing(new Set())
+      lastErase.current = null
       const [a, b] = touches
-      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, view: viewRef.current }
+      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, view: viewRef.current }
       mode.current = { kind: 'pinch' }
+      active.current = null
       return
     }
     const palm = e.pointerType === 'touch' && (penOnly || penSeen.current)
     if (e.button === 1 || space || tool === 'select' || tool === 'type' || palm) {
+      capture(e)
+      if ((tool === 'select' || tool === 'type') && e.button === 0 && !space && !palm) props.onSelectCard(null)
       const place = tool === 'type' && e.button === 0 && !space && !palm
       mode.current = { kind: 'pan', x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, place }
+      active.current = e.pointerId
       return
     }
-    if (e.button !== 0 && e.pointerType === 'mouse') return
+    if (e.button !== 0 && e.pointerType === 'mouse') {
+      pointers.current.delete(e.pointerId)
+      return
+    }
+    capture(e)
+    active.current = e.pointerId
     if (tool === 'eraser') {
       mode.current = { kind: 'erase' }
+      lastErase.current = null
       eraseAt(e.clientX, e.clientY)
       return
     }
@@ -219,7 +274,9 @@ export function Board(props: Props) {
       return
     }
     if (m.kind === 'erase') {
-      eraseAt(e.clientX, e.clientY)
+      const evs = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : []
+      const list = evs.length ? evs : [e.nativeEvent]
+      for (const ev of list) eraseAt(ev.clientX, ev.clientY)
       return
     }
     if (m.kind === 'draw' && liveRef.current) {
@@ -233,28 +290,50 @@ export function Board(props: Props) {
         if (Math.hypot(w.x - lx, w.y - ly) * viewRef.current.scale < 0.8) continue
         pts.push(w.x, w.y, ev.pointerType === 'pen' ? ev.pressure || 0.5 : 0.5)
       }
-      liveRef.current = { ...liveRef.current, pts }
-      setLive(liveRef.current)
+      const next = { ...liveRef.current, pts }
+      liveRef.current = next
+      // A deferred pointermove must not resurrect a stroke that an interruption already dropped.
+      setLive(() => (liveRef.current === next ? next : null))
     }
   }
 
-  const onPointerUp = (e: React.PointerEvent) => {
+  const endOwned = (e: React.PointerEvent, commit: boolean) => {
     pointers.current.delete(e.pointerId)
     const m = mode.current
     if (m?.kind === 'pinch') {
       if ([...pointers.current.values()].filter((p) => p.type === 'touch').length < 2) {
         pinch.current = null
         mode.current = null
+        active.current = null
       }
       return
     }
-    if (m?.kind === 'pan' && m.place && Math.hypot(e.clientX - m.x0, e.clientY - m.y0) < 6) {
+    if (active.current !== null && e.pointerId !== active.current) return
+    if (!m) return
+    if (!commit) {
+      abortLive()
+      return
+    }
+    if (m.kind === 'pan' && m.place && Math.hypot(e.clientX - m.x0, e.clientY - m.y0) < 6) {
       const w = toWorld(e.clientX, e.clientY)
       props.onPlace(w.x, w.y)
     }
-    if (m?.kind === 'draw') finishStroke()
-    if (m?.kind === 'erase') finishErase()
+    if (m.kind === 'draw') finishStroke()
+    if (m.kind === 'erase') finishErase()
     mode.current = null
+    active.current = null
+  }
+
+  const onPointerUp = (e: React.PointerEvent) => endOwned(e, true)
+
+  const onPointerCancel = (e: React.PointerEvent) => endOwned(e, false)
+
+  const onLostPointerCapture = (e: React.PointerEvent) => {
+    // pointerup releases capture and then fires this with the button already up.
+    // A still-pressed pointer that lost capture was interrupted.
+    if (e.buttons === 0) return
+    if (active.current !== e.pointerId || !mode.current || mode.current.kind === 'pinch') return
+    endOwned(e, false)
   }
 
   const drawing = tool === 'pen' || tool === 'marker' || tool === 'eraser'
@@ -287,7 +366,8 @@ export function Board(props: Props) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onLostPointerCapture}
       onDoubleClick={onDoubleClick}
     >
       {showGrid && <div className="dot-grid pointer-events-none absolute inset-0" style={{ backgroundSize: `${grid}px ${grid}px`, backgroundPosition: `${view.x}px ${view.y}px` }} />}
@@ -311,12 +391,13 @@ export function Board(props: Props) {
             onDragStart={props.onCardDragStart}
             onDrag={props.onCardDrag}
             onDragEnd={props.onCardDragEnd}
+            onDragCancel={props.onCardDragCancel}
             onPlot={props.onPlot}
             onEdit={props.onEdit}
             onDelete={props.onDelete}
           />
         ))}
-        <svg className="pointer-events-none absolute top-0 left-0 overflow-visible" width="1" height="1">
+        <svg data-ink="" className="pointer-events-none absolute top-0 left-0 overflow-visible" width="1" height="1">
           <StrokeDefs />
           {doc.strokes.map((s) => (
             <g key={s.id} opacity={erasing.has(s.id) ? 0.15 : 1}>

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { applyRedo, applyUndo, pushCommit, type HistEntry } from './history'
 import type { Doc } from './types'
 
 const KEY = 'mathscrap.doc.v2'
-const LIMIT = 120
 
 export const blankDoc = (): Doc => ({ strokes: [], cards: [], stickers: [] })
 
@@ -25,11 +25,17 @@ function load(): Doc {
  */
 export function useDocument() {
   const [doc, setDoc] = useState<Doc>(load)
-  const past = useRef<Doc[]>([])
-  const future = useRef<Doc[]>([])
+  const past = useRef<HistEntry[]>([])
+  const future = useRef<HistEntry[]>([])
   const [nav, setNav] = useState({ undo: false, redo: false })
   const docRef = useRef(doc)
+  const [selected, setSelectedState] = useState<string | null>(null)
+  const selectedRef = useRef<string | null>(null)
   const remember = () => setNav({ undo: past.current.length > 0, redo: future.current.length > 0 })
+  const setSelected = useCallback((id: string | null) => {
+    selectedRef.current = id
+    setSelectedState(id)
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -45,8 +51,9 @@ export function useDocument() {
   const commit = useCallback((next: Doc | ((d: Doc) => Doc), base?: Doc) => {
     const prev = base ?? docRef.current
     const value = typeof next === 'function' ? next(docRef.current) : next
-    past.current.push(prev)
-    if (past.current.length > LIMIT) past.current.shift()
+    const recorded = pushCommit(past.current, prev, value, selectedRef.current)
+    if (!recorded.changed) return
+    past.current = recorded.past
     future.current = []
     docRef.current = value
     setDoc(value)
@@ -60,20 +67,26 @@ export function useDocument() {
   }, [])
 
   const undo = useCallback(() => {
-    const prev = past.current.pop()
-    if (!prev) return
-    future.current.push(docRef.current)
-    docRef.current = prev
-    setDoc(prev)
+    const step = applyUndo(past.current, future.current, docRef.current, selectedRef.current)
+    if (!step.changed) return
+    past.current = step.past
+    future.current = step.future
+    docRef.current = step.doc
+    selectedRef.current = step.selected
+    setDoc(step.doc)
+    setSelectedState(step.selected)
     remember()
   }, [])
 
   const redo = useCallback(() => {
-    const next = future.current.pop()
-    if (!next) return
-    past.current.push(docRef.current)
-    docRef.current = next
-    setDoc(next)
+    const step = applyRedo(past.current, future.current, docRef.current, selectedRef.current)
+    if (!step.changed) return
+    past.current = step.past
+    future.current = step.future
+    docRef.current = step.doc
+    selectedRef.current = step.selected
+    setDoc(step.doc)
+    setSelectedState(step.selected)
     remember()
   }, [])
 
@@ -86,5 +99,7 @@ export function useDocument() {
     redo,
     canUndo: nav.undo,
     canRedo: nav.redo,
+    selected,
+    setSelected,
   }
 }
