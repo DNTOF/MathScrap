@@ -32,13 +32,19 @@ fi
 npx tauri "${args[@]}"
 
 copied=0
-while IFS= read -r file; do
+shopt -s nullglob
+for file in src-tauri/target/release/bundle/nsis/*-setup.exe src-tauri/target/release/mathscrap.exe; do
+  [[ -f "$file" ]] || continue
   base="$(basename "$file")"
-  dest="packaging/out/MathScrap-${version}-windows-x64-${label}-${base}"
+  if [[ "$base" == *-setup.exe ]]; then
+    dest="packaging/out/MathScrap-${version}-windows-x64-${label}-setup.exe"
+  else
+    dest="packaging/out/MathScrap-${version}-windows-x64-${label}.exe"
+  fi
   cp "$file" "$dest"
   echo "artifact $dest"
   copied=1
-done < <(find src-tauri/target/release/bundle/nsis src-tauri/target/release -maxdepth 3 -type f \( -name '*.exe' -o -name '*.msi' \) 2>/dev/null || true)
+done
 if [[ "$copied" -ne 1 ]]; then
   echo "tauri build finished but no EXE was found." >&2
   exit 1
