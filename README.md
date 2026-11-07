@@ -154,9 +154,9 @@ The dev server forwards the browser's model request through `POST /__mathscrap/a
 
 ## Packages
 
-外壳是 Tauri 2。它把 `dist/` 放进系统 WebView。安装之后不连接 Vite，也不从公共 CDN 拉数学库或 OCR。标识是 `app.mathscrap`，版本 `0.1.0`。图标用纸面的牛皮色 `#c9a473`。
+外壳是 Tauri 2。它把 `dist/` 放进系统 WebView。安装之后不连接 Vite，也不从公共 CDN 拉数学库或 OCR。标识是 `app.mathscrap`，版本 `0.0.1`。图标用纸面的牛皮色 `#c9a473`。
 
-The shell is Tauri 2. It puts `dist/` in the system WebView. After install it does not connect to Vite and does not fetch the math library or OCR from a public CDN. The identifier is `app.mathscrap`, version `0.1.0`. The icon uses the kraft color `#c9a473`.
+The shell is Tauri 2. It puts `dist/` in the system WebView. After install it does not connect to Vite and does not fetch the math library or OCR from a public CDN. The identifier is `app.mathscrap`, version `0.0.1`. The icon uses the kraft color `#c9a473`.
 
 | 命令 Command | 在哪里跑 / Where it runs | 得到什么 / What you get |
 | --- | --- | --- |
