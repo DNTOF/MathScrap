@@ -1,4 +1,5 @@
 import { StrictMode, useEffect, useState } from 'react'
+import { LocaleProvider } from './i18n'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App, { EngineGate, Loading } from './App.tsx'
@@ -6,7 +7,7 @@ import { loadEngine } from './wasm/engine'
 import { TooltipProvider } from './components/ui/tooltip'
 import { Toaster } from './components/ui/sonner'
 
-function Root() {
+export function Root() {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,6 +30,8 @@ function Root() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Root />
+    <LocaleProvider>
+      <Root />
+    </LocaleProvider>
   </StrictMode>,
 )

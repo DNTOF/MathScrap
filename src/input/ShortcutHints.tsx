@@ -1,19 +1,24 @@
 import { Tex } from '@/components/Tex'
+import { useI18n } from '@/i18n/useI18n'
+import type { MessageKey } from '@/i18n/messages'
 import { cn } from '@/lib/utils'
 import { MOD, SNIPPETS, snippetKey } from './snippets'
+
+const hintKey = (id: string) => (`hint${id[0].toUpperCase()}${id.slice(1)}`) as MessageKey
 
 /**
  * The cheat-sheet "pencilled" onto the kraft page while typing — pointer-transparent,
  * low contrast, so it reads like notes on the paper rather than UI chrome.
  */
 export function ShortcutHints({ visible, compact, placement = 'top' }: { visible: boolean; compact: boolean; placement?: 'top' | 'bottom' }) {
+  const { t } = useI18n()
   const items = SNIPPETS.filter((s) => s.code)
   const extra = [
-    { k: 'Enter', d: '写上纸面' },
-    { k: 'Shift Enter', d: '换行写下一个条件' },
-    { k: 'Tab', d: '跳到下一个 □' },
-    { k: 'Esc', d: '放弃' },
-    { k: 'G', d: '所有式子 → 同一坐标系' },
+    { k: 'Enter', d: t('scEnter') },
+    { k: 'Shift Enter', d: t('scShiftEnter') },
+    { k: 'Tab', d: t('scTab') },
+    { k: 'Esc', d: t('scEsc') },
+    { k: 'G', d: t('scPlot') },
   ]
   return (
     <div
@@ -25,7 +30,7 @@ export function ShortcutHints({ visible, compact, placement = 'top' }: { visible
       )}
     >
       <div className="rotate-[-0.6deg] px-5 py-4 text-kraft-800/60">
-        <div className="hand mb-2 text-[26px] leading-none font-bold text-kraft-800/50">边写边看 · 快捷键</div>
+        <div className="hand mb-2 text-[26px] leading-none font-bold text-kraft-800/50">{t('shortcuts')}</div>
         <div className={cn('grid gap-x-6 gap-y-1.5', compact ? 'grid-cols-2 text-[12px]' : 'grid-cols-3 text-[14px]')}>
           {(compact ? items.slice(0, 10) : items).map((s) => (
             <div key={s.id} className="flex items-center gap-2">
@@ -33,13 +38,13 @@ export function ShortcutHints({ visible, compact, placement = 'top' }: { visible
               <span className="[&_.katex]:text-kraft-800/70">
                 <Tex tex={s.label} />
               </span>
-              {!compact && <span className="text-[11.5px] text-kraft-800/45">{s.hint}</span>}
+              {!compact && <span className="text-[11.5px] text-kraft-800/45">{t(hintKey(s.id))}</span>}
             </div>
           ))}
         </div>
         {compact && (
           <div className="mt-2 border-t border-dashed border-kraft-800/20 pt-1.5 text-[11.5px] text-kraft-800/55">
-            没有 Alt 键？直接打：x^2 · sqrt(x) · _|_ · // · 30° · Tab 跳 □
+            {t('scNoAlt')}
           </div>
         )}
         {!compact && (
@@ -50,9 +55,9 @@ export function ShortcutHints({ visible, compact, placement = 'top' }: { visible
               </span>
             ))}
             <span>
-              <b className="hand text-[18px] text-kraft-800/60">{MOD} Z</b> 撤销
+              <b className="hand text-[18px] text-kraft-800/60">{MOD} Z</b> {t('undo')}
             </span>
-            <span className="text-kraft-800/45">也可以直接打：x^2 · sqrt(x) · 2x · _|_ · // · 30°</span>
+            <span className="text-kraft-800/45">{t('scAlso')}</span>
           </div>
         )}
       </div>

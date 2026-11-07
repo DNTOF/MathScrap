@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils'
 import { pageGroups } from '@/math/page'
 import { analyze } from '@/math/scene'
 import type { RustShape } from '@/wasm/engine'
-import { FactsPanel, factKey } from './FactsPanel'
+import { useI18n } from '@/i18n/useI18n'
+import { factKey } from './factKey'
+import { FactsPanel } from './FactsPanel'
 import { buildFigure2d, buildFigure3d, initialRanges, type Ranges } from './figure'
 import { subscribePlotView, takePlotView, type Camera3, type PlotViewCommand } from './remoteView'
 import { PlotView } from './PlotView'
@@ -34,6 +36,7 @@ const staticMode = () => typeof window !== 'undefined' && new URLSearchParams(wi
  * freshly added statements emerge one by one instead of appearing as one batch.
  */
 export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Props) {
+  const { lang, t } = useI18n()
   const groups = useMemo(() => pageGroups(cards), [cards])
   const [mode, setMode] = useState<2 | 3>(2)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
@@ -65,7 +68,10 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
   const deferredInput = useDeferredValue(activeInput)
   const stale = deferredInput !== activeInput
 
-  const analysis = useMemo(() => (deferredInput.length ? analyze(deferredInput, solution) : null), [deferredInput, solution])
+  const analysis = useMemo(() => {
+    void lang
+    return deferredInput.length ? analyze(deferredInput, solution) : null
+  }, [deferredInput, solution, lang])
 
   const shapes = useMemo(() => {
     if (!analysis) return [] as RustShape[]
@@ -103,10 +109,11 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
   const revision = rev === 0 ? 'keep' : `v${rev}`
   const base = useMemo(() => (analysis && analysis.dim === 2 ? initialRanges(analysis) : null), [analysis])
   const figure = useMemo(() => {
+    void lang
     if (!shownAnalysis) return null
     if (shownAnalysis.dim === 3) return buildFigure3d(shownAnalysis, shapes, { camera, z: zRange, revision })
     return buildFigure2d(shownAnalysis, ranges ?? base!, shapes, revision)
-  }, [shownAnalysis, shapes, ranges, base, camera, zRange, revision])
+  }, [shownAnalysis, shapes, ranges, base, camera, zRange, revision, lang])
 
   // the user's zoom survives sheet edits; only switching plane/space refits
   useEffect(() => {
@@ -196,19 +203,19 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
       <header className={cn('flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1', dock ? 'px-3 pt-2.5 pb-1.5' : 'px-4 pt-3 pb-2')}>
         <div className="min-w-0 flex-1">
           {dock ? (
-            <h2 className="hand truncate text-[19px] leading-none font-bold text-kraft-800">{mode === 3 ? '空间直角坐标系' : '平面直角坐标系'}</h2>
+            <h2 className="hand truncate text-[19px] leading-none font-bold text-kraft-800">{mode === 3 ? t('spaceAxes') : t('planeAxes')}</h2>
           ) : (
-            <DialogPrimitive.Title className="hand text-[26px] leading-none font-bold text-kraft-800">{mode === 3 ? '空间直角坐标系' : '平面直角坐标系'}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="hand text-[26px] leading-none font-bold text-kraft-800">{mode === 3 ? t('spaceAxes') : t('planeAxes')}</DialogPrimitive.Title>
           )}
           <p className={cn('mt-1 truncate text-[12px] text-kraft-700', stale && 'opacity-60')}>
-            纸上 {drawn} 个式子{conditions ? ` + ${conditions} 个条件` : ''}画在同一坐标系里{stale ? ' · 正在重算…' : ''}
+            {t('sheetSummary', { drawn, conditions: conditions ? t('conditions', { n: conditions }) : '', stale: stale ? t('recalculating') : '' })}
           </p>
         </div>
         {both && (
-          <div className="flex rounded-full bg-kraft-800/10 p-0.5 text-[12.5px]" role="tablist" aria-label="坐标系">
+          <div className="flex rounded-full bg-kraft-800/10 p-0.5 text-[12.5px]" role="tablist" aria-label={t('axes')}>
             {([2, 3] as const).map((d) => (
               <button key={d} role="tab" aria-selected={mode === d} onClick={() => setMode(d)} className={cn('h-8 rounded-full px-3 transition', mode === d ? 'bg-kraft-50 text-kraft-800 shadow-sm' : 'text-kraft-700 hover:text-kraft-800')}>
-                {d === 2 ? '平面' : '空间'} · {groups.count[d]}
+                {d === 2 ? t('plane') : t('space')} · {groups.count[d]}
               </button>
             ))}
           </div>
@@ -220,8 +227,8 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
             setZRange(undefined)
             setRev((n) => n + 1)
           }}
-          aria-label="适应视野"
-          title="回到恰好框住所有图形的初始视野"
+          aria-label={t('fitAxes')}
+          title={t('fitAxesTitle')}
           className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10"
         >
           <Focus className="size-4.5" />
@@ -229,25 +236,25 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
         {dock ? (
           <>
             {onCollapse && (
-              <button onClick={onCollapse} aria-label="只看图" title="回到右下角的图" className="h-8 rounded-full px-2.5 text-[12.5px] text-kraft-700 hover:bg-kraft-800/10">
-                只看图
+              <button onClick={onCollapse} aria-label={t('pictureOnly')} title={t('pictureOnlyTitle')} className="h-8 rounded-full px-2.5 text-[12.5px] text-kraft-700 hover:bg-kraft-800/10">
+                {t('pictureOnly')}
               </button>
             )}
             {onExpand && (
-              <button onClick={onExpand} aria-label="全屏坐标系" title="放大到全屏" className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
+              <button onClick={onExpand} aria-label={t('fullscreen')} title={t('fullscreenTitle')} className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10">
                 <Maximize2 className="size-4.5" />
               </button>
             )}
           </>
         ) : (
-          <DialogPrimitive.Close className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10" aria-label="关闭">
+          <DialogPrimitive.Close className="touch-target grid size-9 place-items-center rounded-full text-kraft-700 hover:bg-kraft-800/10" aria-label={t('close')}>
             <X className="size-5" />
           </DialogPrimitive.Close>
         )}
       </header>
 
       {entries.length > 1 && (
-        <div className="flex shrink-0 gap-1.5 overflow-x-auto px-4 pb-2" aria-label="纸上的式子">
+        <div className="flex shrink-0 gap-1.5 overflow-x-auto px-4 pb-2" aria-label={t('formulasOnSheet')}>
           {entries.map((e) => {
             const off = hidden.has(e.card.id)
             return (
@@ -256,7 +263,7 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
                 onClick={() => toggle(setHidden, e.card.id)}
                 aria-pressed={!off}
                 aria-label={e.card.text}
-                title={off ? '放回坐标系' : '暂时从坐标系拿掉'}
+                title={off ? t('putBack') : t('takeOff')}
                 className={cn('touch-target flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[14px] transition', off ? 'border-dashed border-kraft-800/25 opacity-45' : 'border-kraft-800/20 bg-kraft-50/50 hover:bg-kraft-50')}
               >
                 {off ? <EyeOff className="size-3.5 text-kraft-700" /> : <Eye className="size-3.5 text-kraft-700" />}
@@ -277,7 +284,7 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
             {analysis.sections.some((s) => s.facts.some((f) => f.shape)) && (
               <button onClick={showAllShapes} className="paper-chrome touch-target absolute bottom-3 left-3 flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-kraft-800">
                 <Sparkles className="size-3.5 text-[#b9852a]" />
-                {visible.size ? '收起推导标注' : '在图上标出全部推导'}
+                {visible.size ? t('hideMarks') : t('showAllMarks')}
               </button>
             )}
           </div>
@@ -290,9 +297,9 @@ export function PlotPane({ cards, focusId, variant, onExpand, onCollapse }: Prop
           <div>
             <div className="hand flex items-center justify-center gap-2 text-[26px] font-bold">
               <Scan className="size-5 opacity-50" />
-              {entries.length ? '式子都先拿掉了' : '纸上还没有能画的式子'}
+              {entries.length ? t('allHidden') : t('nothingToDraw')}
             </div>
-            <p className="mt-1 text-[13px]">{entries.length ? '点上面的式子把它放回坐标系。' : dock ? '在左边纸上写一个式子，这里马上画出来。' : '在纸上写一个函数、方程或几何条件，再回来看。'}</p>
+            <p className="mt-1 text-[13px]">{entries.length ? t('putBackHint') : dock ? t('writeLeft') : t('writeThen')}</p>
           </div>
         </div>
       )}

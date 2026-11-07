@@ -1,3 +1,4 @@
+import { t } from '@/i18n/locale'
 import init, * as core from './pkg/mathcore.js'
 
 export interface RustFact {
@@ -109,7 +110,7 @@ export const engine = {
   version: () => core.version(),
   latex: (src: string) => timed(() => core.latex(src)),
   inspect: (src: string) =>
-    timed(() => parseJson<{ ok: boolean; error: string | null; vars: string[]; source: string | null }>(core.inspect(src), { ok: false, error: '解析失败', vars: [], source: null })),
+    timed(() => parseJson<{ ok: boolean; error: string | null; vars: string[]; source: string | null }>(core.inspect(src), { ok: false, error: t('parseFailed'), vars: [], source: null })),
   substitute: (src: string, name: string, w: string) => timed(() => core.substitute(src, name, w)),
   eval: (src: string, env?: Env) => timed(() => core._eval(src, envStr(env))),
   sampleCurve: (src: string, v: string, env: Env | undefined, a: number, b: number, n: number) => timed(() => core.sample_curve(src, v, envStr(env), a, b, n)),
@@ -124,13 +125,13 @@ export const engine = {
   intersectCurveImplicit: (f: string, F: string, env: Env | undefined, a: number, b: number) =>
     Array.from(timed(() => core.intersect_curve_implicit(f, F, envStr(env), a, b))),
   solveSystem: (eqs: string[], unknowns: string[], env?: Env) =>
-    timed(() => parseJson<SolveResult>(core.solve_system(JSON.stringify(eqs), JSON.stringify(unknowns), envStr(env)), { unknowns, solutions: [], exact: false, starts: 0, error: '求解失败' })),
+    timed(() => parseJson<SolveResult>(core.solve_system(JSON.stringify(eqs), JSON.stringify(unknowns), envStr(env)), { unknowns, solutions: [], exact: false, starts: 0, error: t('solveFailed') })),
   linearCoeffs: (src: string, vars: string[], env?: Env) => timed(() => parseJson<number[] | null>(core.linear_coeffs(src, JSON.stringify(vars), envStr(env)), null)),
   conic: (src: string, env: Env | undefined, name: string) => timed(() => parseJson<RustFact[]>(core.conic_analyze(src, envStr(env), name), [])),
   triangle: (known: Record<string, number>) =>
-    timed(() => parseJson<{ cases: TriangleCase[]; error: string | null }>(core.triangle_solve(JSON.stringify(known)), { cases: [], error: '求解失败' })),
+    timed(() => parseJson<{ cases: TriangleCase[]; error: string | null }>(core.triangle_solve(JSON.stringify(known)), { cases: [], error: t('solveFailed') })),
   circle: (known: { r: number; cross: ChordCrossInput }) =>
-    timed(() => parseJson<{ cases: CircleCase[]; error: string | null }>(core.circle_solve(JSON.stringify(known)), { cases: [], error: '求解失败' })),
+    timed(() => parseJson<{ cases: CircleCase[]; error: string | null }>(core.circle_solve(JSON.stringify(known)), { cases: [], error: t('solveFailed') })),
   circles: (cs: { name: string; cx: number; cy: number; r: number }[], pts: { name: string; p: number[] }[]) =>
     timed(() => parseJson<RustFact[]>(core.circles_analyze(JSON.stringify(cs), JSON.stringify(pts)), [])),
   derivedPoints: (defs: { name: string; a: string; b: string; m: number | null; n: number | null }[], pts: { name: string; p: number[] }[]) =>

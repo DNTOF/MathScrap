@@ -56,8 +56,10 @@ const FUNCS: &[(&str, &str, usize)] = &[
     ("csc", "csc", 1),
     ("exp", "exp", 1),
     ("abs", "abs", 1),
+    // `ln` is natural. Unary `log` and `lg` are common logs (base 10).
+    // A base is written `log_2(x)`, `log₂(x)`, `log2(x)`, or `log(2, x)`.
     ("log", "log", 1),
-    ("lg", "log", 1),
+    ("lg", "lg", 1),
     ("ln", "ln", 1),
     ("min", "min", 2),
     ("max", "max", 2),
@@ -103,6 +105,8 @@ enum Tok {
     Num(f64),
     Ident(String),
     Func(&'static str, usize),
+    /// Base source sitting on a preceding `log`, as in `log_2` or `log_{a+1}`.
+    LogBase(String),
     Const(&'static str),
     Op(char),
     LParen,
@@ -116,6 +120,111 @@ enum Tok {
 
 fn is_letter(c: char) -> bool {
     c.is_ascii_alphabetic()
+}
+
+fn sub_digit(c: char) -> Option<char> {
+    match c {
+        '₀'..='₉' => Some(char::from(b'0' + (c as u32 - '₀' as u32) as u8)),
+        'ₐ' => Some('a'),
+        'ₑ' => Some('e'),
+        'ₕ' => Some('h'),
+        'ₖ' => Some('k'),
+        'ₙ' => Some('n'),
+        'ₒ' => Some('o'),
+        'ₓ' => Some('x'),
+        _ => None,
+    }
+}
+
+/// `log_2`, `log_{a+1}`, or `log₂` after a `log` function token. `lg` and `ln` are not bases.
+fn log_base_suffix(chars: &[char], i: &mut usize, last: Option<&Tok>) -> Option<String> {
+    if !matches!(last, Some(Tok::Func("log", _))) || *i >= chars.len() {
+        return None;
+    }
+    if sub_digit(chars[*i]).is_some() {
+        let mut s = String::new();
+        while *i < chars.len() {
+            match sub_digit(chars[*i]) {
+                Some(d) => {
+                    s.push(d);
+                    *i += 1;
+                }
+                None => break,
+            }
+        }
+        return Some(s);
+    }
+    if chars[*i] != '_' {
+        return None;
+    }
+    let mut j = *i + 1;
+    if j >= chars.len() {
+        return None;
+    }
+    if chars[j] == '(' {
+        let start = j;
+        let mut depth = 0i32;
+        while j < chars.len() {
+            if chars[j] == '(' {
+                depth += 1;
+            } else if chars[j] == ')' {
+                depth -= 1;
+            }
+            j += 1;
+            if depth == 0 {
+                break;
+            }
+        }
+        if depth != 0 {
+            return None;
+        }
+        let inner: String = chars[start..j].iter().collect();
+        *i = j;
+        return Some(inner);
+    }
+    if chars[j] == '{' {
+        j += 1;
+        let start = j;
+        let mut depth = 1i32;
+        while j < chars.len() && depth > 0 {
+            if chars[j] == '{' {
+                depth += 1;
+            } else if chars[j] == '}' {
+                depth -= 1;
+            }
+            if depth > 0 {
+                j += 1;
+            }
+        }
+        if depth != 0 {
+            return None;
+        }
+        let inner: String = chars[start..j].iter().collect();
+        let inner = inner.trim().to_string();
+        if inner.is_empty() {
+            return None;
+        }
+        *i = j + 1;
+        return Some(inner);
+    }
+    let start = j;
+    if chars[j].is_ascii_digit() || chars[j] == '.' {
+        while j < chars.len() && (chars[j].is_ascii_digit() || chars[j] == '.') {
+            j += 1;
+        }
+    } else if chars[j].is_ascii_alphabetic() {
+        while j < chars.len() && chars[j].is_ascii_alphabetic() {
+            j += 1;
+        }
+    } else {
+        return None;
+    }
+    if j == start {
+        return None;
+    }
+    let s: String = chars[start..j].iter().collect();
+    *i = j;
+    Some(s)
 }
 
 fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
@@ -145,8 +254,10 @@ fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
             }
             let run: String = chars[start..i].iter().collect();
             split_letters(&run, &mut out);
-            // `a_1` / `x_{12}` subscripts glue onto the last single-letter identifier
-            if i < chars.len() && chars[i] == '_' {
+            if let Some(base) = log_base_suffix(&chars, &mut i, out.last()) {
+                out.push(Tok::LogBase(base));
+            } else if i < chars.len() && chars[i] == '_' {
+                // `a_1` / `x_{12}` subscripts glue onto the last single-letter identifier
                 if let Some(Tok::Ident(last)) = out.last_mut() {
                     let mut j = i + 1;
                     let braced = j < chars.len() && chars[j] == '{';
@@ -264,6 +375,77 @@ impl Parser {
         self.pos += 1;
         t
     }
+    fn log_call(&mut self) -> Result<Expr, String> {
+        if let Some(Tok::LogBase(src)) = self.peek().cloned() {
+            self.pos += 1;
+            let base = parse(&src)?;
+            let arg = self.log_argument()?;
+            return Ok(Expr::Call("logb", vec![base, arg]));
+        }
+        if let Some(Tok::LParen) = self.peek() {
+            self.pos += 1;
+            let saved = self.abs_depth;
+            self.abs_depth = 0;
+            let mut args = vec![self.expr()?];
+            while let Some(Tok::Comma) = self.peek() {
+                self.pos += 1;
+                args.push(self.expr()?);
+            }
+            self.abs_depth = saved;
+            self.expect_rparen()?;
+            return match args.len() {
+                1 => Ok(Expr::Call("log", args)),
+                2 => Ok(Expr::Call("logb", args)),
+                _ => Err("log 写成 log(真数) 或 log(底数, 真数)".into()),
+            };
+        }
+        if self.glued_log_base() {
+            let base = match self.next() {
+                Some(Tok::Num(v)) => Expr::Num(v),
+                Some(Tok::Ident(n)) => Expr::Var(n),
+                Some(Tok::Const(c)) => Expr::Const(c),
+                _ => return Err("log 的底数没有写全".into()),
+            };
+            let arg = self.power()?;
+            return Ok(Expr::Call("logb", vec![base, arg]));
+        }
+        let arg = self.power()?;
+        Ok(Expr::Call("log", vec![arg]))
+    }
+
+    /// `log2(x)` / `log2x` / `loga(x)` carry a base. `log 2` and `log(x)` do not.
+    fn glued_log_base(&self) -> bool {
+        let simple = match self.peek() {
+            Some(Tok::Num(_)) | Some(Tok::Const(_)) => true,
+            Some(Tok::Ident(n)) => n.chars().count() == 1 && !n.contains('_'),
+            _ => false,
+        };
+        if !simple {
+            return false;
+        }
+        matches!(
+            self.toks.get(self.pos + 1),
+            Some(Tok::LParen) | Some(Tok::Ident(_)) | Some(Tok::Func(..)) | Some(Tok::Const(_)) | Some(Tok::Num(_)) | Some(Tok::Sqrt) | Some(Tok::Bar)
+        )
+    }
+
+    fn log_argument(&mut self) -> Result<Expr, String> {
+        if let Some(Tok::LParen) = self.peek() {
+            self.pos += 1;
+            let saved = self.abs_depth;
+            self.abs_depth = 0;
+            let arg = self.expr()?;
+            self.abs_depth = saved;
+            if let Some(Tok::Comma) = self.peek() {
+                return Err("底数已经写在下标里，括号里只放真数".into());
+            }
+            self.expect_rparen()?;
+            Ok(arg)
+        } else {
+            self.power()
+        }
+    }
+
     fn expect_rparen(&mut self) -> Result<(), String> {
         match self.next() {
             Some(Tok::RParen) => Ok(()),
@@ -396,6 +578,7 @@ impl Parser {
                 let e = self.power()?;
                 Ok(Expr::Call("sqrt", vec![e]))
             }
+            Some(Tok::Func(name, _)) if name == "log" => self.log_call(),
             Some(Tok::Func(name, arity)) => {
                 if let Some(Tok::LParen) = self.peek() {
                     self.pos += 1;
@@ -426,6 +609,7 @@ impl Parser {
             Some(Tok::Comma) => Err("多余的逗号".into()),
             Some(Tok::Deg) => Err("° 前面需要数字".into()),
             Some(Tok::Bang) => Err("! 前面需要数字".into()),
+            Some(Tok::LogBase(_)) => Err("对数的底数要写在 log 后面".into()),
             None => Err("表达式不完整".into()),
         }
     }
@@ -505,6 +689,7 @@ impl Expr {
                 format!("({}{}{})", a.to_source(), o, b.to_source())
             }
             Expr::Juxt(a, b) => format!("({}*{})", a.to_source(), b.to_source()),
+            Expr::Call("logb", args) => format!("log_{{{}}}({})", args[0].to_source(), args[1].to_source()),
             Expr::Call(f, args) => {
                 let inner: Vec<String> = args.iter().map(|a| a.to_source()).collect();
                 format!("{}({})", f, inner.join(","))
@@ -604,7 +789,16 @@ impl Code {
                     "exp" => a.exp(),
                     "abs" => a.abs(),
                     "ln" => a.ln(),
-                    "log" => a.log10(),
+                    "lg" | "log" => a.log10(),
+                    "logb" => {
+                        let base = a;
+                        let arg = args[1].eval(s);
+                        if !(arg > 0.0 && base > 0.0 && (base - 1.0).abs() > 1e-12) {
+                            f64::NAN
+                        } else {
+                            arg.ln() / base.ln()
+                        }
+                    }
                     "floor" => a.floor(),
                     "ceil" => a.ceil(),
                     "sign" => {
@@ -738,7 +932,9 @@ pub fn latex(e: &Expr) -> String {
                 "exp" => format!("e^{{{}}}", a0),
                 "floor" => format!("\\lfloor {} \\rfloor", a0),
                 "ceil" => format!("\\lceil {} \\rceil", a0),
-                "log" => format!("\\lg{}", wrap(a0)),
+                "lg" => format!("\\lg{}", wrap(a0)),
+                "log" => format!("\\log{}", wrap(a0)),
+                "logb" => format!("\\log_{{{}}}{}", latex(&args[0]), wrap(latex(&args[1]))),
                 "min" | "max" => format!("\\{}\\left({}, {}\\right)", f, a0, latex(&args[1])),
                 "asin" => format!("\\arcsin{}", wrap(a0)),
                 "acos" => format!("\\arccos{}", wrap(a0)),
@@ -870,5 +1066,50 @@ mod tests {
         assert_eq!(statement_latex("(x+1)/2"), "\\frac{x + 1}{2}");
         assert_eq!(statement_latex("2sin(x)"), "2\\sin x");
         assert_eq!(statement_latex("a = (1, 2, 3)"), "a = \\left(1,\\ 2,\\ 3\\right)");
+    }
+
+    fn near(a: f64, b: f64) -> bool {
+        a.is_finite() && b.is_finite() && (a - b).abs() <= 1e-9 * (1.0 + b.abs())
+    }
+
+    #[test]
+    fn logarithms() {
+        assert!(near(ev("ln(e)", 0.0), 1.0));
+        assert!(near(ev("ln(1)", 0.0), 0.0));
+        assert!(near(ev("log(100)", 0.0), 2.0));
+        assert!(near(ev("lg(100)", 0.0), 2.0));
+        assert!(near(ev("log(1000)", 0.0), 3.0));
+        assert!(near(ev("log_2(8)", 1.0), 3.0));
+        assert!(near(ev("log_{2}(8)", 1.0), 3.0));
+        assert!(near(ev("log2(8)", 1.0), 3.0));
+        assert!(near(ev("log2x", 8.0), 3.0));
+        assert!(near(ev("log₂(8)", 1.0), 3.0));
+        assert!(near(ev("log(2, 8)", 1.0), 3.0));
+        assert!(near(ev("log_{1/2}(1/8)", 1.0), 3.0));
+        let e = parse("log_a(x)").unwrap();
+        let c = compile(&e, &["x", "a"], &HashMap::new()).unwrap();
+        assert!(near(c.eval(&[8.0, 2.0]), 3.0));
+        assert!(near(ev("ln(x^2+1)", 0.0), 0.0));
+        assert!(near(ev("log(x^2+1)", 0.0), 0.0));
+        assert!(near(ev("ln(ln(e))", 0.0), 0.0) || near(ev("ln(ln(e^e))", 0.0), 1.0));
+        assert!(near(ev("ln(x-2)", 3.0), 0.0));
+        assert!(ev("ln(-1)", 0.0).is_nan());
+        assert!(ev("log(0)", 0.0).is_nan() || ev("log(0)", 0.0).is_infinite());
+        assert!(ev("log_1(5)", 0.0).is_nan());
+        assert!(ev("log_0(5)", 0.0).is_nan());
+        assert!(ev("log_(-2)(8)", 0.0).is_nan());
+        assert!(ev("log(1, 5)", 0.0).is_nan());
+        assert!(ev("log(-2, 8)", 0.0).is_nan());
+        assert!(ev("ln(x)", -1.0).is_nan());
+        assert!(near(ev("log(2)", 0.0), 2f64.log10()));
+        assert!(near(ev("lg2(3)", 1.0), 2f64.log10() * 3.0));
+        let shown = latex(&parse("log_2(x)").unwrap());
+        assert!(shown.contains("\\log_{2}"), "{shown}");
+        let common = latex(&parse("log(x)").unwrap());
+        assert!(common.contains("\\log"), "{common}");
+        assert!(!common.contains("\\log_{"), "{common}");
+        assert_eq!(parse("y").unwrap().to_source(), "y");
+        let round = parse("log_2(x+1)").unwrap().to_source();
+        assert!(near(ev(&round, 3.0), ev("log_2(x+1)", 3.0)));
     }
 }

@@ -1,4 +1,5 @@
 import type { Card, Doc } from '@/board/types'
+import { t } from '@/i18n/locale'
 import { analyze } from '@/math/scene'
 import { emphasizeVectors } from './formulas'
 import { normalizePlotInput, type PlotViewInput } from '@/plot/remoteView'
@@ -26,12 +27,12 @@ export function createToolBridge(host: ToolHost) {
     },
     page_add_formula: (a) => {
       const text = emphasizeVectors(String(a.text ?? '')).trim()
-      if (!text) return { error: '公式是空的' }
+      if (!text) return { error: t('emptyFormula') }
       return host.addCard(text, finite(a.x), finite(a.y))
     },
     page_update_formula: (a) => {
       const text = emphasizeVectors(String(a.text ?? '')).trim()
-      if (!text) return { error: '公式是空的' }
+      if (!text) return { error: t('emptyFormula') }
       host.updateCard(String(a.id ?? ''), text)
       return { ok: true, id: String(a.id ?? ''), text }
     },
@@ -78,11 +79,11 @@ export function createToolBridge(host: ToolHost) {
     specs: TOOL_SPECS,
     call(name: string, args: Record<string, unknown> = {}) {
       const handler = handlers[name]
-      if (!handler) return { error: `未知工具 ${name}` }
+      if (!handler) return { error: t('unknownTool', { name }) }
       try {
         return handler(args)
       } catch (e) {
-        return { error: e instanceof Error ? e.message : '工具执行失败' }
+        return { error: e instanceof Error ? e.message : t('toolFailed') }
       }
     },
   }

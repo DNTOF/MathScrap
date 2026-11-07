@@ -34,3 +34,15 @@ ASTER_BG_TASK.md
 edge-mathscrap.png
 screen-check.png
 
+# native shells (generated) and local package output
+src-tauri/target
+src-tauri/gen
+packaging/out
+
+# signing material — never commit
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+keystore.properties
+

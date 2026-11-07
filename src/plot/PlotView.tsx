@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useI18n } from '@/i18n/useI18n'
 
 type PlotlyLib = typeof import('plotly.js-dist-min')
 let plotlyPromise: Promise<PlotlyLib> | null = null
@@ -20,13 +21,16 @@ interface Props {
 type PlotDiv = HTMLDivElement & { on?: (ev: string, cb: (e: Record<string, unknown>) => void) => void; layout?: { xaxis?: { range?: number[] }; yaxis?: { range?: number[] } } }
 
 export function PlotView({ data, layout, onRange, resetKey, onReady, bare }: Props) {
+  const { t } = useI18n()
   const ref = useRef<PlotDiv>(null)
   const [lib, setLib] = useState<PlotlyLib | null>(null)
   const [error, setError] = useState<string | null>(null)
   const onRangeRef = useRef(onRange)
-  onRangeRef.current = onRange
   const onReadyRef = useRef(onReady)
-  onReadyRef.current = onReady
+  useLayoutEffect(() => {
+    onRangeRef.current = onRange
+    onReadyRef.current = onReady
+  }, [onRange, onReady])
   const bound = useRef(false)
   const fired = useRef(false)
 
@@ -88,11 +92,11 @@ export function PlotView({ data, layout, onRange, resetKey, onReady, bare }: Pro
       {!lib && !error && (
         <div className="absolute inset-0 grid place-items-center text-sm text-kraft-700">
           <span className="flex items-center gap-2">
-            <Loader2 className="size-4 animate-spin" /> 正在铺开坐标纸…
+            <Loader2 className="size-4 animate-spin" /> {t('plotPaper')}
           </span>
         </div>
       )}
-      {error && <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-ink-red">绘图库加载失败：{error}</div>}
+      {error && <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-ink-red">{t('plotLibFailed', { error })}</div>}
     </div>
   )
 }

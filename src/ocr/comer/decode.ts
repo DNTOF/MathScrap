@@ -1,3 +1,5 @@
+import { t } from '../../i18n/locale.ts'
+
 /**
  * Greedy / beam decode for the CoMER encoder+decoder pair.
  * Sessions are injected so the same loop runs on onnxruntime-web today
@@ -34,7 +36,7 @@ export async function decodeComer(encoder: ComerSession, decoder: ComerSession, 
   const encoded = await encoder.run({ pixel_values: pixel, pixel_mask: mask })
   const features = encoded.encoder_features
   const encMask = encoded.encoder_mask
-  if (!features || !encMask) throw new Error('编码器没有返回特征')
+  if (!features || !encMask) throw new Error(t('encoderEmpty'))
   try {
     const beam = Math.max(1, opts.beamWidth ?? 1)
     return beam <= 1 ? [await greedy(decoder, features, encMask, opts)] : await beamSearch(decoder, features, encMask, opts, beam)
@@ -111,7 +113,7 @@ async function logitsOf(decoder: ComerSession, features: ComerTensor, encMask: C
   const input: ComerTensor = { type: 'int64', data: BigInt64Array.from(ids.map((id) => BigInt(id))), dims: [1, ids.length] }
   const out = await decoder.run({ encoder_features: features, encoder_mask: encMask, input_ids: input })
   const logits = out.logits
-  if (!logits || !(logits.data instanceof Float32Array)) throw new Error('解码器没有返回 logits')
+  if (!logits || !(logits.data instanceof Float32Array)) throw new Error(t('decoderEmpty'))
   const copy = Float32Array.from(logits.data)
   logits.dispose?.()
   return copy

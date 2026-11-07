@@ -1,3 +1,5 @@
+import { t } from '@/i18n/locale'
+
 /**
  * Polls the Vite dev bridge and runs tool calls against the open page.
  * The first request waits until after load so Playwright's networkidle can
@@ -32,7 +34,7 @@ export function startBrowserBridge(call: (name: string, args: Record<string, unk
         try {
           payload = { id: job.id, ok: true, result: call(job.name, job.arguments ?? {}) }
         } catch (e) {
-          payload = { id: job.id, ok: false, error: e instanceof Error ? e.message : '工具执行失败' }
+          payload = { id: job.id, ok: false, error: e instanceof Error ? e.message : t('toolFailed') }
         }
         await fetch('/__mathscrap/bridge/result', {
           method: 'POST',

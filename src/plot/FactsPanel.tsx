@@ -1,5 +1,8 @@
 import { AlertTriangle, ArrowDown, Cpu, Eye, EyeOff, Sparkles } from 'lucide-react'
 import { Tex } from '@/components/Tex'
+import { localizeGeo } from '@/i18n/geometry'
+import { useI18n } from '@/i18n/useI18n'
+import { factKey } from './factKey'
 import { cn } from '@/lib/utils'
 import type { Analysis, FactSection } from '@/math/scene'
 
@@ -19,21 +22,20 @@ const TONE: Record<FactSection['tone'], string> = {
   warn: 'border-ink-red/40 bg-[#f1d5c4]/70',
 }
 
-export const factKey = (sectionId: string, i: number) => `${sectionId}#${i}`
-
 export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution }: Props) {
+  const { lang, t } = useI18n()
   return (
     <div className="flex flex-col gap-3 pb-6">
       <div className="rounded-xl border border-kraft-600/25 bg-kraft-50/50 p-3">
         <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-kraft-800">
-          <span className="rounded-md bg-kraft-700 px-1.5 py-0.5 text-[11px] text-kraft-50">已知</span>
-          <span>{a.givens.length} 条</span>
+          <span className="rounded-md bg-kraft-700 px-1.5 py-0.5 text-[11px] text-kraft-50">{t('known')}</span>
+          <span>{t('knownCount', { n: a.givens.length })}</span>
           <ArrowDown className="size-3.5 -rotate-90 text-kraft-500" />
           <span className="flex items-center gap-1 rounded-md bg-ink-green px-1.5 py-0.5 text-[11px] text-kraft-50">
             <Sparkles className="size-3" />
-            推出
+            {t('derived')}
           </span>
-          <span>{a.factCount} 项</span>
+          <span>{t('derivedCount', { n: a.factCount })}</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {a.givens.map((g, i) => (
@@ -51,7 +53,7 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
             <div key={i} className="flex gap-1.5">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                <b className="font-mono">{e.src}</b>：{e.message}
+                <b className="font-mono">{e.src}</b>: {localizeGeo(e.message)}
               </span>
             </div>
           ))}
@@ -60,7 +62,7 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
 
       {a.solve && a.solve.solutions.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-kraft-700">
-          <span>多组解：</span>
+          <span>{t('manySolutions')}</span>
           {a.solve.solutions.map((s, i) => (
             <button
               key={i}
@@ -72,11 +74,11 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
           ))}
         </div>
       )}
-      {a.solve?.note && <div className="rounded-lg bg-kraft-200/60 px-3 py-2 text-[12px] leading-relaxed text-kraft-800">{a.solve.note}</div>}
+      {a.solve?.note && <div className="rounded-lg bg-kraft-200/60 px-3 py-2 text-[12px] leading-relaxed text-kraft-800">{localizeGeo(a.solve.note)}</div>}
 
       {a.sections.length === 0 && (
         <div className="rounded-xl border border-dashed border-kraft-600/40 p-4 text-center text-[13px] text-kraft-700">
-          这里暂时没有可推导的量。试试写下更多条件，比如 <span className="font-mono">过(1, 3)</span> 或 <span className="font-mono">AB ⊥ BC</span>。
+          {t('emptyFacts')} <span className="font-mono">过(1, 3)</span> <span className="font-mono">AB ⊥ BC</span>
         </div>
       )}
 
@@ -90,13 +92,13 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
         return (
           <section key={sec.id} className={cn('rounded-xl border p-3', TONE[sec.tone])}>
             <header className="mb-2">
-              <h3 className="hand text-[22px] leading-none font-bold text-kraft-800">{sec.title}</h3>
-              {sec.subtitle && <p className="mt-1 text-[11.5px] text-kraft-600">{sec.subtitle}</p>}
+              <h3 className="hand text-[22px] leading-none font-bold text-kraft-800">{localizeGeo(sec.title)}</h3>
+              {sec.subtitle && <p className="mt-1 text-[11.5px] text-kraft-600">{localizeGeo(sec.subtitle)}</p>}
             </header>
             <div className="flex flex-col gap-2.5">
               {[...groups.entries()].map(([g, rows]) => (
                 <div key={g}>
-                  <div className="mb-1 text-[10.5px] font-semibold tracking-widest text-kraft-500 uppercase">{g}</div>
+                  <div className="mb-1 text-[10.5px] font-semibold tracking-widest text-kraft-500 uppercase">{localizeGeo(g)}</div>
                   <ul className="flex flex-col divide-y divide-kraft-600/10">
                     {rows.map(({ f, i }) => {
                       const key = factKey(sec.id, i)
@@ -105,11 +107,11 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
                         <li key={i} className="group/fact flex items-start gap-2 py-1.5">
                           <div className="min-w-0 flex-1">
                             <div className="overflow-x-auto overflow-y-hidden text-[15px]">
-                              <Tex tex={`${f.label} = ${f.value}`} />
+                              <Tex tex={localizeGeo(`${f.label} = ${f.value}`)} />
                             </div>
                             {(f.why || f.how) && (
                               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-kraft-600">
-                                {f.why && <span>{f.why}</span>}
+                                {f.why && <span>{localizeGeo(f.why)}</span>}
                                 {f.how && (
                                   <span className="overflow-x-auto opacity-90">
                                     <Tex tex={f.how} />
@@ -122,8 +124,8 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
                             <button
                               onClick={() => onToggleShape(key)}
                               className={cn('touch-target grid size-7 shrink-0 place-items-center rounded-full border transition', on ? 'border-[#b9852a] bg-[#b9852a] text-kraft-50' : 'border-kraft-600/30 text-kraft-600 hover:bg-kraft-100')}
-                              title={on ? '从图上隐藏' : '在图上标出'}
-                              aria-label={on ? '从图上隐藏' : '在图上标出'}
+                              title={on ? t('hideShape') : t('showShape')}
+                              aria-label={on ? t('hideShape') : t('showShape')}
                             >
                               {on ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                             </button>
@@ -141,7 +143,8 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
 
       <div className="flex items-center gap-1.5 text-[11px] text-kraft-600">
         <Cpu className="size-3.5" />
-        Rust → WASM 引擎 · {a.stats.calls} 次调用 · {a.stats.ms.toFixed(1)} ms
+        {t('engineStats', { calls: a.stats.calls, ms: a.stats.ms.toFixed(1) })}
+        {lang === 'en' && <span className="block pt-1">{t('engineNote')}</span>}
       </div>
     </div>
   )

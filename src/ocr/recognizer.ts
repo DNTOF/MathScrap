@@ -1,5 +1,6 @@
 import type { Stroke } from '@/board/types'
-import { strokeBounds } from '@/board/strokes'
+import { t } from '@/i18n/locale'
+import { strokeBounds } from '@/board/strokeGeom'
 import { OCR_ACCEPT } from './threshold.ts'
 
 export { OCR_ACCEPT }
@@ -63,13 +64,13 @@ export function clusterStrokes(strokes: Stroke[]): Stroke[][] {
  */
 export const mockRecognizer: Recognizer = {
   id: 'comer',
-  name: 'CoMER 手写模型（本地 ONNX）',
+  name: 'CoMER (local ONNX)',
   async recognize(strokes) {
     try {
       const { recognizeMath } = await import('./comer/web')
       return await recognizeMath(strokes)
     } catch (err) {
-      console.error(err instanceof Error ? err.message : '手写模型没有跑起来')
+      console.error(err instanceof Error ? err.message : t('modelFiles'))
       return []
     }
   },

@@ -1,3 +1,5 @@
+import { localizeGeo } from '@/i18n/geometry'
+import { t } from '@/i18n/locale'
 import type { Analysis, PlotObj } from '@/math/scene'
 import { engine, type Env, type RustShape } from '@/wasm/engine'
 import type { Camera3 } from './remoteView'
@@ -220,13 +222,13 @@ function shapeTraces2d(shapes: RustShape[]): Trace[] {
   const out: Trace[] = []
   for (const s of shapes) {
     if (s.type === 'point')
-      out.push({ type: 'scatter', mode: 'markers+text', x: [s.x], y: [s.y], text: [s.label], textposition: 'top right', marker: { symbol: 'star', size: 13, color: '#b9852a', line: { color: INK, width: 1 } }, name: s.label, showlegend: false, hovertemplate: `${s.label}<br>(%{x:.4f}, %{y:.4f})<extra></extra>` })
+      out.push({ type: 'scatter', mode: 'markers+text', x: [s.x], y: [s.y], text: [localizeGeo(s.label)], textposition: 'top right', marker: { symbol: 'star', size: 13, color: '#b9852a', line: { color: INK, width: 1 } }, name: localizeGeo(s.label), showlegend: false, hovertemplate: `${localizeGeo(s.label)}<br>(%{x:.4f}, %{y:.4f})<extra></extra>` })
     if (s.type === 'circle') {
       const t = linspace(0, 2 * Math.PI, 200)
-      out.push({ type: 'scatter', mode: 'lines', x: t.map((u) => s.cx + s.r * Math.cos(u)), y: t.map((u) => s.cy + s.r * Math.sin(u)), line: { color: '#b9852a', width: 2, dash: 'dash' }, name: s.label, hoverinfo: 'name' })
+      out.push({ type: 'scatter', mode: 'lines', x: t.map((u) => s.cx + s.r * Math.cos(u)), y: t.map((u) => s.cy + s.r * Math.sin(u)), line: { color: '#b9852a', width: 2, dash: 'dash' }, name: localizeGeo(s.label), hoverinfo: 'name' })
     }
     if (s.type === 'segment')
-      out.push({ type: 'scatter', mode: 'lines', x: [s.x1, s.x2], y: [s.y1, s.y2], line: { color: '#b9852a', width: 2.2, dash: 'dot' }, name: s.label, hoverinfo: 'name' })
+      out.push({ type: 'scatter', mode: 'lines', x: [s.x1, s.x2], y: [s.y1, s.y2], line: { color: '#b9852a', width: 2.2, dash: 'dot' }, name: localizeGeo(s.label), hoverinfo: 'name' })
   }
   return out
 }
@@ -244,7 +246,8 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revis
     switch (o.type) {
       case 'curve': {
         const { x, y } = curveXY(o.expr, a.env, sx[0], sx[1], spanY)
-        data.push({ type: 'scatter', mode: 'lines', x, y, name: `${o.name}(x)`, line: { color: o.color, width: 2.6, shape: 'spline', smoothing: 0.4 }, hovertemplate: `${o.name}: (%{x:.3f}, %{y:.3f})<extra></extra>` })
+        const broken = x.some((v) => v == null)
+        data.push({ type: 'scatter', mode: 'lines', x, y, name: `${o.name}(x)`, line: { color: o.color, width: 2.6, shape: broken ? 'linear' : 'spline', smoothing: broken ? 0 : 0.4 }, hovertemplate: `${o.name}: (%{x:.3f}, %{y:.3f})<extra></extra>` })
         break
       }
       case 'implicit2': {
@@ -276,11 +279,11 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revis
           const ys = [...o.pts.map((p) => p.p[1]), o.pts[0].p[1]]
           data.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, fill: 'toself', fillcolor: 'rgba(47, 74, 109, 0.08)', line: { color: '#2f4a6d', width: 2.4 }, name: o.pts.map((p) => p.name).join(''), hoverinfo: 'skip' })
         }
-        data.push({ type: 'scatter', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.name), textposition: 'top left', textfont: { size: 15, color: INK }, marker: { size: 9, color: INK }, name: '点', showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
+        data.push({ type: 'scatter', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.name), textposition: 'top left', textfont: { size: 15, color: INK }, marker: { size: 9, color: INK }, name: t('pointsLegend'), showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
         break
       case 'triangle': {
         const [A, B, C] = o.verts
-        data.push({ type: 'scatter', mode: 'lines', x: [A[0], B[0], C[0], A[0]], y: [A[1], B[1], C[1], A[1]], fill: 'toself', fillcolor: hexA(o.color, 0.08), line: { color: o.color, width: 2.6, dash: o.dashed ? 'dash' : 'solid' }, name: `△${o.names}${o.dashed ? '（另一解）' : ''}`, hoverinfo: 'skip' })
+        data.push({ type: 'scatter', mode: 'lines', x: [A[0], B[0], C[0], A[0]], y: [A[1], B[1], C[1], A[1]], fill: 'toself', fillcolor: hexA(o.color, 0.08), line: { color: o.color, width: 2.6, dash: o.dashed ? 'dash' : 'solid' }, name: `△${o.names}${o.dashed ? t('otherSolution') : ''}`, hoverinfo: 'skip' })
         data.push({ type: 'scatter', mode: 'markers+text', x: [A[0], B[0], C[0]], y: [A[1], B[1], C[1]], text: o.names.split(''), textposition: ['bottom left', 'bottom right', 'top center'], textfont: { size: 15, color: INK }, marker: { size: 8, color: o.color }, showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
         const lower = o.names.toLowerCase()
         const mids = [
@@ -307,7 +310,7 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revis
           data.push({ type: 'scatter', mode: 'markers+text', x: o.xs, y: o.xs.map(() => 0), text: o.xs.map((x) => `x=${+x.toFixed(4)}`), textposition: 'bottom center', textfont: { size: 12, color: '#9b3b2a' }, marker: { size: 11, symbol: 'diamond', color: '#9b3b2a', line: { color: INK, width: 1 } }, name: o.name, hovertemplate: 'x = %{x:.6f}<extra></extra>' })
         break
       case 'marks':
-        data.push({ type: 'scatter', mode: 'markers', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.label), marker: { size: 12, symbol: 'circle-open', color: '#9b3b2a', line: { width: 2.6 } }, name: '交点', hovertemplate: '%{text}<br>(%{x:.4f}, %{y:.4f})<extra></extra>' })
+        data.push({ type: 'scatter', mode: 'markers', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.label), marker: { size: 12, symbol: 'circle-open', color: '#9b3b2a', line: { width: 2.6 } }, name: t('intersections'), hovertemplate: '%{text}<br>(%{x:.4f}, %{y:.4f})<extra></extra>' })
         break
       case 'circle': {
         const t = linspace(0, 2 * Math.PI, 200)
@@ -402,7 +405,7 @@ function planeTraces(o: Extract<PlotObj, { type: 'plane' }>, R: number): Trace[]
   const poly = planeCubePolygon(o.n, o.d, R)
   if (!poly.length) return []
   const k = poly.length
-  const name = `平面 ${o.name}`
+  const name = t('planeName', { name: o.name })
   const closed = [...poly, poly[0]]
   return [
     {
@@ -563,10 +566,10 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[], opts?: { camera?
         break
       }
       case 'points':
-        data.push({ type: 'scatter3d', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), z: o.pts.map((p) => p.p[2] ?? 0), text: o.pts.map((p) => p.name), textposition: 'top center', marker: { size: 5, color: INK }, name: '点', textfont: { size: 14 } })
+        data.push({ type: 'scatter3d', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), z: o.pts.map((p) => p.p[2] ?? 0), text: o.pts.map((p) => p.name), textposition: 'top center', marker: { size: 5, color: INK }, name: t('pointsLegend'), textfont: { size: 14 } })
         if (o.polygon) {
           const loop = [...o.pts, o.pts[0]]
-          data.push({ type: 'scatter3d', mode: 'lines', x: loop.map((p) => p.p[0]), y: loop.map((p) => p.p[1]), z: loop.map((p) => p.p[2] ?? 0), line: { color: '#2f4a6d', width: 5 }, name: '连线', hoverinfo: 'skip' })
+          data.push({ type: 'scatter3d', mode: 'lines', x: loop.map((p) => p.p[0]), y: loop.map((p) => p.p[1]), z: loop.map((p) => p.p[2] ?? 0), line: { color: '#2f4a6d', width: 5 }, name: t('linkLegend'), hoverinfo: 'skip' })
         }
         break
       case 'vector':
@@ -583,15 +586,15 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[], opts?: { camera?
     }
   }
   for (const s of shapes) {
-    if (s.type === 'point3') data.push({ type: 'scatter3d', mode: 'markers+text', x: [s.x], y: [s.y], z: [s.z], text: [s.label], textposition: 'top center', marker: { size: 6, symbol: 'diamond', color: '#b9852a' }, name: s.label, showlegend: false })
+    if (s.type === 'point3') data.push({ type: 'scatter3d', mode: 'markers+text', x: [s.x], y: [s.y], z: [s.z], text: [localizeGeo(s.label)], textposition: 'top center', marker: { size: 6, symbol: 'diamond', color: '#b9852a' }, name: localizeGeo(s.label), showlegend: false })
     if (s.type === 'line3') {
       const L = R * 2.2
       const n = Math.hypot(s.dx, s.dy, s.dz) || 1
       const [ux, uy, uz] = [s.dx / n, s.dy / n, s.dz / n]
       const pts = linspace(-L, L, 80).map((t) => [s.px + ux * t, s.py + uy * t, s.pz + uz * t]).filter((p) => p.every((v) => Math.abs(v) <= R))
-      data.push({ type: 'scatter3d', mode: 'lines', x: pts.map((p) => p[0]), y: pts.map((p) => p[1]), z: pts.map((p) => p[2]), line: { color: '#9b3b2a', width: 9 }, name: s.label })
+      data.push({ type: 'scatter3d', mode: 'lines', x: pts.map((p) => p[0]), y: pts.map((p) => p[1]), z: pts.map((p) => p[2]), line: { color: '#9b3b2a', width: 9 }, name: localizeGeo(s.label) })
     }
-    if (s.type === 'arrow3') data.push(...arrow3([s.x, s.y, s.z], '#b9852a', s.label, true))
+    if (s.type === 'arrow3') data.push(...arrow3([s.x, s.y, s.z], '#b9852a', localizeGeo(s.label), true))
   }
 
   const ax = (title: string, range: [number, number] = [-R, R]) => ({ title: { text: title }, range, backgroundcolor: '#e9d6b4', showbackground: true, gridcolor: 'rgba(90,60,30,0.22)', zerolinecolor: 'rgba(60,35,15,0.7)', color: '#5f4128', showspikes: false })

@@ -30,7 +30,13 @@ export const cases: [string, string, Expect][] = [
   ['三次函数', 'f(x) = x^3 - 3x', { dim: 2, inView: [[-1, 2], [1, -2], [0, 0]] }],
   ['正弦', 'y = sin(x)', { dim: 2, inView: [[Math.PI / 2, 1], [-Math.PI / 2, -1]] }],
   ['指数', 'y = e^x', { dim: 2, inView: [[0, 1]] }],
-  ['对数', 'y = ln(x)', { dim: 2, inView: [[1, 0]] }],
+  ['对数', 'y = ln(x)', { dim: 2, inView: [[1, 0]], facts: ['\\ln u: u > 0'] }],
+  ['常用对数', 'y = log(x)', { dim: 2, inView: [[1, 0]], facts: ['\\log u = \\log_{10} u'] }],
+  ['lg', 'y = lg(x)', { dim: 2, inView: [[1, 0]], facts: ['\\lg u = \\log_{10} u'] }],
+  ['指定底数', 'y = log_2(x)', { dim: 2, inView: [[1, 0], [2, 1]], facts: ['a > 0'] }],
+  ['log(底, 真数)', 'y = log(2, x)', { dim: 2, inView: [[2, 1]] }],
+  ['平移后的对数', 'y = ln(x-2)', { dim: 2, inView: [[3, 0], [4, Math.log(2)]] }],
+  ['复合对数', 'y = ln(x^2+1)', { dim: 2, inView: [[0, 0]] }],
   ['反比例', 'y = 1/x', { dim: 2, facts: ['x \\ne 0'] }],
   ['常函数', 'y = 3', { dim: 2, inView: [[0, 3]] }],
   ['直线（隐式）', 'x + y = 1', { dim: 2, kinds: ['implicit2'], inView: [[1, 0], [0, 1]] }],
@@ -81,8 +87,8 @@ export const cases: [string, string, Expect][] = [
   // ---- parallel lines: intercept theorem + similar triangles ----
   ['平行线分线段成比例', 'y = 0\ny = 1\ny = 3\nx = 0\nx - y = 0', { dim: 2, facts: ['成比例', '相似比'] }],
   // ---- notation rules ----
-  ['小写不能当向量定义', 'b = (1, 2)', { error: /粗体/ }],
-  ['小写不能当点', 'b(1, 2)', { error: /大写字母/ }],
+  ['小写不能当向量定义', 'b = (1, 2)', { error: /粗体|bold/i }],
+  ['小写不能当点', 'b(1, 2)', { error: /大写字母|capital/i }],
   ['大写点', 'B(1, 2)', { kinds: ['point'] }],
   // ---- 3D ----
   ['曲面 z = sin x cos y', 'z = sin(x)cos(y)', { dim: 3 }],

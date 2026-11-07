@@ -4,10 +4,12 @@ import { recognizeStrokes, type OcrCandidate } from './engine.ts'
 import type { ComerSession, ComerTensor } from './decode.ts'
 import { vocabFromJson, type Vocab } from './source.ts'
 import type { InkStroke } from './preprocess.ts'
+import { assetUrl } from '@/lib/asset'
+import { t } from '@/i18n/locale'
 
-const ENC = '/models/comer/encoder_int8.onnx'
-const DEC = '/models/comer/decoder_int8.onnx'
-const VOCAB_URL = '/models/comer/vocab.json'
+const ENC = assetUrl('models/comer/encoder_int8.onnx')
+const DEC = assetUrl('models/comer/decoder_int8.onnx')
+const VOCAB_URL = assetUrl('models/comer/vocab.json')
 
 let pending: Promise<{ encoder: ComerSession; decoder: ComerSession; vocab: Vocab }> | null = null
 let chain: Promise<unknown> = Promise.resolve()
@@ -39,9 +41,9 @@ async function loadSessions() {
   const ort = await import('onnxruntime-web/wasm')
   ort.env.wasm.numThreads = 1
   ort.env.wasm.simd = true
-  ort.env.wasm.wasmPaths = '/ort/'
+  ort.env.wasm.wasmPaths = assetUrl('ort/')
   const [vocabRes, encRes, decRes] = await Promise.all([fetch(VOCAB_URL), fetch(ENC), fetch(DEC)])
-  if (!vocabRes.ok || !encRes.ok || !decRes.ok) throw new Error('手写模型文件缺失')
+  if (!vocabRes.ok || !encRes.ok || !decRes.ok) throw new Error(t('modelFiles'))
   const vocab = vocabFromJson(await vocabRes.json())
   const opts = { executionProviders: ['wasm' as const] }
   const [encoder, decoder] = await Promise.all([

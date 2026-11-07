@@ -27,9 +27,9 @@ export function useDocument() {
   const [doc, setDoc] = useState<Doc>(load)
   const past = useRef<Doc[]>([])
   const future = useRef<Doc[]>([])
-  const [, bump] = useState(0)
+  const [nav, setNav] = useState({ undo: false, redo: false })
   const docRef = useRef(doc)
-  docRef.current = doc
+  const remember = () => setNav({ undo: past.current.length > 0, redo: future.current.length > 0 })
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -50,7 +50,7 @@ export function useDocument() {
     future.current = []
     docRef.current = value
     setDoc(value)
-    bump((n) => n + 1)
+    remember()
   }, [])
 
   const preview = useCallback((next: (d: Doc) => Doc) => {
@@ -65,7 +65,7 @@ export function useDocument() {
     future.current.push(docRef.current)
     docRef.current = prev
     setDoc(prev)
-    bump((n) => n + 1)
+    remember()
   }, [])
 
   const redo = useCallback(() => {
@@ -74,7 +74,7 @@ export function useDocument() {
     past.current.push(docRef.current)
     docRef.current = next
     setDoc(next)
-    bump((n) => n + 1)
+    remember()
   }, [])
 
   return {
@@ -84,7 +84,7 @@ export function useDocument() {
     preview,
     undo,
     redo,
-    canUndo: past.current.length > 0,
-    canRedo: future.current.length > 0,
+    canUndo: nav.undo,
+    canRedo: nav.redo,
   }
 }
