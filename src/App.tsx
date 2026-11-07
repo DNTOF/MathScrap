@@ -2,7 +2,6 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { startBrowserBridge } from '@/ai/browserBridge'
 import { createToolBridge } from '@/ai/tools'
 import { AssistSheet } from '@/components/AssistSheet'
 import { pushPlotView } from '@/plot/remoteView'
@@ -415,9 +414,18 @@ export default function App() {
   )
   useEffect(() => {
     ;(window as unknown as { mathscrap: { tools: typeof bridge } }).mathscrap = { tools: bridge }
-    // The dev bridge exists only while Vite is running. Packaged shells never call it.
+    // The dev bridge exists only while Vite is running. The production build drops this import.
     if (!import.meta.env.DEV) return
-    return startBrowserBridge((name, args) => bridge.call(name, args))
+    let dispose: () => void = () => undefined
+    let cancelled = false
+    void import('@/ai/browserBridge').then((mod) => {
+      if (cancelled) return
+      dispose = mod.startBrowserBridge((name, args) => bridge.call(name, args))
+    })
+    return () => {
+      cancelled = true
+      dispose()
+    }
   }, [bridge])
 
   const exportPage = useCallback(() => {

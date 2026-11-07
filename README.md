@@ -90,13 +90,9 @@ The sheet is stored locally under the `localStorage` key `mathscrap.doc.v2`. The
 
 If the browser language starts with `zh`, the interface starts in Simplified Chinese. Otherwise it starts in English. More contains a compact 中文 / EN control. The choice is stored in `mathscrap.lang` and is used again next time. The blank sheet has no language card.
 
-切换语言会改按钮、菜单、对话框、占位符、提示、状态和面向人的错误。不会翻译或改写公式、已经写在纸上的内容、导入的纸，也不会改 MCP 工具名（`page_read`、`solve_analyze` 等）。
+切换语言会改按钮、菜单、对话框、占位符、提示、状态、面向人的错误，以及详情里的标题、分组和已收录的几何理由。不会翻译或改写公式、点名、已经写在纸上的内容、导入的纸，也不会改 MCP 工具名（`page_read`、`solve_analyze` 等）。计算引擎和 MCP 返回的原文仍是中文；只有屏幕上的显示会换成英文。个别较长的 Rust 句子还没有收录，英文模式下会仍以中文出现，详情底部有一句说明。
 
-Switching language changes buttons, menus, dialogs, placeholders, hints, status text, and user-facing errors. It does not translate or rewrite formulas, anything already on the sheet, or an imported sheet, and it does not change MCP tool names (`page_read`, `solve_analyze`, and the rest).
-
-几何推导的标题和说明来自计算引擎，目前仍是中文。English 的详情底部会说明这一点。复制出去的工具 JSON 仍是 `src/ai/specs.ts` 里的稳定说明，界面上另有一段随语言变化的短说明。
-
-Geometry headings and explanations come from the compute engine and are still Chinese. The English details panel says so at the bottom. The copied tool JSON stays the stable text in `src/ai/specs.ts`. The settings screen shows a separate short description that follows the language.
+Switching language changes buttons, menus, dialogs, placeholders, hints, status text, user-facing errors, and the titles, groups, and listed geometry reasons in the details. It does not translate or rewrite formulas, point names, anything already on the sheet, or an imported sheet, and it does not change MCP tool names (`page_read`, `solve_analyze`, and the rest). The compute engine and MCP still return the original Chinese wording. Only the screen shows English. A few longer Rust sentences are not in the glossary and still appear in Chinese in English mode. The details panel says so at the bottom.
 
 ## 手写
 
@@ -172,9 +168,9 @@ iOS 最低系统是 16.4。能装到别人手机上的 IPA 需要 Apple Develope
 
 The iOS minimum is 16.4. An IPA that installs on someone else's phone needs an Apple Developer certificate and profile: `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD`, `IOS_MOBILE_PROVISION`, or `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_PATH`. This repository does not enroll a developer account, does not upload to TestFlight or the App Store, and has not been installed on an iPhone.
 
-`.github/workflows/package.yml` 里的 `test` 作业在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`，然后拉起 dev 服务器跑 `npm run e2e:sheet`。失败时上传 `e2e-shots` 和 `dev-server.log`。这些步骤不需要密钥。推到 `cursor/mathscrap-packaging-*` 时，测试通过后同一 workflow 再构建网页、debug APK 和未签名的 Windows 安装程序。指向 `main` 的 pull request 只跑 `test`。`npm run e2e` 的逐条作图检查仍在本机跑，没有放进这个作业。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
+`.github/workflows/package.yml` 里的 `test` 作业在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`，然后拉起 dev 服务器，依次跑 `npm run e2e:sheet` 和 `npm run e2e`（逐条作图）。失败时上传 `e2e-shots`、`e2e-plots` 和 `dev-server.log`。这些步骤不需要密钥。推到 `cursor/mathscrap-packaging-*` 时，测试通过后同一 workflow 再构建网页、debug APK 和未签名的 Windows 安装程序。指向 `main` 的 pull request 只跑 `test`。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
 
-The `test` job in `.github/workflows/package.yml` runs on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, then starts the dev server and runs `npm run e2e:sheet`. On failure it uploads `e2e-shots` and `dev-server.log`. Those steps need no secrets. A push to `cursor/mathscrap-packaging-*` builds the web bundle, a debug APK, and an unsigned Windows installer in the same workflow after that job passes. A pull request into `main` runs only `test`. `npm run e2e`, the per-case plot gallery, stays a local command and is not in that job. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
+The `test` job in `.github/workflows/package.yml` runs on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, then starts the dev server and runs `npm run e2e:sheet` and `npm run e2e` (one plot per formula). On failure it uploads `e2e-shots`, `e2e-plots`, and `dev-server.log`. Those steps need no secrets. A push to `cursor/mathscrap-packaging-*` builds the web bundle, a debug APK, and an unsigned Windows installer in the same workflow after that job passes. A pull request into `main` runs only `test`. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
 
 ## 许可和作者
 

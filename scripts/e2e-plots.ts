@@ -20,7 +20,11 @@ console.log(`browser ${BROWSER.executablePath} (${BROWSER.via})`)
 const SHOTS = process.env.SHOTS ?? '/tmp/mathscrap-e2e'
 mkdirSync(SHOTS, { recursive: true })
 
-/** Pixels clearly off the kraft palette: saturated and not in the brown hue band. */
+/**
+ * Marks on the kraft sheet. Curve ink is dark brown (#2e2116), which is not a
+ * saturated non-brown hue, so darkness against the kraft paper counts too.
+ * Saturated marks outside the kraft hue band (red intersections, blue chords) still count.
+ */
 function inkPixels(png: Buffer) {
   const img = PNG.sync.read(png)
   let n = 0
@@ -31,6 +35,11 @@ function inkPixels(png: Buffer) {
     const max = Math.max(r, g, b)
     const min = Math.min(r, g, b)
     const d = max - min
+    const lum = 0.3 * r + 0.59 * g + 0.11 * b
+    if (lum < 0.42 && max < 0.62) {
+      n++
+      continue
+    }
     if (d < 0.18 || max < 0.12) continue
     let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
     h = (h * 60 + 360) % 360

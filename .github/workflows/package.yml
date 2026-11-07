@@ -72,6 +72,10 @@ jobs:
         env:
           SHOTS: e2e-shots
         run: npm run e2e:sheet
+      - name: Per-formula plot end-to-end
+        env:
+          SHOTS: e2e-plots
+        run: npm run e2e
       - name: Upload failure logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -79,6 +83,7 @@ jobs:
           name: mathscrap-test-failure
           path: |
             e2e-shots
+            e2e-plots
             dev-server.log
           if-no-files-found: ignore
 

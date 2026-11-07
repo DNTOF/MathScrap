@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { SAMPLES } from '../src/board/samples.ts'
+import { localizeGeo } from '../src/i18n/geometry.ts'
 import { applyLang, getLang, LANG_KEY, readSavedLang, resolveLocale, t, writeSavedLang } from '../src/i18n/locale.ts'
 import { en, zh, type MessageKey } from '../src/i18n/messages.ts'
 
@@ -61,6 +62,14 @@ assert.equal(formula, 'y = log_2(x)')
 assert.deepEqual(SAMPLES.map((s) => s.blocks.join('\n')), blocks)
 assert.ok(SAMPLES.some((s) => s.blocks.includes('y = log_2(x)')))
 assert.equal(t('domainLogb').includes('log'), true)
+applyLang('en')
+assert.equal(localizeGeo('余弦定理'), 'Law of cosines')
+assert.equal(localizeGeo('y = x^2'), 'y = x^2')
+assert.equal(localizeGeo('函数 f(x)'), 'Function f(x)')
+assert.match(localizeGeo('第 2 / 3 组解'), /solution 2 \/ 3/)
+applyLang('zh')
+assert.equal(localizeGeo('余弦定理'), '余弦定理')
+applyLang('en')
 
 const allow = new Set([
   'src/i18n/messages.ts',
@@ -74,6 +83,8 @@ const allow = new Set([
   // Syntax examples and engine labels. FactsPanel quotes 过(1, 3). figure.ts matches 圆心/中心 from the Rust facts.
   'src/plot/FactsPanel.tsx',
   'src/plot/figure.ts',
+  // Chinese keys are the engine's wording. English values are the screen text.
+  'src/i18n/geometry.ts',
 ])
 const hits: string[] = []
 function walk(dir: string) {

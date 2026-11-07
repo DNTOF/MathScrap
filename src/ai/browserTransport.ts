@@ -9,25 +9,12 @@ import { directTransport, type AiTransport } from './client'
 export function browserTransport(): AiTransport {
   const direct = directTransport()
   // The packaged shell has no Vite forwarder. Call the address the person typed.
+  // The forwarder module is imported only for dev, so the production bundle does not name it.
   if (import.meta.env.PROD) return direct
   return {
     async request(url, init) {
-      try {
-        const res = await fetch('/__mathscrap/ai/forward', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ url, method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined }),
-          signal: init.signal,
-        })
-        if (res.headers.get('x-mathscrap-proxy') === '1') return { status: res.status, text: await res.text() }
-      } catch (e) {
-        if (isAbort(e)) throw e
-      }
-      return direct.request(url, init)
+      const { forwardThroughDevServer } = await import('./browserForward')
+      return forwardThroughDevServer(direct, url, init)
     },
   }
-}
-
-function isAbort(e: unknown) {
-  return e instanceof Error && (e.name === 'AbortError' || e.name === 'TimeoutError')
 }

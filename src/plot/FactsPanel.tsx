@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowDown, Cpu, Eye, EyeOff, Sparkles } from 'lucide-react'
 import { Tex } from '@/components/Tex'
+import { localizeGeo } from '@/i18n/geometry'
 import { useI18n } from '@/i18n/useI18n'
 import { factKey } from './factKey'
 import { cn } from '@/lib/utils'
@@ -52,7 +53,7 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
             <div key={i} className="flex gap-1.5">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                <b className="font-mono">{e.src}</b>：{e.message}
+                <b className="font-mono">{e.src}</b>: {localizeGeo(e.message)}
               </span>
             </div>
           ))}
@@ -73,7 +74,7 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
           ))}
         </div>
       )}
-      {a.solve?.note && <div className="rounded-lg bg-kraft-200/60 px-3 py-2 text-[12px] leading-relaxed text-kraft-800">{a.solve.note}</div>}
+      {a.solve?.note && <div className="rounded-lg bg-kraft-200/60 px-3 py-2 text-[12px] leading-relaxed text-kraft-800">{localizeGeo(a.solve.note)}</div>}
 
       {a.sections.length === 0 && (
         <div className="rounded-xl border border-dashed border-kraft-600/40 p-4 text-center text-[13px] text-kraft-700">
@@ -91,13 +92,13 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
         return (
           <section key={sec.id} className={cn('rounded-xl border p-3', TONE[sec.tone])}>
             <header className="mb-2">
-              <h3 className="hand text-[22px] leading-none font-bold text-kraft-800">{sec.title}</h3>
-              {sec.subtitle && <p className="mt-1 text-[11.5px] text-kraft-600">{sec.subtitle}</p>}
+              <h3 className="hand text-[22px] leading-none font-bold text-kraft-800">{localizeGeo(sec.title)}</h3>
+              {sec.subtitle && <p className="mt-1 text-[11.5px] text-kraft-600">{localizeGeo(sec.subtitle)}</p>}
             </header>
             <div className="flex flex-col gap-2.5">
               {[...groups.entries()].map(([g, rows]) => (
                 <div key={g}>
-                  <div className="mb-1 text-[10.5px] font-semibold tracking-widest text-kraft-500 uppercase">{g}</div>
+                  <div className="mb-1 text-[10.5px] font-semibold tracking-widest text-kraft-500 uppercase">{localizeGeo(g)}</div>
                   <ul className="flex flex-col divide-y divide-kraft-600/10">
                     {rows.map(({ f, i }) => {
                       const key = factKey(sec.id, i)
@@ -106,11 +107,11 @@ export function FactsPanel({ analysis: a, visible, onToggleShape, onPickSolution
                         <li key={i} className="group/fact flex items-start gap-2 py-1.5">
                           <div className="min-w-0 flex-1">
                             <div className="overflow-x-auto overflow-y-hidden text-[15px]">
-                              <Tex tex={`${f.label} = ${f.value}`} />
+                              <Tex tex={localizeGeo(`${f.label} = ${f.value}`)} />
                             </div>
                             {(f.why || f.how) && (
                               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-kraft-600">
-                                {f.why && <span>{f.why}</span>}
+                                {f.why && <span>{localizeGeo(f.why)}</span>}
                                 {f.how && (
                                   <span className="overflow-x-auto opacity-90">
                                     <Tex tex={f.how} />

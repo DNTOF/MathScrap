@@ -1,3 +1,4 @@
+import { localizeGeo } from '@/i18n/geometry'
 import { t } from '@/i18n/locale'
 import type { Analysis, PlotObj } from '@/math/scene'
 import { engine, type Env, type RustShape } from '@/wasm/engine'
@@ -221,13 +222,13 @@ function shapeTraces2d(shapes: RustShape[]): Trace[] {
   const out: Trace[] = []
   for (const s of shapes) {
     if (s.type === 'point')
-      out.push({ type: 'scatter', mode: 'markers+text', x: [s.x], y: [s.y], text: [s.label], textposition: 'top right', marker: { symbol: 'star', size: 13, color: '#b9852a', line: { color: INK, width: 1 } }, name: s.label, showlegend: false, hovertemplate: `${s.label}<br>(%{x:.4f}, %{y:.4f})<extra></extra>` })
+      out.push({ type: 'scatter', mode: 'markers+text', x: [s.x], y: [s.y], text: [localizeGeo(s.label)], textposition: 'top right', marker: { symbol: 'star', size: 13, color: '#b9852a', line: { color: INK, width: 1 } }, name: localizeGeo(s.label), showlegend: false, hovertemplate: `${localizeGeo(s.label)}<br>(%{x:.4f}, %{y:.4f})<extra></extra>` })
     if (s.type === 'circle') {
       const t = linspace(0, 2 * Math.PI, 200)
-      out.push({ type: 'scatter', mode: 'lines', x: t.map((u) => s.cx + s.r * Math.cos(u)), y: t.map((u) => s.cy + s.r * Math.sin(u)), line: { color: '#b9852a', width: 2, dash: 'dash' }, name: s.label, hoverinfo: 'name' })
+      out.push({ type: 'scatter', mode: 'lines', x: t.map((u) => s.cx + s.r * Math.cos(u)), y: t.map((u) => s.cy + s.r * Math.sin(u)), line: { color: '#b9852a', width: 2, dash: 'dash' }, name: localizeGeo(s.label), hoverinfo: 'name' })
     }
     if (s.type === 'segment')
-      out.push({ type: 'scatter', mode: 'lines', x: [s.x1, s.x2], y: [s.y1, s.y2], line: { color: '#b9852a', width: 2.2, dash: 'dot' }, name: s.label, hoverinfo: 'name' })
+      out.push({ type: 'scatter', mode: 'lines', x: [s.x1, s.x2], y: [s.y1, s.y2], line: { color: '#b9852a', width: 2.2, dash: 'dot' }, name: localizeGeo(s.label), hoverinfo: 'name' })
   }
   return out
 }
@@ -585,15 +586,15 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[], opts?: { camera?
     }
   }
   for (const s of shapes) {
-    if (s.type === 'point3') data.push({ type: 'scatter3d', mode: 'markers+text', x: [s.x], y: [s.y], z: [s.z], text: [s.label], textposition: 'top center', marker: { size: 6, symbol: 'diamond', color: '#b9852a' }, name: s.label, showlegend: false })
+    if (s.type === 'point3') data.push({ type: 'scatter3d', mode: 'markers+text', x: [s.x], y: [s.y], z: [s.z], text: [localizeGeo(s.label)], textposition: 'top center', marker: { size: 6, symbol: 'diamond', color: '#b9852a' }, name: localizeGeo(s.label), showlegend: false })
     if (s.type === 'line3') {
       const L = R * 2.2
       const n = Math.hypot(s.dx, s.dy, s.dz) || 1
       const [ux, uy, uz] = [s.dx / n, s.dy / n, s.dz / n]
       const pts = linspace(-L, L, 80).map((t) => [s.px + ux * t, s.py + uy * t, s.pz + uz * t]).filter((p) => p.every((v) => Math.abs(v) <= R))
-      data.push({ type: 'scatter3d', mode: 'lines', x: pts.map((p) => p[0]), y: pts.map((p) => p[1]), z: pts.map((p) => p[2]), line: { color: '#9b3b2a', width: 9 }, name: s.label })
+      data.push({ type: 'scatter3d', mode: 'lines', x: pts.map((p) => p[0]), y: pts.map((p) => p[1]), z: pts.map((p) => p[2]), line: { color: '#9b3b2a', width: 9 }, name: localizeGeo(s.label) })
     }
-    if (s.type === 'arrow3') data.push(...arrow3([s.x, s.y, s.z], '#b9852a', s.label, true))
+    if (s.type === 'arrow3') data.push(...arrow3([s.x, s.y, s.z], '#b9852a', localizeGeo(s.label), true))
   }
 
   const ax = (title: string, range: [number, number] = [-R, R]) => ({ title: { text: title }, range, backgroundcolor: '#e9d6b4', showbackground: true, gridcolor: 'rgba(90,60,30,0.22)', zerolinecolor: 'rgba(60,35,15,0.7)', color: '#5f4128', showspikes: false })
