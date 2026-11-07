@@ -11,10 +11,12 @@ import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright-core'
 import { PNG } from 'pngjs'
+import { resolveBrowser } from './browser-path.ts'
 import { cases } from './plot-cases'
 
 const URL = (process.env.APP_URL ?? 'http://127.0.0.1:47321/').includes('?') ? process.env.APP_URL! : `${process.env.APP_URL ?? 'http://127.0.0.1:47321/'}?static=1`
-const CHROME = process.env.CHROME_PATH ?? '/usr/local/bin/google-chrome'
+const BROWSER = resolveBrowser()
+console.log(`browser ${BROWSER.executablePath} (${BROWSER.via})`)
 const SHOTS = process.env.SHOTS ?? '/tmp/mathscrap-e2e'
 mkdirSync(SHOTS, { recursive: true })
 
@@ -71,7 +73,7 @@ async function probe(page: Page): Promise<Probe> {
 }
 
 async function run(viewport: { width: number; height: number }, subset?: number[]) {
-  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
+  const browser = await chromium.launch({ executablePath: BROWSER.executablePath, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
   const page = await browser.newPage({ viewport, isMobile: viewport.width < 500, hasTouch: viewport.width < 500 })
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))

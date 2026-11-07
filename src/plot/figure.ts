@@ -1,3 +1,4 @@
+import { t } from '@/i18n/locale'
 import type { Analysis, PlotObj } from '@/math/scene'
 import { engine, type Env, type RustShape } from '@/wasm/engine'
 import type { Camera3 } from './remoteView'
@@ -244,7 +245,8 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revis
     switch (o.type) {
       case 'curve': {
         const { x, y } = curveXY(o.expr, a.env, sx[0], sx[1], spanY)
-        data.push({ type: 'scatter', mode: 'lines', x, y, name: `${o.name}(x)`, line: { color: o.color, width: 2.6, shape: 'spline', smoothing: 0.4 }, hovertemplate: `${o.name}: (%{x:.3f}, %{y:.3f})<extra></extra>` })
+        const broken = x.some((v) => v == null)
+        data.push({ type: 'scatter', mode: 'lines', x, y, name: `${o.name}(x)`, line: { color: o.color, width: 2.6, shape: broken ? 'linear' : 'spline', smoothing: broken ? 0 : 0.4 }, hovertemplate: `${o.name}: (%{x:.3f}, %{y:.3f})<extra></extra>` })
         break
       }
       case 'implicit2': {
@@ -276,11 +278,11 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revis
           const ys = [...o.pts.map((p) => p.p[1]), o.pts[0].p[1]]
           data.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, fill: 'toself', fillcolor: 'rgba(47, 74, 109, 0.08)', line: { color: '#2f4a6d', width: 2.4 }, name: o.pts.map((p) => p.name).join(''), hoverinfo: 'skip' })
         }
-        data.push({ type: 'scatter', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.name), textposition: 'top left', textfont: { size: 15, color: INK }, marker: { size: 9, color: INK }, name: '点', showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
+        data.push({ type: 'scatter', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.name), textposition: 'top left', textfont: { size: 15, color: INK }, marker: { size: 9, color: INK }, name: t('pointsLegend'), showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
         break
       case 'triangle': {
         const [A, B, C] = o.verts
-        data.push({ type: 'scatter', mode: 'lines', x: [A[0], B[0], C[0], A[0]], y: [A[1], B[1], C[1], A[1]], fill: 'toself', fillcolor: hexA(o.color, 0.08), line: { color: o.color, width: 2.6, dash: o.dashed ? 'dash' : 'solid' }, name: `△${o.names}${o.dashed ? '（另一解）' : ''}`, hoverinfo: 'skip' })
+        data.push({ type: 'scatter', mode: 'lines', x: [A[0], B[0], C[0], A[0]], y: [A[1], B[1], C[1], A[1]], fill: 'toself', fillcolor: hexA(o.color, 0.08), line: { color: o.color, width: 2.6, dash: o.dashed ? 'dash' : 'solid' }, name: `△${o.names}${o.dashed ? t('otherSolution') : ''}`, hoverinfo: 'skip' })
         data.push({ type: 'scatter', mode: 'markers+text', x: [A[0], B[0], C[0]], y: [A[1], B[1], C[1]], text: o.names.split(''), textposition: ['bottom left', 'bottom right', 'top center'], textfont: { size: 15, color: INK }, marker: { size: 8, color: o.color }, showlegend: false, hovertemplate: '%{text} (%{x:.4f}, %{y:.4f})<extra></extra>' })
         const lower = o.names.toLowerCase()
         const mids = [
@@ -307,7 +309,7 @@ export function buildFigure2d(a: Analysis, r: Ranges, shapes: RustShape[], revis
           data.push({ type: 'scatter', mode: 'markers+text', x: o.xs, y: o.xs.map(() => 0), text: o.xs.map((x) => `x=${+x.toFixed(4)}`), textposition: 'bottom center', textfont: { size: 12, color: '#9b3b2a' }, marker: { size: 11, symbol: 'diamond', color: '#9b3b2a', line: { color: INK, width: 1 } }, name: o.name, hovertemplate: 'x = %{x:.6f}<extra></extra>' })
         break
       case 'marks':
-        data.push({ type: 'scatter', mode: 'markers', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.label), marker: { size: 12, symbol: 'circle-open', color: '#9b3b2a', line: { width: 2.6 } }, name: '交点', hovertemplate: '%{text}<br>(%{x:.4f}, %{y:.4f})<extra></extra>' })
+        data.push({ type: 'scatter', mode: 'markers', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), text: o.pts.map((p) => p.label), marker: { size: 12, symbol: 'circle-open', color: '#9b3b2a', line: { width: 2.6 } }, name: t('intersections'), hovertemplate: '%{text}<br>(%{x:.4f}, %{y:.4f})<extra></extra>' })
         break
       case 'circle': {
         const t = linspace(0, 2 * Math.PI, 200)
@@ -402,7 +404,7 @@ function planeTraces(o: Extract<PlotObj, { type: 'plane' }>, R: number): Trace[]
   const poly = planeCubePolygon(o.n, o.d, R)
   if (!poly.length) return []
   const k = poly.length
-  const name = `平面 ${o.name}`
+  const name = t('planeName', { name: o.name })
   const closed = [...poly, poly[0]]
   return [
     {
@@ -563,10 +565,10 @@ export function buildFigure3d(a: Analysis, shapes: RustShape[], opts?: { camera?
         break
       }
       case 'points':
-        data.push({ type: 'scatter3d', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), z: o.pts.map((p) => p.p[2] ?? 0), text: o.pts.map((p) => p.name), textposition: 'top center', marker: { size: 5, color: INK }, name: '点', textfont: { size: 14 } })
+        data.push({ type: 'scatter3d', mode: 'markers+text', x: o.pts.map((p) => p.p[0]), y: o.pts.map((p) => p.p[1]), z: o.pts.map((p) => p.p[2] ?? 0), text: o.pts.map((p) => p.name), textposition: 'top center', marker: { size: 5, color: INK }, name: t('pointsLegend'), textfont: { size: 14 } })
         if (o.polygon) {
           const loop = [...o.pts, o.pts[0]]
-          data.push({ type: 'scatter3d', mode: 'lines', x: loop.map((p) => p.p[0]), y: loop.map((p) => p.p[1]), z: loop.map((p) => p.p[2] ?? 0), line: { color: '#2f4a6d', width: 5 }, name: '连线', hoverinfo: 'skip' })
+          data.push({ type: 'scatter3d', mode: 'lines', x: loop.map((p) => p.p[0]), y: loop.map((p) => p.p[1]), z: loop.map((p) => p.p[2] ?? 0), line: { color: '#2f4a6d', width: 5 }, name: t('linkLegend'), hoverinfo: 'skip' })
         }
         break
       case 'vector':

@@ -1,3 +1,4 @@
+import { t } from '@/i18n/locale'
 import type { Card, Doc, PenStyle, Sticker, Stroke } from './types'
 
 export const SHEET_FORMAT = 'mathscrap.sheet'
@@ -21,7 +22,7 @@ export function serializeSheet(doc: Doc): string {
     doc: copyDoc(doc),
   }
   const text = JSON.stringify(body)
-  if (text.length > MAX_BYTES) throw new Error('这一页太大，没法导出')
+  if (text.length > MAX_BYTES) throw new Error(t('sheetTooBig'))
   return text
 }
 
@@ -31,18 +32,18 @@ export function serializeSheet(doc: Doc): string {
  * data; nothing in the file is evaluated.
  */
 export function parseSheet(raw: string): Doc {
-  if (raw.length > MAX_BYTES) throw new Error('文件太大')
+  if (raw.length > MAX_BYTES) throw new Error(t('fileTooBig'))
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
-    throw new Error('这不是 JSON 文件')
+    throw new Error(t('notJsonFile'))
   }
   const root = record(parsed)
-  if (!root) throw new Error('文件内容不是一张纸')
+  if (!root) throw new Error(t('notASheet'))
   if ('format' in root || 'version' in root || 'doc' in root) {
-    if (root.format !== SHEET_FORMAT) throw new Error('这不是 MathScrap 的纸')
-    if (root.version !== SHEET_VERSION) throw new Error('这张纸的版本读不了')
+    if (root.format !== SHEET_FORMAT) throw new Error(t('notMathScrap'))
+    if (root.version !== SHEET_VERSION) throw new Error(t('sheetVersion'))
     return copyDoc(asDoc(root.doc))
   }
   return copyDoc(asDoc(root))
@@ -58,15 +59,15 @@ function copyDoc(doc: Doc): Doc {
 
 function asDoc(value: unknown): Doc {
   const src = record(value)
-  if (!src || !Array.isArray(src.strokes) || !Array.isArray(src.cards)) throw new Error('文件里没有笔迹和式子')
-  if (src.strokes.length > MAX_STROKES || src.cards.length > MAX_CARDS) throw new Error('这一页的内容太多')
+  if (!src || !Array.isArray(src.strokes) || !Array.isArray(src.cards)) throw new Error(t('noInk'))
+  if (src.strokes.length > MAX_STROKES || src.cards.length > MAX_CARDS) throw new Error(t('tooMuch'))
   const stickers = src.stickers == null ? [] : src.stickers
-  if (!Array.isArray(stickers) || stickers.length > MAX_STICKERS) throw new Error('这一页的内容太多')
+  if (!Array.isArray(stickers) || stickers.length > MAX_STICKERS) throw new Error(t('tooMuch'))
   let numbers = 0
   const strokes = src.strokes.map((item) => {
     const stroke = copyStroke(asStroke(item))
     numbers += stroke.pts.length
-    if (numbers > MAX_NUMBERS) throw new Error('笔迹太长')
+    if (numbers > MAX_NUMBERS) throw new Error(t('strokeTooLong'))
     return stroke
   })
   return {
@@ -78,11 +79,11 @@ function asDoc(value: unknown): Doc {
 
 function asStroke(value: unknown): Stroke {
   const src = record(value)
-  if (!src) throw new Error('有一笔读不出来')
+  if (!src) throw new Error(t('badStroke'))
   const pts = src.pts
-  if (!Array.isArray(pts) || pts.length % 3 !== 0) throw new Error('有一笔的点不对')
+  if (!Array.isArray(pts) || pts.length % 3 !== 0) throw new Error(t('badPoints'))
   const style = src.style
-  if (typeof style !== 'string' || !STYLES.has(style as PenStyle | 'marker')) throw new Error('有一笔的笔触不对')
+  if (typeof style !== 'string' || !STYLES.has(style as PenStyle | 'marker')) throw new Error(t('badStyle'))
   return {
     id: idOf(src.id),
     pts: pts.map(num),
@@ -103,15 +104,15 @@ function copyStroke(stroke: Stroke): Stroke {
     style: stroke.style,
     createdAt: num(stroke.createdAt),
   }
-  if (!STYLES.has(next.style)) throw new Error('有一笔的笔触不对')
-  if (next.pts.length % 3 !== 0) throw new Error('有一笔的点不对')
+  if (!STYLES.has(next.style)) throw new Error(t('badStyle'))
+  if (next.pts.length % 3 !== 0) throw new Error(t('badPoints'))
   if (stroke.recognized !== undefined) next.recognized = bool(stroke.recognized)
   return next
 }
 
 function asCard(value: unknown): Card {
   const src = record(value)
-  if (!src) throw new Error('有一个式子读不出来')
+  if (!src) throw new Error(t('badCard'))
   return copyCard({ id: idOf(src.id), x: num(src.x), y: num(src.y), text: textOf(src.text, MAX_TEXT) })
 }
 
@@ -121,7 +122,7 @@ function copyCard(card: Card): Card {
 
 function asSticker(value: unknown): Sticker {
   const src = record(value)
-  if (!src) throw new Error('有一张字条读不出来')
+  if (!src) throw new Error(t('badSticker'))
   return copySticker({
     id: idOf(src.id),
     x: num(src.x),
@@ -149,33 +150,33 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 function idOf(value: unknown): string {
-  if (typeof value !== 'string' || !ID.test(value)) throw new Error('有一条内容的编号不对')
+  if (typeof value !== 'string' || !ID.test(value)) throw new Error(t('badId'))
   return value
 }
 
 function num(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('有一个数字读不出来')
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(t('badNumber'))
   return value
 }
 
 function widthOf(value: unknown): number {
   const n = num(value)
-  if (n <= 0 || n > 256) throw new Error('有一笔太粗或太细')
+  if (n <= 0 || n > 256) throw new Error(t('badWidth'))
   return n
 }
 
 function colorOf(value: unknown): string {
-  if (typeof value !== 'string' || !COLOR.test(value)) throw new Error('有一笔的颜色不对')
+  if (typeof value !== 'string' || !COLOR.test(value)) throw new Error(t('badColor'))
   return value
 }
 
 function textOf(value: unknown, max: number): string {
-  if (typeof value !== 'string') throw new Error('有一段文字读不出来')
-  if (value.length > max) throw new Error('有一段文字太长')
+  if (typeof value !== 'string') throw new Error(t('badText'))
+  if (value.length > max) throw new Error(t('textTooLong'))
   return value
 }
 
 function bool(value: unknown): boolean {
-  if (typeof value !== 'boolean') throw new Error('有一个开关读不出来')
+  if (typeof value !== 'boolean') throw new Error(t('badBool'))
   return value
 }

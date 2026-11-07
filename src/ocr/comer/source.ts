@@ -1,3 +1,4 @@
+import { t } from '../../i18n/locale.ts'
 import { isCompleteExpression, repairLatex } from './repair.ts'
 
 export interface Vocab {
@@ -9,7 +10,7 @@ export interface Vocab {
 
 export function vocabFromJson(raw: unknown): Vocab {
   const v = raw as Vocab
-  if (!v?.idx2word || !v.special_tokens || !v.vocab_size) throw new Error('词表格式不对')
+  if (!v?.idx2word || !v.special_tokens || !v.vocab_size) throw new Error(t('vocabBad'))
   return v
 }
 
@@ -95,6 +96,9 @@ export function tokensToSource(tokens: string[]): string {
     }
     if (cur === '^') return `^${readGroup()}`
     if (cur === '_') return `_${readGroup()}`
+    if (cur === '\\ln') return 'ln'
+    if (cur === '\\lg') return 'lg'
+    if (cur === '\\log') return 'log'
     if (cur === '\\cdot' || cur === '\\times') return ''
     if (cur === '=' || cur === '+' || cur === '-') return ` ${cur} `
     if (NAMED[cur]) return NAMED[cur]

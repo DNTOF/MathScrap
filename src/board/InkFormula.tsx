@@ -1,6 +1,7 @@
 import { LineChart, Pencil, Trash2 } from 'lucide-react'
 import { memo, useRef } from 'react'
 import { Tex } from '@/components/Tex'
+import { useI18n } from '@/i18n/useI18n'
 import { cn } from '@/lib/utils'
 import { summarizeCard } from '@/math/scene'
 import type { Card } from './types'
@@ -24,6 +25,7 @@ interface Props {
 
 /** A formula written straight onto the kraft sheet — no card, just ink. */
 export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, movable, selected, hidden, onSelect, onDragStart, onDrag, onDragEnd, onPlot, onEdit, onDelete }: Props) {
+  const { t } = useI18n()
   const summary = summarizeCard(card.text)
   const drag = useRef<{ x: number; y: number; moved: boolean; id: number } | null>(null)
 
@@ -87,15 +89,15 @@ export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, mova
           onPointerDown={(e) => e.stopPropagation()}
           data-no-board
         >
-          <button className={action} onClick={() => onEdit(card.id)} title="改写 (双击)" aria-label="改写">
+          <button className={action} onClick={() => onEdit(card.id)} title={t('editInk')} aria-label={t('editInkAria')}>
             <Pencil className="size-4" />
           </button>
           {summary.plottable && (
-            <button className={action} onClick={() => onPlot(card.id)} title="在坐标系里看 (Enter)" aria-label="坐标系">
+            <button className={action} onClick={() => onPlot(card.id)} title={t('plotInk')} aria-label={t('coordinates')}>
               <LineChart className="size-4" />
             </button>
           )}
-          <button className={cn(action, 'text-ink-red')} onClick={() => onDelete(card.id)} title="擦掉 (Delete)" aria-label="删除">
+          <button className={cn(action, 'text-ink-red')} onClick={() => onDelete(card.id)} title={t('deleteInk')} aria-label={t('deleteInkAria')}>
             <Trash2 className="size-4" />
           </button>
         </div>

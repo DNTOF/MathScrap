@@ -1,3 +1,4 @@
+import { getLang, t } from '../i18n/locale.ts'
 import { joinUrl, missingConfig, resolveBaseUrl, type AiConfig } from './config.ts'
 import { TOOL_SPECS, type ToolSpec } from './specs.ts'
 
@@ -33,7 +34,7 @@ const TEST_TIMEOUT_MS = 12_000
 const CHAT_TIMEOUT_MS = 30_000
 const MAX_ROUNDS = 4
 
-const SYSTEM = `你是 MathScrap 的纸面推导助手。用户在一张牛皮纸上写公式，整页共用一套坐标系。数值和几何推导交给工具 solve_analyze（Rust），不要心算代替它。
+const SYSTEM_ZH = `你是 MathScrap 的纸面推导助手。用户在一张牛皮纸上写公式，整页共用一套坐标系。数值和几何推导交给工具 solve_analyze（Rust），不要心算代替它。
 
 写法：
 - 使用 ASCII 数学，例如 y = x^2 - 2、△ABC: a=3, b=4, C=90°。
@@ -49,6 +50,27 @@ const SYSTEM = `你是 MathScrap 的纸面推导助手。用户在一张牛皮�
 如果接口不支持工具调用，只输出一个 JSON 对象，不要加别的文字：
 {"add":["要写到纸上的式子"],"analyze":true,"note":"一句说明"}
 add 可以省略。`
+
+const SYSTEM_EN = `You are MathScrap's on-paper derivation assistant. The user writes formulas on one kraft sheet that shares one coordinate system. Hand numeric and geometric derivation to the tool solve_analyze (Rust). Do not do that arithmetic yourself.
+
+Notation:
+- Use ASCII math, for example y = x^2 - 2 or △ABC: a=3, b=4, C=90°.
+- A vector must be bold with an equals sign: **b** = (1, 2) or **a** = (1, 2, 2). Do not write b = (1, 2).
+- Name a point with a capital letter: A(0, 0).
+
+What to do:
+- To write the next step on the sheet, call page_add_formula (one useful formula) or page_update_formula.
+- For intersections, solving a triangle, or an unknown, call solve_analyze with texts as the formula array.
+- To change ranges, the 3D camera, or which formulas are shown, call plot_set_view. To read ink points, call ink_read.
+- Then explain the step in one or two English sentences. Do not invent a formula you are not sure about.
+
+If the endpoint does not support tool calls, output only one JSON object and no other text:
+{"add":["formula to write on the sheet"],"analyze":true,"note":"one sentence"}
+add may be omitted.`
+
+function systemPrompt() {
+  return getLang() === 'zh' ? SYSTEM_ZH : SYSTEM_EN
+}
 
 interface Msg {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -88,14 +110,14 @@ export async function testConnection(cfg: AiConfig, transport: AiTransport = dir
       timeout: TEST_TIMEOUT_MS,
     })
     if (status < 200 || status >= 300) throw httpError(status, text)
-    return `已连通 Anthropic（${cfg.model.trim()}）`
+    return t('connectedAnthropic', { model: cfg.model.trim() })
   }
   const headers = openaiHeaders(cfg)
   const models = await send(transport, joinUrl(base, 'models'), { method: 'GET', headers, signal, timeout: TEST_TIMEOUT_MS })
   if (models.status >= 200 && models.status < 300) {
     const ids = modelIds(models.text)
     const name = cfg.model.trim()
-    if (ids.length && !ids.includes(name)) throw new AiError(`连上了，但模型列表里没有「${name}」`)
+    if (ids.length && !ids.includes(name)) throw new AiError(t('modelMissing', { name }))
     return connectedLabel(cfg)
   }
   const authFailed = models.status === 401 || models.status === 403
@@ -126,8 +148,8 @@ export async function assist(opts: {
   const transport = opts.transport ?? directTransport()
   const steps: AssistStep[] = []
   const messages: Msg[] = [
-    { role: 'system', content: SYSTEM },
-    { role: 'user', content: userPrompt(opts.formulas, opts.strokes ?? 0, opts.prompt.trim() || '帮我推一步') },
+    { role: 'system', content: systemPrompt() },
+    { role: 'user', content: userPrompt(opts.formulas, opts.strokes ?? 0, opts.prompt.trim() || t('assist')) },
   ]
   let text = ''
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -137,7 +159,7 @@ export async function assist(opts: {
       const suggestion = round === 0 ? extractSuggestions(res.text) : null
       if (suggestion && (suggestion.add.length || suggestion.analyze)) {
         const added = applySuggestion(suggestion, opts.formulas, opts.callTool, steps)
-        text = suggestion.note || (added ? '已写到纸上。' : text)
+        text = suggestion.note || (added ? t('wroteOnSheet') : text)
       }
       break
     }
@@ -147,13 +169,13 @@ export async function assist(opts: {
       try {
         result = opts.callTool(call.name, call.arguments)
       } catch (e) {
-        result = { error: e instanceof Error ? e.message : '工具执行失败' }
+        result = { error: e instanceof Error ? e.message : t('toolFailed') }
       }
       steps.push({ name: call.name, args: call.arguments, result })
       messages.push({ role: 'tool', content: clip(result), toolCallId: call.id, name: call.name })
     }
   }
-  if (!text && steps.length) text = '已按工具结果处理。'
+  if (!text && steps.length) text = t('handledByTools')
   return { text, steps }
 }
 
@@ -184,7 +206,7 @@ function applySuggestion(suggestion: { add: string[]; analyze: boolean }, formul
     try {
       result = callTool('page_add_formula', args)
     } catch (e) {
-      result = { error: e instanceof Error ? e.message : '工具执行失败' }
+      result = { error: e instanceof Error ? e.message : t('toolFailed') }
     }
     steps.push({ name: 'page_add_formula', args, result })
   }
@@ -194,7 +216,7 @@ function applySuggestion(suggestion: { add: string[]; analyze: boolean }, formul
     try {
       result = callTool('solve_analyze', args)
     } catch (e) {
-      result = { error: e instanceof Error ? e.message : '工具执行失败' }
+      result = { error: e instanceof Error ? e.message : t('toolFailed') }
     }
     steps.push({ name: 'solve_analyze', args, result })
   }
@@ -309,7 +331,7 @@ function parseJson(text: string): Record<string, unknown> {
     const data = JSON.parse(text) as unknown
     return data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
   } catch {
-    throw new AiError('接口返回的不是 JSON')
+    throw new AiError(t('notJson'))
   }
 }
 
@@ -318,7 +340,7 @@ function errorMessage(data: Record<string, unknown>): string | null {
   if (!err) return null
   if (typeof err === 'string') return err
   if (typeof err === 'object' && err && 'message' in err && typeof (err as { message: unknown }).message === 'string') return (err as { message: string }).message
-  return '接口返回错误'
+  return t('apiError')
 }
 
 function parseArgs(raw: unknown): Record<string, unknown> {
@@ -346,8 +368,8 @@ function modelIds(text: string): string[] {
 
 function userPrompt(formulas: FormulaRef[], strokes: number, prompt: string) {
   const lines = formulas.slice(0, 40).map((f) => `- [${f.id}] ${f.text.replace(/\s+/g, ' ').slice(0, 500)}`)
-  const page = lines.length ? lines.join('\n') : '（纸上还没有公式）'
-  return `纸上的公式：\n${page}\n手写笔迹 ${strokes} 条。\n\n用户：${prompt}`
+  const page = lines.length ? lines.join('\n') : t('emptySheet')
+  return t('promptSheet', { page, strokes, prompt })
 }
 
 function clip(value: unknown) {
@@ -357,7 +379,7 @@ function clip(value: unknown) {
 
 function connectedLabel(cfg: AiConfig) {
   const name = cfg.model.trim()
-  return cfg.provider === 'local' ? `已连通本地模型（${name}）` : `已连通 OpenAI 兼容接口（${name}）`
+  return cfg.provider === 'local' ? t('connectedLocal', { name }) : t('connectedOpenAI', { name })
 }
 
 function openaiHeaders(cfg: AiConfig): Record<string, string> {
@@ -378,9 +400,9 @@ function anthropicHeaders(cfg: AiConfig): Record<string, string> {
 }
 
 function httpError(status: number, text: string) {
-  if (status === 401 || status === 403) return new AiError(`密钥被拒绝（HTTP ${status}）`)
+  if (status === 401 || status === 403) return new AiError(t('keyRejected', { status }))
   const snippet = redact(text).replace(/\s+/g, ' ').slice(0, 280)
-  return new AiError(`接口返回 HTTP ${status}${snippet ? `：${snippet}` : ''}`)
+  return new AiError(t('httpError', { status, snippet: snippet ? `: ${snippet}` : '' }))
 }
 
 async function send(transport: AiTransport, url: string, init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal; timeout: number }) {
@@ -388,9 +410,9 @@ async function send(transport: AiTransport, url: string, init: { method: string;
   try {
     return await transport.request(url, { method: init.method, headers: init.headers, body: init.body, signal: gate.signal })
   } catch (e) {
-    if (isAbort(e)) throw new AiError(init.signal?.aborted ? '已取消' : '连接超时')
-    const message = e instanceof Error ? e.message : '网络错误'
-    throw new AiError(`连不上接口：${redact(message)}`)
+    if (isAbort(e)) throw new AiError(init.signal?.aborted ? t('cancelled') : t('timeout'))
+    const message = e instanceof Error ? e.message : t('network')
+    throw new AiError(t('cannotReach', { message: redact(message) }))
   } finally {
     gate.cancel()
   }

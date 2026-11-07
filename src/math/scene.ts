@@ -1,3 +1,4 @@
+import { t } from '@/i18n/locale'
 import { engine, getStats, resetStats, type Env, type RustFact } from '@/wasm/engine'
 import { kindLabel, parseCard, statementLatex, triKeyLatex, type Ref, type Statement } from './statements'
 
@@ -1099,7 +1100,7 @@ export function analyze(cards: CardInput[], solutionIndex = 0): Analysis {
           label: `e_{${coneName}\\cap ${p.name}}`,
           value: engine.nice(e),
           num: e,
-          how: 'e = \\cos\\beta / \\cos\\alpha,\ \\sin\\beta = |\\vec n\\cdot\\vec k|/|\\vec n|',
+          how: 'e = \\cos\\beta / \\cos\\alpha,\\ \\sin\\beta = |\\vec n\\cdot\\vec k|/|\\vec n|',
           why: '圆锥截线离心率（β = 轴与平面的线面角）',
           shape: null,
         })
@@ -1141,11 +1142,14 @@ export function fmt(v: number) {
 
 function domainHint(src: string) {
   const hints: string[] = []
-  if (/\bln|log|lg/.test(src)) hints.push('\\ln u: u > 0')
-  if (/sqrt|√/.test(src)) hints.push('\\sqrt{u}: u \\ge 0')
-  if (/\//.test(src)) hints.push('\\frac{p}{q}: q \\ne 0')
-  if (/tan/.test(src)) hints.push('\\tan u: u \\ne \\frac{\\pi}{2} + k\\pi')
-  if (/asin|acos|arcsin|arccos/.test(src)) hints.push('|u| \\le 1')
+  if (/\bln\b/.test(src)) hints.push(t('domainLn'))
+  if (/\blg\b/.test(src)) hints.push(t('domainLg'))
+  if (/\blog_/.test(src) || /\blog\s*\([^)]*,/.test(src)) hints.push(t('domainLogb'))
+  else if (/\blog\b/.test(src)) hints.push(t('domainLog'))
+  if (/sqrt|√/.test(src)) hints.push(t('domainSqrt'))
+  if (/\//.test(src)) hints.push(t('domainDiv'))
+  if (/tan/.test(src)) hints.push(t('domainTan'))
+  if (/asin|acos|arcsin|arccos/.test(src)) hints.push(t('domainAsin'))
   return hints.join(',\\ ')
 }
 

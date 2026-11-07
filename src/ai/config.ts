@@ -1,3 +1,5 @@
+import { t } from '../i18n/locale.ts'
+
 /** Browser-local AI settings. The API key never leaves this shape except as a request header. */
 export type AiProvider = 'openai-compatible' | 'anthropic' | 'local'
 
@@ -38,14 +40,14 @@ export function missingConfig(cfg: AiConfig): string | null {
   const base = cfg.baseUrl.trim()
   const key = cfg.apiKey.trim()
   if (cfg.provider === 'anthropic') {
-    if (!model && !key) return '还没填写模型名和 API Key'
-    if (!model) return '还没填写模型名'
-    if (!key) return '还没填写 API Key'
+    if (!model && !key) return t('needModelAndKey')
+    if (!model) return t('needModel')
+    if (!key) return t('needKey')
     return null
   }
-  if (!base && !model) return '还没填写 Base URL 和模型名'
-  if (!base) return '还没填写 Base URL'
-  if (!model) return '还没填写模型名'
+  if (!base && !model) return t('needBaseAndModel')
+  if (!base) return t('needBase')
+  if (!model) return t('needModel')
   return null
 }
 
@@ -57,9 +59,9 @@ export function resolveBaseUrl(cfg: AiConfig): string {
   try {
     url = new URL(trimmed)
   } catch {
-    throw new Error('Base URL 不是合法地址')
+    throw new Error(t('badBase'))
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Base URL 只支持 http 或 https')
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(t('badProtocol'))
   url.username = ''
   url.password = ''
   url.hash = ''

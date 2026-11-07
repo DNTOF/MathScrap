@@ -1,3 +1,4 @@
+import { t } from '@/i18n/locale'
 import { serializeSheet } from './sheetFile'
 import type { Doc } from './types'
 
@@ -58,6 +59,6 @@ function downloadBlob(file: File, name: string) {
 }
 
 export async function readSheetFile(file: File): Promise<string> {
-  if (file.size > 8_000_000) throw new Error('文件太大')
+  if (file.size > 8_000_000) throw new Error(t('fileTooBig'))
   return file.text()
 }

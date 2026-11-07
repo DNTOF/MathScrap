@@ -1,3 +1,4 @@
+import { t } from '../src/i18n/locale.ts'
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendEmpty, sendJson } from './http.ts'
@@ -41,13 +42,13 @@ export function createBridge() {
 
   async function call(name: string, args: Record<string, unknown>) {
     if (!browserLive()) {
-      return { ok: false as const, error: 'MathScrap 页面还没连上。先运行 npm run dev，并在本机浏览器打开 http://127.0.0.1:47321 。' }
+      return { ok: false as const, error: t('pageOffline') }
     }
     const id = randomUUID()
     const result = new Promise<{ ok: boolean; result?: unknown; error?: string }>((resolve) => {
       const timer = setTimeout(() => {
         pending.delete(id)
-        resolve({ ok: false, error: `工具 ${name} 等待页面响应超时` })
+        resolve({ ok: false, error: t('toolTimeout', { name }) })
       }, CALL_MS)
       pending.set(id, { resolve, timer })
     })

@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "preview": "vite preview",
-    "test:pack": "tsx scripts/pack-smoke.ts",
+    "test:pack": "tsx scripts/pack-smoke.ts && tsx scripts/i18n-smoke.ts",
+    "test:i18n": "tsx scripts/i18n-smoke.ts",
     "pack:web": "tsc -b && vite build && node scripts/verify-packaged-dist.mjs",
     "pack:desktop": "tauri build",
     "pack:windows": "bash scripts/package-windows.sh",

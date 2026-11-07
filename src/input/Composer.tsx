@@ -1,10 +1,11 @@
 import { Check, X } from 'lucide-react'
 import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { Tex } from '@/components/Tex'
+import { useI18n } from '@/i18n/useI18n'
 import { cn } from '@/lib/utils'
 import { summarizeCard } from '@/math/scene'
 import { MathPalette } from './MathPalette'
-import { applySnippet, matchSnippet, nextPlaceholder, type Snippet } from './snippets'
+import { insertSnippet, matchSnippet, nextPlaceholder } from './snippets'
 
 interface Props {
   value: string
@@ -23,23 +24,12 @@ interface Props {
 
 const TRY = ['y = x^2 - 2', 'x^2 + y^2 = 4', 'x^2 + 2x + 1 = 0', '△ABC: a=3, b=4, C=90°', 'z = sin(x)cos(y)']
 
-export function insertSnippet(el: HTMLTextAreaElement | null, value: string, onChange: (v: string) => void, s: Snippet) {
-  const start = el?.selectionStart ?? value.length
-  const end = el?.selectionEnd ?? value.length
-  const r = applySnippet(value, start, end, s)
-  onChange(r.value)
-  requestAnimationFrame(() => {
-    if (!el) return
-    el.focus()
-    el.setSelectionRange(r.selStart, r.selEnd)
-  })
-}
-
 /**
  * Writing a formula straight onto the paper: a caret where you tapped, the ink preview
  * right beneath it, and nothing else. Clicking away writes it down, like a Freeform text box.
  */
 export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocusChange, textareaRef, compact, open, anchor }: Props) {
+  const { t } = useI18n()
   const deferred = useDeferredValue(value)
   const summary = deferred.trim() ? summarizeCard(deferred) : null
   const hasHole = value.includes('□')
@@ -137,15 +127,15 @@ export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocus
       autoCapitalize="off"
       autoCorrect="off"
       enterKeyHint="done"
-      aria-label="在纸上写公式"
-      placeholder={editing ? '改写这个式子…' : '写一个式子…'}
+      aria-label={t('writeFormula')}
+      placeholder={editing ? t('editFormula') : t('writeFormulaPh')}
       className="min-h-9 w-full resize-none bg-transparent py-1.5 font-mono text-[17px] leading-6 text-ink outline-none placeholder:font-sans placeholder:text-[15px] placeholder:text-kraft-800/45"
     />
   )
 
   const tips = !value.trim() && !editing && (
     <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[12px] text-kraft-800/60">
-      <span>试试</span>
+      <span>{t('try')}</span>
       {TRY.map((t) => (
         <button key={t} onPointerDown={keep} onMouseDown={keep} onClick={() => onChange(t)} className="rounded-md px-1 font-mono text-kraft-800/80 underline decoration-kraft-800/25 underline-offset-2 hover:bg-kraft-800/8">
           {t}
@@ -155,7 +145,7 @@ export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocus
   )
 
   const footer = (
-    <div className="text-[11px] text-kraft-800/55">{hasHole ? <span className="text-ink-red">还有 □ 没填，按 Tab 跳过去</span> : 'Enter 写上 · Shift+Enter 换行加条件 · Esc 放弃'}</div>
+    <div className="text-[11px] text-kraft-800/55">{hasHole ? <span className="text-ink-red">{t('hole')}</span> : t('composerHint')}</div>
   )
 
   if (compact) {
@@ -164,10 +154,10 @@ export function Composer({ value, onChange, onSubmit, onCancel, editing, onFocus
         {preview && <div className="max-h-[26dvh] overflow-auto">{preview}</div>}
         <div className="flex items-end gap-1.5 border-b border-dashed border-kraft-800/30">
           {field}
-          <button onPointerDown={keep} onMouseDown={keep} onClick={cancel} className="touch-target grid size-9 shrink-0 place-items-center rounded-full text-kraft-700" aria-label="放弃">
+          <button onPointerDown={keep} onMouseDown={keep} onClick={cancel} className="touch-target grid size-9 shrink-0 place-items-center rounded-full text-kraft-700" aria-label={t('discard')}>
             <X className="size-4.5" />
           </button>
-          <button onPointerDown={keep} onMouseDown={keep} onClick={submit} disabled={hasHole || (!value.trim() && !editing)} className="touch-target mb-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-kraft-800 text-kraft-50 disabled:opacity-35" aria-label="写上">
+          <button onPointerDown={keep} onMouseDown={keep} onClick={submit} disabled={hasHole || (!value.trim() && !editing)} className="touch-target mb-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-kraft-800 text-kraft-50 disabled:opacity-35" aria-label={t('commit')}>
             <Check className="size-4.5" />
           </button>
         </div>

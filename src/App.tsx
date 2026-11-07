@@ -7,7 +7,7 @@ import { createToolBridge } from '@/ai/tools'
 import { AssistSheet } from '@/components/AssistSheet'
 import { pushPlotView } from '@/plot/remoteView'
 import { Board, type PenSettings } from '@/board/Board'
-import { strokeBounds } from '@/board/strokes'
+import { strokeBounds } from '@/board/strokeGeom'
 import { uid, type Card, type Doc, type Stroke, type Tool, type View } from '@/board/types'
 import { parseSheet } from '@/board/sheetFile'
 import { exportSheetFile, readSheetFile } from '@/board/sheetTransfer'
@@ -17,9 +17,11 @@ import { Toolbar } from '@/components/Toolbar'
 import { TopBar } from '@/components/TopBar'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
-import { Composer, insertSnippet } from '@/input/Composer'
+import { Composer } from '@/input/Composer'
+import { insertSnippet } from '@/input/snippets'
 import { MathPalette } from '@/input/MathPalette'
 import { ShortcutHints } from '@/input/ShortcutHints'
+import { useI18n } from '@/i18n/useI18n'
 import { pageGroups } from '@/math/page'
 import { summarizeCard } from '@/math/scene'
 import { parseCard } from '@/math/statements'
@@ -101,6 +103,14 @@ function freeSpot(x: number, y: number, cards: Card[], h = 40) {
   return { x, y: py }
 }
 
+function docNow(ref: { current: Doc }) {
+  return ref.current
+}
+
+function unmarkedInk(ref: { current: Doc }) {
+  return docNow(ref).strokes.filter((s) => !s.recognized && s.style !== 'marker')
+}
+
 interface ComposerState {
   open: boolean
   /** world position the formula will be written at */
@@ -109,11 +119,10 @@ interface ComposerState {
 }
 
 export default function App() {
+  const { t } = useI18n()
   const compact = useMediaQuery('(max-width: 767px)')
   const { doc, docRef, commit, preview, undo, redo, canUndo, canRedo } = useDocument()
   const [view, setView] = useState<View>(() => fitView(doc, window.innerWidth < 768))
-  const viewRef = useRef(view)
-  viewRef.current = view
   const [tool, setTool] = useState<Tool>('pen')
   const [pen, setPen] = useState<PenSettings>({ color: '#2b2118', width: 3, style: 'ink' })
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
@@ -154,11 +163,10 @@ export default function App() {
 
   /** Where the next formula goes when you didn't tap a spot: the left third of the view. */
   const writingSpot = useCallback(() => {
-    const v = viewRef.current
     const sx = compact ? 24 : Math.max(120, sheet.w * 0.3)
     const sy = compact ? 110 : sheet.h * 0.3
-    return freeSpot((sx - v.x) / v.scale, (sy - v.y) / v.scale, docRef.current.cards)
-  }, [compact, docRef, sheet])
+    return freeSpot((sx - view.x) / view.scale, (sy - view.y) / view.scale, doc.cards)
+  }, [compact, doc.cards, sheet, view])
 
   const openPlot = useCallback((focusId: string | null = null) => setPlot({ open: true, details: false, full: false, focusId }), [])
   const ensurePlot = useCallback(() => setPlot((p) => (p.open ? p : { open: true, details: false, full: false, focusId: p.focusId })), [])
@@ -182,7 +190,7 @@ export default function App() {
       const placed: Card[] = []
       let y = start.y
       for (const text of blocks) {
-        const spot = freeSpot(start.x, y, [...docRef.current.cards, ...placed])
+        const spot = freeSpot(start.x, y, [...doc.cards, ...placed])
         const card: Card = { id: uid(), text, x: spot.x, y: spot.y }
         placed.push(card)
         y = spot.y + footprint(card).h + 16
@@ -190,7 +198,7 @@ export default function App() {
       commit((d) => ({ ...d, cards: [...d.cards, ...placed] }))
       return placed
     },
-    [commit, docRef, writingSpot],
+    [commit, doc.cards, writingSpot],
   )
 
   const updateCard = useCallback((id: string, text: string) => commit((d) => ({ ...d, cards: d.cards.map((c) => (c.id === id ? { ...c, text } : c)) })), [commit])
@@ -199,9 +207,9 @@ export default function App() {
     (id: string) => {
       commit((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }))
       setSelected(null)
-      toast('擦掉了一个式子', { action: { label: '撤销', onClick: undo } })
+      toast(t('clearedOne'), { action: { label: t('undo'), onClick: undo } })
     },
-    [commit, undo],
+    [commit, t, undo],
   )
 
   const closeComposer = () => {
@@ -273,7 +281,7 @@ export default function App() {
   const acceptInk = useCallback(
     (text: string, strokes: Stroke[]) => {
       const ids = new Set(strokes.map((s) => s.id))
-      const still = docRef.current.strokes.filter((s) => ids.has(s.id) && !s.recognized)
+      const still = docNow(docRef).strokes.filter((s) => ids.has(s.id) && !s.recognized)
       if (still.length !== strokes.length || !canWriteFormula(text)) return null
       return commitRecognized(text, still, true)
     },
@@ -281,9 +289,9 @@ export default function App() {
   )
 
   const recognize = useCallback(() => {
-    const pool = docRef.current.strokes.filter((s) => !s.recognized && s.style !== 'marker').slice(-24)
+    const pool = unmarkedInk(docRef).slice(-24)
     if (!pool.length) {
-      toast('先用笔在纸上写一个式子')
+      toast(t('writeFirst'))
       return
     }
     const clusters = clusterStrokes(pool)
@@ -296,10 +304,10 @@ export default function App() {
         const best = cands[0]
         if (best && best.confidence >= OCR_ACCEPT && acceptInk(best.text, cl)) wrote += 1
         pending -= 1
-        if (pending === 0 && wrote === 0) toast('没认出来')
+        if (pending === 0 && wrote === 0) toast(t('notRecognized'))
       })
     }
-  }, [acceptInk, docRef])
+  }, [acceptInk, docRef, t])
 
   // Settled ink is read on its own. A confident reading is written onto the sheet and the
   // corner plot updates. Nothing is drawn over the paper while that happens.
@@ -320,7 +328,7 @@ export default function App() {
         jobs.push(
           mockRecognizer.recognize(cl).then((cands) => {
             const ids = new Set(cl.map((s) => s.id))
-            const now = docRef.current.strokes.filter((s) => !s.recognized && s.style !== 'marker')
+            const now = unmarkedInk(docRef)
             const group = clusterStrokes(now).find((g) => g.some((s) => ids.has(s.id)))
             const same = !!group && group.length === cl.length && cl.every((s) => group.some((g) => g.id === s.id))
             if (!same) return
@@ -336,13 +344,13 @@ export default function App() {
       })
     }, 900)
     return () => clearTimeout(t)
-  }, [doc.strokes, prefs.autoOcr, composer.open, acceptInk])
+  }, [doc.strokes, prefs.autoOcr, composer.open, acceptInk, docRef])
 
   const writeSample = (blocks: string[]) => {
     const placed = writeBlocks(blocks)
     setSelected(null)
-    toast.success(blocks.length > 1 ? `写了 ${blocks.length} 个式子，它们会叠在同一个坐标系里` : '写到纸上了', {
-      action: { label: '看坐标系', onClick: () => openPlot(placed[0]?.id ?? null) },
+    toast.success(blocks.length > 1 ? t('wroteMany', { n: blocks.length }) : t('wroteOne'), {
+      action: { label: t('seePlot'), onClick: () => openPlot(placed[0]?.id ?? null) },
     })
   }
 
@@ -389,12 +397,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo, plot.open, plot.full, recognize, selected, deleteCard, openPlot, closePlot, togglePlot, placeComposer, writingSpot])
 
-  // MCP-ready local tool bridge for experimentation from devtools
+  // MCP-ready local tool bridge for experimentation from devtools.
+  // getDoc reads the React state captured for this render, so the bridge is rebuilt when the sheet changes.
   const bridge = useMemo(
     () =>
       createToolBridge({
-        getDoc: () => docRef.current,
-        addCard: (t, x, y) => addFormula(t, x, y),
+        getDoc: () => doc,
+        addCard: (text, x, y) => addFormula(text, x, y),
         updateCard,
         openPlot: (id) => openPlot(id ?? null),
         setPlotView: (input) => {
@@ -402,7 +411,7 @@ export default function App() {
           return pushPlotView(input)
         },
       }),
-    [docRef, addFormula, updateCard, openPlot, ensurePlot],
+    [doc, addFormula, updateCard, openPlot, ensurePlot],
   )
   useEffect(() => {
     ;(window as unknown as { mathscrap: { tools: typeof bridge } }).mathscrap = { tools: bridge }
@@ -412,13 +421,13 @@ export default function App() {
   }, [bridge])
 
   const exportPage = useCallback(() => {
-    void exportSheetFile(docRef.current)
+    void exportSheetFile(docNow(docRef))
       .then((kind) => {
         if (kind === 'cancelled') return
-        toast.success(kind === 'shared' ? '已交给系统分享' : '已导出这一页')
+        toast.success(kind === 'shared' ? t('shared') : t('exported'))
       })
-      .catch((e: unknown) => toast(e instanceof Error ? e.message : '没能导出'))
-  }, [docRef])
+      .catch((e: unknown) => toast(e instanceof Error ? e.message : t('exportFailed')))
+  }, [docRef, t])
 
   const importPage = useCallback(
     async (file: File | undefined) => {
@@ -427,12 +436,12 @@ export default function App() {
         const next = parseSheet(await readSheetFile(file))
         commit(next)
         setSelected(null)
-        toast.success('已导入这一页', { action: { label: '撤销', onClick: undo } })
+        toast.success(t('imported'), { action: { label: t('undo'), onClick: undo } })
       } catch (e) {
-        toast(e instanceof Error ? e.message : '没能导入')
+        toast(e instanceof Error ? e.message : t('importFailed'))
       }
     },
-    [commit, undo],
+    [commit, t, undo],
   )
 
   const anchor = composer.at ? { left: composer.at.x * view.scale + view.x, top: composer.at.y * view.scale + view.y } : null
@@ -470,7 +479,7 @@ export default function App() {
           onPlot={openPlot}
           onEdit={editCard}
           onDelete={deleteCard}
-          onPenDetected={() => toast.success('检测到手写笔：笔负责书写，手指负责选择、平移和缩放')}
+          onPenDetected={() => toast.success(t('penDetected'))}
         >
           <ShortcutHints visible={showHints} compact={compact} placement={anchor && anchor.top < sheet.h / 2 ? 'bottom' : 'top'} />
         </Board>
@@ -520,8 +529,8 @@ export default function App() {
             )}
           >
             <PlotPane cards={doc.cards} focusId={plot.focusId} variant="float" />
-            <button type="button" onClick={showDetails} aria-label="详情" className="paper-chrome absolute top-2 right-2 h-7 rounded-full px-2.5 text-[12px] text-kraft-800">
-              详情
+            <button type="button" onClick={showDetails} aria-label={t('details')} className="paper-chrome absolute top-2 right-2 h-7 rounded-full px-2.5 text-[12px] text-kraft-800">
+              {t('details')}
             </button>
           </div>
         )}
@@ -568,22 +577,22 @@ export default function App() {
       <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
         <DialogContent className="kraft-panel bg-transparent" data-no-board>
           <DialogHeader>
-            <DialogTitle className="text-kraft-800">清空这一页？</DialogTitle>
-            <DialogDescription className="text-kraft-600">笔迹和写下的式子都会被擦掉，可以用“撤销”找回。</DialogDescription>
+            <DialogTitle className="text-kraft-800">{t('clearTitle')}</DialogTitle>
+            <DialogDescription className="text-kraft-600">{t('clearBody')}</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <button onClick={() => setConfirmClear(false)} className="h-10 rounded-xl px-4 text-[13px] text-kraft-700 hover:bg-kraft-200">
-              取消
+              {t('cancel')}
             </button>
             <button
               onClick={() => {
                 commit(blankDoc())
                 setConfirmClear(false)
-                toast('页面已清空', { action: { label: '撤销', onClick: undo } })
+                toast(t('cleared'), { action: { label: t('undo'), onClick: undo } })
               }}
               className="h-10 rounded-xl bg-ink-red px-4 text-[13px] font-medium text-kraft-50"
             >
-              清空
+              {t('clear')}
             </button>
           </div>
         </DialogContent>
@@ -593,11 +602,12 @@ export default function App() {
 }
 
 export function EngineGate({ children, error }: { children: React.ReactNode; error: string | null; ready: boolean }) {
+  const { t } = useI18n()
   return error ? (
     <div className="kraft-page grid h-full place-items-center p-8 text-center text-kraft-800">
       <div>
-        <div className="hand text-[34px] font-bold">数学引擎没能启动</div>
-        <p className="mt-2 text-[13px]">Rust/WASM 模块加载失败：{error}</p>
+        <div className="hand text-[34px] font-bold">{t('engineFailed')}</div>
+        <p className="mt-2 text-[13px]">{t('engineFailedBody', { error })}</p>
       </div>
     </div>
   ) : (
@@ -606,12 +616,13 @@ export function EngineGate({ children, error }: { children: React.ReactNode; err
 }
 
 export function Loading() {
+  const { t } = useI18n()
   return (
     <div className="kraft-page grid h-full place-items-center text-kraft-800">
       <div className="flex flex-col items-center gap-3">
         <div className="text-[30px] font-semibold tracking-tight">MathScrap</div>
         <div className="flex items-center gap-2 text-[13px] text-kraft-700">
-          <Loader2 className="size-4 animate-spin" /> 正在加载 Rust 数学引擎…
+          <Loader2 className="size-4 animate-spin" /> {t('engineLoading')}
         </div>
       </div>
     </div>
