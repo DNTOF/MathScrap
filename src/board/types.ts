@@ -45,11 +45,11 @@ export interface View {
 }
 
 export const INK_COLORS = [
-  { name: '墨黑', value: '#2b2118' },
-  { name: '赭红', value: '#9b3b2a' },
-  { name: '靛蓝', value: '#2f4a6d' },
-  { name: '苔绿', value: '#4d6b3c' },
-  { name: '姜黄', value: '#b9852a' },
-  { name: '粉笔白', value: '#f6eedd' },
+  { name: 'ink', value: '#2b2118' },
+  { name: 'red', value: '#9b3b2a' },
+  { name: 'blue', value: '#2f4a6d' },
+  { name: 'green', value: '#4d6b3c' },
+  { name: 'yellow', value: '#b9852a' },
+  { name: 'white', value: '#f6eedd' },
 ]
 export const uid = () => Math.random().toString(36).slice(2, 10)

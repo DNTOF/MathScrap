@@ -1,411 +1,181 @@
 # MathScrap
 
-A math-learning scrapbook on one continuous sheet of kraft paper, in the spirit of Apple Freeform. There are no cards or widgets: you draw with the pen, and formulas are written straight onto the paper like ink. The **坐标系 (coordinate system)** button in the corner draws **every formula on the sheet on the same axes**. The panel finds intersections between them, solves shared unknowns, and **derives as many quantities as possible**: remaining sides and angles, unknown parameters, area, domain, and more.
+MathScrap 是一张连续的牛皮纸。笔迹和公式直接写在纸上，没有卡片，也没有贴在空白纸上的大块说明。右下角的坐标系把这张纸上能画的式子画进同一套坐标轴，并尽量推出交点、未知量和几何量。
 
-> 本仓库是一个可点击的演示：Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui，绘图用 Plotly，数学核心是 **Rust 编译的 WebAssembly**（`crates/mathcore`）。
+MathScrap is one continuous sheet of kraft paper. Ink and formulas sit on the paper itself. There are no cards, and the blank sheet does not carry a large instruction panel. The coordinate button in the corner draws every plottable formula on that sheet onto one set of axes, and derives intersections, unknowns, and geometric quantities when it can.
 
----
+计算在本机完成：浏览器或系统 WebView 里的 Rust/WebAssembly（`crates/mathcore`），手写公式走随包的 CoMER INT8 ONNX。界面有简体中文和 English。许可证是 Apache-2.0。
+
+Computation stays on the device: Rust compiled to WebAssembly (`crates/mathcore`) inside the browser or the system WebView, and handwritten formulas go through the bundled CoMER INT8 ONNX models. The interface is Simplified Chinese and English. The license is Apache-2.0.
+
+## 对数
+
+## Logarithms
+
+`ln` 是自然对数。单独的 `log` 和 `lg` 是常用对数，底数是 10。这三项不会被改成别的底。
+
+`ln` is the natural logarithm. A unary `log` and `lg` are common logarithms, base 10. Those three are not silently given another base.
+
+显式底数用这些写法，它们求的是同一个值：
+
+Explicit bases use the forms below. They evaluate to the same value:
+
+```
+log_2(8)    log_{2}(8)    log₂(8)    log2(8)    log(2, 8)
+```
+
+`log(2)` 和 `log 2` 仍是 log₁₀(2)，不是以 2 为底。`lg` 不接受粘在后面的底数：`lg2(3)` 是 lg(2)·3。底数必须大于 0 且不等于 1，真数必须大于 0；否则实数结果是空的，图上不画穿过间断或渐近线的假线段。
+
+`log(2)` and `log 2` stay log₁₀(2). They are not “base 2”. `lg` does not take a base glued to the name: `lg2(3)` is lg(2)·3. The base must be greater than 0 and not 1, and the argument must be greater than 0. Otherwise there is no real value, and the plot does not draw a fake segment across a gap or an asymptote.
 
 ## 快速开始
 
+## Quick start
+
+需要 Node.js。仓库里已经带有编译好的 `src/wasm/pkg`，只改页面时不必安装 Rust。改了 `crates/mathcore` 才需要 Rust 1.90 和 wasm-pack，再运行 `npm run build:wasm`。
+
+Node.js is required. A built `src/wasm/pkg` is already in the repository, so Rust is not required for page-only changes. Rust 1.90 and wasm-pack are required only after editing `crates/mathcore`; then run `npm run build:wasm`.
+
 ```bash
 npm install
-npm run dev        # http://localhost:47321
+npm run dev
 ```
 
-- 不需要安装 Rust：编译好的 WASM（`src/wasm/pkg/`）已经提交在仓库里。
-- 改了 Rust 代码才需要重新编译（见下文 “Rust / WASM”）。
+开发服务器是 `http://127.0.0.1:47321`。`npm run preview` 用 `47322` 预览生产构建。
 
-| 命令 | 作用 |
+The dev server is `http://127.0.0.1:47321`. `npm run preview` serves the production build on port `47322`.
+
+| 命令 Command | 作用 / What it does |
 | --- | --- |
-| `npm run dev` | 开发服务器（端口 47321，监听 0.0.0.0，手机/平板可用局域网 IP 访问） |
-| `npm run build` | 类型检查 + 生产构建到 `dist/` |
-| `npm run preview` | 预览生产构建（端口 47322） |
-| `npm run lint` | oxlint |
-| `npm run smoke` | 不开浏览器：加载真实 WASM，对 77 个单式用例和 19 张“整页联立”用例做推导，并检查每个图形在初始坐标窗口里确实有可见的数据（`-v` 打印全部推导） |
-| `npm run smoke:ai` | 不开浏览器：起一个本地 OpenAI 兼容接口，检查「测试连接」、工具调用和空配置立刻返回；再让 MCP 服务器列出并调用工具 |
-| `npm run smoke:ocr` | 不开浏览器：几何回归，以及 CoMER 预处理 + 假的编码器/解码器（不会自己编 `y = x`） |
-| `npm run ocr:live` | 本机用 ONNX Runtime Web WASM 跑仓库里的 CoMER INT8，检查 `y = 2`、`y = x`、`a^2 = b`、`1/2` |
-| `npm run mcp` | 启动 stdio MCP 服务器（给 Cursor / Claude 用；人直接跑它会停在 stdio 上，见下文） |
-| `npm run e2e` | 浏览器端到端：先 `npm run dev`，再用无头 Chrome 打开每个用例的坐标系，检查 SVG 线条和截图像素，确认 2D/3D 图都真的画出来了（`CHROME_PATH` 可指定浏览器路径） |
-| `npm run e2e:sheet` | 浏览器端到端：空白纸 → 在纸上写式子 → 右下角半透明图 → 详情展开，并检查手写会自己写上纸、更新图 |
-| `npm run build:wasm` | 重新编译 Rust → WASM（需要 Rust + wasm-pack） |
-| `npm run test:rust` | Rust 单元测试 |
+| `npm run dev` | 本机开发服务器，含 MCP 桥和 AI 转发。 / Local dev server, including the MCP bridge and the AI forwarder. |
+| `npm run build` | 类型检查并构建 `dist/`。 / Typecheck and build `dist/`. |
+| `npm run lint` | oxlint，有警告也失败。 / oxlint. Warnings fail the command. |
+| `npm test:pack` 或 `npm run test:i18n` | 打包元数据，以及中英词条、语言记忆。 / Packaging metadata, plus Chinese/English keys and saved language. |
+| `npm run smoke` | 用真实 WASM 检查数值、对数和图上有没有点。 / Real WASM: numbers, logarithms, and whether a curve has points. |
+| `npm run smoke:ocr` | 手写预处理和假的编码器/解码器，不加载 ONNX。 / Ink preprocess and a fake encoder/decoder. No ONNX. |
+| `npm run ocr:live` | 本机用仓库里的 CoMER INT8 读几笔样例。 / Run the bundled CoMER INT8 on a few sample strokes. |
+| `npm run smoke:ai` | 本地假接口上的连接测试、工具和 MCP。 / Connection test, tools, and MCP against a local fake endpoint. |
+| `npm run test:rust` | `crates/mathcore` 的 Rust 测试。 / Rust tests for `crates/mathcore`. |
+| `npm run e2e` / `npm run e2e:sheet` | 需要先开着 dev。浏览器按 `CHROME_PATH`、Playwright 缓存、PATH，再按常见安装路径查找。 / Need a running dev server. The browser is `CHROME_PATH`, then the Playwright cache, then PATH, then common install paths. |
+| `npm run build:wasm` | 把 Rust 重新编成 `src/wasm/pkg`。 / Rebuild Rust into `src/wasm/pkg`. |
 
----
+## 纸面、公式和坐标系
 
-## 一张纸，一个坐标系
+## The sheet, formulas, and coordinates
 
-打开就是一张真正空白的牛皮纸：没有卡片、没有胶带标题，纸面上也没有任何文字、水印或品牌字样。应用名只有 MathScrap（浏览器标题和「…」菜单顶部）。
+打开是一张空白牛皮纸。应用名只出现在窗口标题和「… / More」菜单里。
 
-- **画**：用笔、荧光笔、橡皮直接在纸上画。
-- **写公式**：双击纸面、按 `/`，或选底部的 Σ 工具再点纸面。在点的位置会出现一个光标，下面实时预览墨迹效果；按 Enter（或点别处）就写上纸了。
-- **改公式**：双击写好的式子可以原地改写，改成空白就是擦掉它。
-- **移动公式**：用「选择」工具（`V`）拖动式子，空白处拖动是平移；在有手写笔的设备上，手指本来就负责选择和平移。
-- **看图**：右下角的 **坐标系** 按钮显示纸上有几个可画的式子。点开后，右下角只浮着一张略透明的图，纸面继续可以写。点图上的 **详情** 才展开式子列表和推导；宽屏上这时是左边纸、右边图，手机上则是全屏。图开着的时候继续写，图形会跟着更新：
-  - 交点在两两之间自动求出。
-  - 同名字母视为同一个未知数，一起求解。比如 `A(0,0), B(4,0), C(1,t)` 写一行、`AC ⊥ BC` 写另一行，也能解出 t。
-  - 只写条件的式子（`AC ⊥ BC`、`f(0) = 1`）归到它前面那个式子所在的坐标系。
-  - **边写边画**：分屏打开时继续写式子（或手写识别成公式），坐标系立刻跟着长出新图形；你缩放过的视野不会被新式子重置，「适应视野」按钮随时回到恰好框住所有图形的视角。新式子会在图上**逐条浮现**（尊重系统的减弱动态效果设置）。
-- **平面和空间**：纸上同时有平面和空间的式子时，面板顶部可以在「平面 · n」和「空间 · m」两个共享坐标系之间切换。
-- **临时隐藏**：面板顶部列出纸上的每个式子，点一下就暂时从坐标系里拿掉（不会从纸上删除）。如果两道题碰巧用了同一个字母，可以先把不相关的拿掉。
+The app opens on a blank kraft sheet. The name MathScrap appears in the window title and in the More menu.
 
-## 开箱即用的示例公式
+- 笔、荧光笔、橡皮直接画在纸上。双击纸面、按 `/`，或点 Σ 再点纸面，就在该处写式子。Enter 写上，Esc 放弃。
+- Draw with the pen, marker, or eraser. Double-click the paper, press `/`, or choose Σ and click, to write a formula there. Enter commits it. Esc discards it.
+- 选择工具（V）拖动式子。手指在检测到手写笔之后负责平移和缩放。
+- The select tool (V) drags a formula. After a stylus is detected, a finger pans and zooms.
+- 右下角「坐标系 / Coordinates」把能画的式子画进同一套轴，图是半透明的小窗。点「详情 / Details」才展开式子列表和推导。
+- Coordinates draws the plottable formulas on one set of axes, in a small translucent window. Details is what expands the formula list and the derivations.
+- 同名未知数一起解。只写条件的行归到它前面的式子。平面和空间可以切换。缩放过的视野不会被新式子重置。
+- Unknowns that share a name are solved together. A condition-only line belongs with the formula before it. Plane and space can be switched. A zoomed view is not reset by a new formula.
+- 「…」里可以把示例写到纸上，也可以导出或导入一页 JSON（`mathscrap.sheet`）。文件里只有笔迹、式子和字条的字符串与数字，导入不会执行代码，也不会改写式子的文字。
+- More can write the examples onto the sheet, and can export or import one JSON sheet (`mathscrap.sheet`). The file holds only strings and numbers for ink, formulas, and notes. Import does not execute the file and does not rewrite formula text.
 
-右上角 **…** 菜单里的「写几个例子到纸上」会把示例一行一行写到纸上。下面的每个代码块都可以照着写：一行就是纸上的一个式子。
+纸面保存在本机 `localStorage` 键 `mathscrap.doc.v2`。第一次打开是空白纸。
 
-**1. 抛物线与直线（2D，两式共用一个坐标系）**
+The sheet is stored locally under the `localStorage` key `mathscrap.doc.v2`. The first open is a blank sheet.
 
-```
-y = x^2 - 2
-y = 0.5x + 1
-```
+## 语言
 
-→ 两个交点 \((-1.5, 0.25)\)、\((2, 2)\)，各自的零点、极值、定义域，以及直线的斜率、截距、倾斜角。
+## Language
 
-再写一个 `x^2 + y^2 = 4` 和 `x^2 + 2x + 1 = 0`，它们会叠进同一个坐标系，交点会一并求出。
+浏览器语言以 `zh` 开头时，界面初始是简体中文，否则是 English。右上角「… / More」里有一组紧凑的「中文 / EN」，选择写在 `mathscrap.lang`，下次打开仍用这个选择。空白纸上没有语言卡片。
 
-**2. 解三角形：只给两边一角（SAS）**
+If the browser language starts with `zh`, the interface starts in Simplified Chinese. Otherwise it starts in English. More contains a compact 中文 / EN control. The choice is stored in `mathscrap.lang` and is used again next time. The blank sheet has no language card.
 
-```
-△ABC: a = 5, b = 7, C = 60°
-```
+切换语言会改按钮、菜单、对话框、占位符、提示、状态、面向人的错误，以及详情里的标题、分组和已收录的几何理由。不会翻译或改写公式、点名、已经写在纸上的内容、导入的纸，也不会改 MCP 工具名（`page_read`、`solve_analyze` 等）。计算引擎和 MCP 返回的原文仍是中文；只有屏幕上的显示会换成英文。个别较长的 Rust 句子还没有收录，英文模式下会仍以中文出现，详情底部有一句说明。
 
-→ \(c = \sqrt{39}\)、∠A、∠B、面积 \(\frac{35\sqrt3}{4}\)、周长、外接圆 / 内切圆半径、三条高、中线、重心 / 外心 / 内心……每一项都标出“用了什么定理”，可以一键标在图上。
+Switching language changes buttons, menus, dialogs, placeholders, hints, status text, user-facing errors, and the titles, groups, and listed geometry reasons in the details. It does not translate or rewrite formulas, point names, anything already on the sheet, or an imported sheet, and it does not change MCP tool names (`page_read`, `solve_analyze`, and the rest). The compute engine and MCP still return the original Chinese wording. Only the screen shows English. A few longer Rust sentences are not in the glossary and still appear in Chinese in English mode. The details panel says so at the bottom.
 
-**3. 坐标几何 + 垂直条件（带未知数）**
+## 手写
 
-```
-A(0,0), B(4,0), C(1,t)
-AC ⊥ BC
-```
+## Handwriting
 
-→ Rust 解出 \(t = \pm\sqrt3\)（可切换两组解），然后把整个三角形推出来：直角、边长、面积、各心坐标。
+默认识别是开的：笔迹停大约一秒，先判断像不像算式。普通句子留在纸上，不送进公式模型。像算式才走本机 CoMER。置信度够就写成公式并更新角落的图，纸上没有确认条。按 R 会对最近的笔迹再认一次。设置里可以关掉自动识别。
 
-更多示例，全部可以直接使用：
+Recognition is on by default. About a second after the ink settles, a text gate decides whether it looks like a formula. Ordinary writing stays on the paper and is not sent to the formula model. Formula-like ink goes to the local CoMER model. A confident reading is written as a formula and the corner plot updates. There is no confirmation strip. R recognizes the latest ink again. Automatic recognition can be turned off in Settings.
 
-| 写法 | 推出什么 |
+模型是 CoMER（ECCV 2022）的 INT8 ONNX，权重由 [ink-on](https://github.com/kimseungdae/ink-on) 以 Apache-2.0 分发。它能读一些清楚的短式，不能当作任意手写的完整识别器：认不出就保持笔迹，不会用 `y = x` 充数。单独的 `sigma` 是符号，求和与积分留在纸上，不因此打开坐标系。
+
+The model is CoMER (ECCV 2022) INT8 ONNX. The weights are distributed by [ink-on](https://github.com/kimseungdae/ink-on) under Apache-2.0. It can read some clear short formulas. It is not a complete recognizer for arbitrary handwriting: a miss leaves the ink, and it does not substitute `y = x`. A lone `sigma` is the symbol. Sums and integrals stay on the paper and do not open the coordinate view by themselves.
+
+| 文件 File | 内容 / Contents |
 | --- | --- |
-| `x + y + z = 3` 换行 `x - y + 2z = 1` | 3D：法向量、两平面夹角、交线参数式 |
-| `z = sin(x)cos(y)` | 3D 曲面，可自由旋转，网格上的最大值、最小值 |
-| `f(x) = ax^2 + bx + c` 换行 `f(0) = 1; f(1) = 0; f(3) = 4` | 待定系数：a = 1, b = −2, c = 1 |
-| `**a** = (1, 2, 2); **b** = (2, 1, k)` 换行 `**a** ⊥ **b**` | k = −2，然后算点积、叉积、夹角、投影 |
-| `x^2 + 2x + 1 = 0` | 一元方程：Δ = 0、重根 x = −1、韦达定理，画出 y = x² + 2x + 1 并在 x 轴上标出根 |
-| `⊙O: r = 5` 换行 `弦 AB、CD 交于 P, PA = 2, PB = 6, PC = 4` | 相交弦定理：PD = 3、弦长、弦心距、圆心角、圆周角、弓形高、\|OP\| = √13 |
-| `△ABC: b = 4, c = 3, m_a = 2.5` | 中线长反推边长：a = 5，整个 3-4-5 直角三角形（含斜边上的高、射影定理） |
-| `A(0,0), B(4,0), C(1,3)` 换行 `M = 中点(A, B), N = 中点(A, C)` | 中点坐标、比值、中位线 MN ∥ BC 且 \\|MN\\| = \\|BC\\|/2 |
-| `y = 0`、`y = 1`、`y = 3`、`x = 0`、`x - y = 0` 各写一行 | 三条平行线 + 两条截线：同位角 / 内错角 / 同旁内角、成比例的截线段、相似三角形 |
-| `x^2 + y^2 - 4x + 2y = 4` 换行 `y = x - 1` | 识别为圆：圆心 (2, −1)、半径 3，以及与直线的交点 |
-| `A(0,0), B(4,0), C(5,3), D(1,3)` | 判定为平行四边形，算出面积、对角线 |
-| `y = kx + m, 过(1, 3), 过(2, 5)` | k = 2, m = 1 |
-| `y = sin(x)`、`y = cos(x)`、`y = x/3` 各写一行 | 三条曲线叠在一个坐标系里，两两求交点 |
-| `x^2 + y^2 + z^2 = 4` | 球面：球心、半径、体积、表面积 |
-| `r(t) = (cos(t), sin(t), t/3)` | 3D 参数曲线（螺旋线） |
+| `public/models/comer/encoder_int8.onnx` | 编码器，约 3.4 MB。 / Encoder, about 3.4 MB. |
+| `public/models/comer/decoder_int8.onnx` | 解码器，约 4.0 MB。 / Decoder, about 4.0 MB. |
+| `public/models/comer/vocab.json` | 词表。 / Vocabulary. |
+| `dist/ort/ort-wasm-simd-threaded.wasm` | 构建时从 onnxruntime-web 复制。运行时不再访问 node_modules 或公共 CDN。 / Copied from onnxruntime-web at build time. Runtime does not read node_modules or a public CDN. |
 
-### 输入写法速查
+## AI 和 MCP
 
-- 隐式乘法：`2x`、`kx`、`sin(x)cos(y)`，以及 `x^2`、`sqrt(x)`、`|x|`、`pi`、`e`、`a_1`；也能直接输入 `π`、`θ`、`²`、`√`。
-- 角度：`30°`、`30deg`，或者直接写 `C = 60`（在三角形里按角度理解）。
-- **点**：只能用大写字母命名，例如 `A(1,2)`、`P(1,2,3)`、`A = (1,2)`。单独一个小写字母不会被当成点：写 `b(1, 2)` 会提示改用大写。
-- **向量**：必须用粗体名字加 `=` 来定义。`**b** = (1, 2)`、`𝐛 = (1, 2)`、`\mathbf{b} = (1, 2)`、`\vec{b} = (1, 2)` 这几种写法等价，`Alt + B` 可以插入粗体名。直接写 `b = (1, 2)` 会提示改写。两个大写字母组成的线段向量 `AB = (3, 4)` 也可以。定义好之后，条件里可以写 `**a** ⊥ **b**`，也可以直接写 `a ⊥ b`。
-- **方程与函数**：
-  - 只含 x 的方程（如 `x^2 + 2x + 1 = 0`、`x^2 = 2x + 3`）按解方程处理，画出 y = 左边 − 右边。
-  - `x = 2` 仍然是竖直直线。
-  - `y = …` 和 `f(x) = …` 是函数。
-  - 同时含 x 和 y 的方程是平面曲线，同时含 x、y、z 的是空间方程。
-- 关系：`⊥` 或 `_|_`，`∥` 或 `//`，`|AB| = 5`，`∠ABC = 90°`，`过(1, 3)`。
-- 三角形：`△ABC: a=3, b=4, c=5`，也可以写 `triangle ABC: ...` 或 `三角形ABC: ...`。可用的量有 a、b、c、A、B、C、面积 S，以及中线 `m_a` 和高 `h_a`（例如 `△ABC: b=4, c=3, m_a=2.5` 会反推出 a=5）。
-- **中点 / 分点**：`M = 中点(A, B)`（或 `M = midpoint(A, B)`）定义 AB 的中点；`P = 分点(A, B, 1:2)` 定义满足 AP : PB = 1 : 2 的分点（写 `分点(A, B, 2)` 表示 AP : PB = 2 : 1）。定义出的点和写出来的点一样参与后续全部推导，两个中点共顶点时自动给出中位线。
-- **向量的和差与投影**：`𝐜 = 𝐚 + 𝐛`、`𝐜 = 𝐚 − 𝐛`、`𝐩 = 投影(𝐚, 𝐛)`（或 `𝐩 = proj(𝐚, 𝐛)`，即 𝐚 在 𝐛 上的投影向量）定义出的向量同样进入向量推导。
-- **圆与弦**：`⊙O: r = 5`（也可写 `圆O: r = 5`）定义一个以点 O 为圆心（O 未定义时取原点）的圆；
-  `⊙O: 过(3, 4)` 用点定半径。弦的问题写在圆的下一行，会自动归属到这个圆：
-  - `弦 AB、CD 交于 P, PA = 2, PB = 6, PC = 4` → 相交弦定理推出 PD = 3、弦长、弦心距、圆心角、圆周角、弓形高、|OP|。P 的位置可写 `P 在圆内 / P 在圆外`，不写则两种情况都推（可切换）。
-  - `割线 AB、CD 交于 P, PA = 2, PB = 6, PC = 4` → 割线定理。
-  - `切线 PT、割线 PAB, PA = 2, PB = 6` → 切割线定理推出 PT = 2√3。
-- 一个式子里也可以写多个条件，用 Shift+Enter 换行、`;` 或顶层逗号分隔；分开写成几行效果一样，因为整张纸是一起推导的。
+## AI and MCP
 
----
+这两条路是分开的。
 
-## 三种写字方式（PC 端也不只是键盘）
+These are two separate paths.
 
-1. **手写**：鼠标、触控、手写笔都能直接在牛皮纸上写。写完点底部工具栏的「手写转公式」（快捷键 `R`），会弹出本机模型给出的候选（见下文），确认或修改后就在原处写成公式；原来的笔迹可以选择保留。
-2. **键盘 + 纸上快捷键提示**：双击纸面或按 `/` 开始写，快捷键表会以铅笔字的样子淡淡浮现在纸上。
+设置里的 AI 接口是你自己的 OpenAI 兼容接口、Anthropic 或本机 Ollama。地址、模型名和密钥只在这台浏览器的 `mathscrap.ai.v1`。请求只发往你填的地址。密钥不进日志，也不交给 MCP。Base URL 或模型名还空着时，「测试连接」不会发请求。
 
-   | 快捷键 | 插入 | 快捷键 | 插入 |
-   | --- | --- | --- | --- |
-   | `Ctrl/⌘ + /` | 分数 `(□)/(□)` | `Alt/⌥ + 2` | `^2` |
-   | `Alt + 6` | `^(□)` | `Alt + R` | `sqrt(□)` |
-   | `Alt + A` | `\|□\|` | `Alt + P` / `T` | `pi` / `theta` |
-   | `Alt + O` | `°` | `Alt + S` / `C` / `L` / `E` | sin / cos / ln / e^ |
-   | `Alt + V` / `W` | `**□** = (□, □, □)` / `**□** = (□, □)` 向量 | `Alt + H` | `, 过(□, □)` |
-   | `Alt + B` | 粗体向量名 `**□**` | `Alt + Q` | 点 `□(□, □)` |
-   | `Alt + D` | `△ABC: …` 模板 | `Alt + K` / `J` / `G` | ⊥ / ∥ / ∠ |
-   | `Tab` | 跳到下一个 □ | `Shift + Enter` | 换行写下一个条件 |
+The AI endpoint in Settings is your own OpenAI-compatible endpoint, Anthropic, or a local Ollama. The address, model name, and key stay in this browser under `mathscrap.ai.v1`. Requests go only to the address you entered. The key is not logged and is not given to MCP. Test connection sends nothing while the base URL or model name is still empty.
 
-3. **浮动数学键盘**：在桌面端，正在写公式时右侧会出现；在手机上它是书写条里的一排大按键。点按键不会让输入框失去焦点。
+「帮我推一步 / Suggest a next step」把纸上的公式和你的一句请求发给那个模型。数值和几何仍由页面里的 Rust 工具计算。模型若不会函数调用，可以只返回 `{"add":["…"],"analyze":true,"note":"…"}`。
 
-纸面上的快捷键：
+Suggest a next step sends the formulas on the sheet and one request to that model. Numbers and geometry are still computed by the Rust tools in the page. If the model cannot call tools, it may return only `{"add":["…"],"analyze":true,"note":"…"}`.
 
-| 键 | 作用 | 键 | 作用 |
-| --- | --- | --- | --- |
-| `P` | 笔 | `/` 或双击纸面 | 在纸上写公式 |
-| `M` | 荧光笔 | `T` | Σ 工具：点哪儿写哪儿 |
-| `E` | 橡皮 | `V`（或 `H`） | 选择：拖动公式 / 平移纸面 |
-| `R` | 手写转公式 | `G` | 打开共享坐标系 |
-| `Enter` | 打开选中式子所在的坐标系 | `Delete` | 擦掉选中的式子 |
-| `Ctrl+Z` | 撤销 | `Ctrl+Shift+Z` / `Ctrl+Y` | 重做 |
+MCP 不保存密钥，也不调用那个聊天接口。工具名是稳定的：`page_read`、`page_add_formula`、`page_update_formula`、`solve_analyze`、`plot_open`、`plot_set_view`、`ink_read`。页面里可以调用 `window.mathscrap.tools.call(name, args)`。
 
-按住空格或鼠标中键拖动可以平移，`Ctrl + 滚轮` 或双指捏合可以缩放。
+MCP does not store the key and does not call that chat endpoint. The tool names are stable: `page_read`, `page_add_formula`, `page_update_formula`, `solve_analyze`, `plot_open`, `plot_set_view`, `ink_read`. The page can call `window.mathscrap.tools.call(name, args)`.
 
-**笔的样式**：墨水（带压感，基于 perfect-freehand）、虚线、点线、铅笔（带纸纹颗粒）、和纸胶带、荧光马克笔。可以调粗细和颜色。
+外部程序要同时开着 `npm run dev` 和本机页面。stdio 服务器是 `mcp/server.ts`，用 `node --import tsx mcp/server.ts` 启动，工作目录是仓库根。`MATHSCRAP_BRIDGE` 默认 `http://127.0.0.1:47321`。不要把 `npm run mcp` 当作 MCP 客户端的 command，npm 会往 stdout 打一行字，stdio 协议会坏。页面没连上时，`tools/call` 立刻返回错误，不会一直等。
 
-### 多设备
+An external program needs both `npm run dev` and the local page. The stdio server is `mcp/server.ts`, started with `node --import tsx mcp/server.ts` and the repository root as its working directory. `MATHSCRAP_BRIDGE` defaults to `http://127.0.0.1:47321`. Do not use `npm run mcp` as the MCP client's command: npm writes a line to stdout and breaks the stdio protocol. If the page is not connected, `tools/call` returns an error immediately.
 
-- **界面**：所有设备都是同一套极简布局，类似 Freeform：
-  - 底部中间一条浮动工具胶囊：笔、荧光笔、橡皮、选择、Σ、手写转公式。
-  - 右下角是「坐标系」按钮。
-  - 右上角只有撤销、重做和「…」菜单（缩放、示例、设置、清空）。
-  - 纸面上不放任何面板。
-  - **手机**：按钮更大；写公式时书写条停在键盘上方，带一排数学按键。坐标系先是右下角的图，详情再打开全屏。
-  - **平板 / 桌面**：公式在点击的位置原地书写。坐标系先是右下角的图；详情之后左边是纸、右边是图和推导。
-- **输入方式**：Pointer Events 统一处理鼠标、触控和手写笔。检测到手写笔之后会自动开启防误触（手掌触碰不画线，单指触碰改为平移）；设置里也可以强制开启「仅手写笔书写」。
-- **手写笔 / 数位板**：这类应用最理想的输入设备是 Apple Pencil、Surface Pen 或 Wacom 数位板。压感已经接入笔画粗细。写完稍停会在本机认成式子。
+开发服务器会把浏览器的模型请求经 `POST /__mathscrap/ai/forward` 转发，以免 CORS 拦住页面。转发只允许 GET/POST，路径要落到模型列表、对话补全或 Messages，并拒绝链路本地地址和云元数据主机。直接打开 `dist/` 时没有这个转发。桥没有单独的口令：谁能访问开发端口，谁就能让开着的页面改公式。不要把 `npm run dev` 暴露到公网。
 
----
+The dev server forwards the browser's model request through `POST /__mathscrap/ai/forward` so CORS does not block the page. The forwarder allows only GET and POST, only model-list, chat-completion, or Messages paths, and it refuses link-local and cloud-metadata hosts. Opening `dist/` by itself has no forwarder. The bridge has no separate password: anyone who can reach the dev port can change formulas on the open page. Do not expose `npm run dev` to the public internet.
 
-## 推导引擎（核心功能）
+## 安装包
 
-“给几个已知量，尽量多推出别的量”这件事，完全在 Rust/WASM 里完成：
+## Packages
 
-- **解三角形**：覆盖 SSS、SAS、SSA（含两解 / 无解的判断）、AAS/ASA、HL（斜边直角边）、给面积的情况，以及**中线 `m_a`、高 `h_a` 作为已知量**（反推出边）和**两角 + 面积**（由外接圆半径 R 定大小）。推出边、角、面积、周长、R、r、三条高、中线、**三条中位线、三条角平分线**，直角三角形还会给出**斜边上的高与两条射影（射影定理）**；给多了的条件会做一致性校验，矛盾时明确报错。每一条结果都附上所用的定理。
-- **圆与弦**：相交弦定理（圆内两弦交于 P：由三条线段长推出第四条）、割线定理（圆外两点割线）、切割线定理（PT² = PA·PB），每个配置都会连着推出弦长、弦心距、圆心角、圆周角、弓形高和 |OP|，并画出恢复出来的弦图。**圆和纸上的点会交叉推断**：不管圆来自 `⊙O: r = 5` 还是 `x^2 + y^2 = 25`，每个点都会得到到圆心的距离、点的幂、在圆上 / 内 / 外，圆外点的切线长，圆上点之间的弦、弦心距、圆心角与圆周角（同弧上的圆周角是圆心角的一半），两条弦相交处自动验证相交弦 / 割线定理。
-- **平行线**：两平行线被第三条线所截时，推出同位角、内错角（相等）与同旁内角（互补）的具体角度，以及截线夹在两平行线间的线段长。**三条平行线截两条截线**时给出平行线分线段成比例定理（两边对应线段的比相等）；**两条平行线 + 两条相交截线**时给出相似三角形与相似比。
-- **坐标点**：两点之间的距离、中点、斜率。三点组成的三角形会给出各心和面积。四点会判定平行四边形、矩形、菱形、正方形、梯形。3D 中三点确定一个平面，四点组成四面体并计算体积。
-- **未知参数**：多起点 Levenberg–Marquardt 求解非线性方程组，条件可以是 ⊥、∥、|AB|=、∠=、过点、`f(a)=b`、`f'(a)=b`，也可以是任意方程。多组解时可以在面板里切换。
-- **直线与圆锥曲线**：直线的斜率、截距、倾斜角、两直线的交点与夹角、点到直线的距离。二次曲线由特征值分类为圆、椭圆、双曲线或抛物线，并给出中心、半轴、焦点、离心率、渐近线、准线。
-- **一元方程**：一次方程直接移项求解。二次方程给出一般式、Δ、求根公式（区分两根、重根、共轭复根）、韦达定理、对应抛物线的顶点和对称轴。其他方程用 Rust 数值求根，并标出重根。
-- **坐标系选择与初始视野**：
-  - 维度：有 z、三维点或三维向量时用 3D，否则用 2D。
-  - 2D 几何图形和圆锥曲线：按 1:1 比例框住所有图形；有界的隐式曲线用零点集的包围盒来定范围。
-  - 2D 函数：以零点、极值、交点、截距为中心取 x 范围，再按这个范围内的曲线取值定 y 范围，并限制 y 的跨度，避免 x³、eˣ 这类曲线被压扁。周期函数固定显示约两个周期。
-  - 3D 曲面：z 轴范围跟随曲面的取值范围，例如 z = x² + y² 不会被立方体顶面截掉。
-  - 拖动或缩放后，曲线会在新的范围里由 Rust 重新采样。
-- **函数**：定义域（扫描断点和渐近线）、零点（变号二分 + 切点检测）、极值（黄金分割 + 渐近线剔除）、两两之间的交点。
-- **向量与平面**：点积、叉积、夹角、投影（数量）、**投影向量与垂直分量**（a = 投影 + 垂直）、混合积。向量还可以用语句定义：`𝐜 = 𝐚 + 𝐛`、`𝐩 = 投影(𝐚, 𝐛)`，定义出的向量参与同一套推导。平面的法向量、两平面夹角、交线、三平面交点、点到平面的距离。
-- **精确形式**：数值结果会被尽量还原成 √、分数、π 的形式，例如 \(\sqrt{39}\)、\(\frac{35\sqrt3}{4}\)、\(\frac{\pi}{3}\)。
+外壳是 Tauri 2。它把 `dist/` 放进系统 WebView。安装之后不连接 Vite，也不从公共 CDN 拉数学库或 OCR。标识是 `app.mathscrap`，版本 `0.1.0`。图标用纸面的牛皮色 `#c9a473`。
 
-坐标系面板右侧依次列出三部分：「已知 N 条 → 推出 M 项」、每一项的推导依据，以及一个可以在图上标出该项的眼睛开关。纸上同一维度的所有式子都在同一个坐标系里，它们之间的交点会自动求出（`src/math/page.ts` 负责把纸上的式子分到平面 / 空间两个共享坐标系）。
+The shell is Tauri 2. It puts `dist/` in the system WebView. After install it does not connect to Vite and does not fetch the math library or OCR from a public CDN. The identifier is `app.mathscrap`, version `0.1.0`. The icon uses the kraft color `#c9a473`.
 
----
-
-## Rust / WASM：JS ↔ Rust 边界
-
-```
-crates/mathcore/            Rust crate（cdylib + rlib）
-  src/expr.rs               表达式分词、解析（隐式乘法、字母拆分）、编译成槽位求值、LaTeX
-  src/numeric.rs            采样、求根、极值、断点、线性/非线性方程组、系数识别
-  src/geometry.rs           三角形 / 点 / 向量 / 直线 / 平面 / 圆锥曲线推导，统一输出 Fact
-  src/circle.rs             相交弦 / 割线 / 切线定理求解，圆 × 点交叉推断
-  src/lib.rs                #[wasm_bindgen] 导出
-src/wasm/pkg/               wasm-pack 产物（已提交，约 430 KB）
-src/wasm/engine.ts          唯一的 JS 入口：加载、类型化、计时统计
-src/math/statements.ts      TS：把纸上每个式子的文本解析成语句（点、曲线、约束、三角形…）
-src/math/page.ts            TS：整张纸 → 平面 / 空间两个共享坐标系
-src/math/scene.ts           TS：编排——决定调用哪些 Rust 函数、组织推导结果
-```
-
-**边界约定**：
-
-- 跨边界只传字符串和数字。表达式用 ASCII 源码（如 `"x^2 - 2"`）。变量环境用 JSON 对象字符串（如 `{"k": 2}`）。
-- 结构化结果以 JSON 字符串返回。
-- 数值采样直接返回 `Float64Array`，不经过 JSON。
-- TS 只经由 `src/wasm/engine.ts` 调用，每次调用都会计时，设置面板和推导面板底部会显示调用次数与耗时。
-
-| 导出 | 输入 | 输出 |
+| 命令 Command | 在哪里跑 / Where it runs | 得到什么 / What you get |
 | --- | --- | --- |
-| `latex(src)` / `inspect(src)` | 表达式 | LaTeX / `{ok, error, vars, source}` |
-| `eval(src, env)` | 表达式、环境 | `f64` |
-| `sample_curve(src, var, env, a, b, n)` | | `Float64Array`（n 个 y 值，无定义为 NaN） |
-| `sample_grid(src, x, y, env, x0, x1, y0, y1, nx, ny)` | | `Float64Array`，行优先 |
-| `sample_volume(src, env, lo, hi, n)` | | `Float64Array`，索引为 `(k*n+j)*n+i` |
-| `roots` / `domain_gaps` / `intersect_curves` / `intersect_curve_implicit` | 表达式与区间 | `Float64Array` |
-| `extrema(src, var, env, a, b)` | | JSON `[{x, y, kind}]` |
-| `solve_system(eqs_json, unknowns_json, env)` | 残差表达式数组、未知数名 | JSON `{unknowns, solutions, exact, starts, error}` |
-| `linear_coeffs` / `conic_analyze` | 方程 | 系数 / 圆锥曲线推导 |
-| `triangle_solve(known_json)` | `{a,b,c,A,B,C,S}`（角用弧度，缺省即未知） | JSON `{cases: [{facts, vertices, note}], error}` |
-| `circle_solve(known_json)` | `{r, cross: {p, chords, lengths, pos}}` | JSON `{cases: [{facts, note, center, p, lines}], error}` |
-| `circles_analyze` / `circle_of` | 圆与点 JSON / 曲线方程 | JSON `Fact[]` / `{cx, cy, r}` |
-| `derived_points_analyze` | 中点 / 分点定义 JSON + 点 JSON | JSON `Fact[]`（坐标、比值、中位线） |
-| `points_analyze` / `vectors_analyze` / `lines_analyze` / `planes_analyze` | JSON | JSON `Fact[]` |
-| `nice_number(v)` | `f64` | 精确形式的 LaTeX |
+| `npm run pack:web` | 有 Node 即可。 / Any machine with Node. | `dist/`。这是页面，不是安装包。 / `dist/`. This is the page, not an installer. |
+| `npm run pack:windows` | Windows 10 1803+ 或 Windows 11，已有 WebView2、VS C++ 生成工具、Rust 1.90、Node。 / That Windows setup. | `packaging/out/` 里的 NSIS 安装程序和 `MathScrap.exe`。默认不签名。 / An NSIS installer and `MathScrap.exe` in `packaging/out/`. Unsigned by default. |
+| `npm run pack:android` | JDK 17、Android SDK、NDK、Rust 的 Android 目标。 / JDK 17, Android SDK, NDK, and the Rust Android targets. | debug 签名的 APK，可以侧载。不是 Play 商店包。 / A debug-signed APK that can be sideloaded. Not a Play Store package. |
+| `npm run pack:ios` | 只有 macOS 加完整 Xcode。其它系统会直接退出。 / macOS with full Xcode only. Other systems exit immediately. | 模拟器是 `.app`。没有描述文件和证书时不会做出可安装的 IPA。 / The simulator product is an `.app`. Without a profile and certificate it does not produce an installable IPA. |
 
-所有推导结果都是统一的 `Fact`：
+Windows 安装程序不附带 WebView2 下载器。可选签名只认环境变量 `WINDOWS_CERTIFICATE`（pfx 的 base64）和 `WINDOWS_CERTIFICATE_PASSWORD`。脚本不打印它们，仓库里也没有证书。
 
-```ts
-{ group, label, value, num, how, why, shape }
-```
+The Windows installer does not bundle a WebView2 downloader. Optional signing reads only `WINDOWS_CERTIFICATE` (base64 pfx) and `WINDOWS_CERTIFICATE_PASSWORD`. The scripts do not print them, and the repository has no certificate.
 
-其中 `shape` 是可选的几何形状（点、圆、线段、3D 直线、3D 箭头），图上的高亮就靠它渲染。
+Android 调试包用 SDK 的 debug keystore 签名。正式签名要已有的 keystore：`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`、`ANDROID_KEY_BASE64`。脚本不会生成 keystore。
 
-**重新编译 WASM**：
+The Android debug package is signed with the SDK debug keystore. A release signature needs an existing keystore: `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_BASE64`. The script does not generate a keystore.
 
-```bash
-rustup target add wasm32-unknown-unknown
-cargo install wasm-pack
-npm run build:wasm   # 输出到 src/wasm/pkg 并删除 wasm-pack 生成的 .gitignore
-npm run test:rust
-npm run smoke
-```
+iOS 最低系统是 16.4。能装到别人手机上的 IPA 需要 Apple Developer 证书和描述文件：`IOS_CERTIFICATE`、`IOS_CERTIFICATE_PASSWORD`、`IOS_MOBILE_PROVISION`，或 `APPLE_API_ISSUER`、`APPLE_API_KEY`、`APPLE_API_KEY_PATH`。这里不注册开发者账号，不上传 TestFlight 或 App Store，也没有在 iPhone 上安装过。
 
----
+The iOS minimum is 16.4. An IPA that installs on someone else's phone needs an Apple Developer certificate and profile: `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD`, `IOS_MOBILE_PROVISION`, or `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_PATH`. This repository does not enroll a developer account, does not upload to TestFlight or the App Store, and has not been installed on an iPhone.
 
-## AI API
+`.github/workflows/package.yml` 里的 `test` 作业在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`，然后拉起 dev 服务器，依次跑 `npm run e2e:sheet` 和 `npm run e2e`（逐条作图）。失败时上传 `e2e-shots`、`e2e-plots` 和 `dev-server.log`。这些步骤不需要密钥。推到 `cursor/mathscrap-packaging-*` 时，测试通过后同一 workflow 再构建网页、debug APK 和未签名的 Windows 安装程序。指向 `main` 的 pull request 只跑 `test`。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
 
-设置 → AI 接口可以填写服务类型、Base URL、模型名和 API Key。配置只写在这台浏览器的 localStorage（`mathscrap.ai.v1`）。密钥不会打进日志，也不会交给 MCP 进程。
+The `test` job in `.github/workflows/package.yml` runs on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, then starts the dev server and runs `npm run e2e:sheet` and `npm run e2e` (one plot per formula). On failure it uploads `e2e-shots`, `e2e-plots`, and `dev-server.log`. Those steps need no secrets. A push to `cursor/mathscrap-packaging-*` builds the web bundle, a debug APK, and an unsigned Windows installer in the same workflow after that job passes. A pull request into `main` runs only `test`. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
 
-| 服务类型 | 怎么发 | Base URL 示例 |
-| --- | --- | --- |
-| OpenAI 兼容接口 | `POST {base}/chat/completions`，测试时先 `GET {base}/models` | `https://api.openai.com/v1` |
-| Anthropic | `POST {base}/v1/messages`（默认主机 `https://api.anthropic.com`） | `https://api.anthropic.com` |
-| 本地模型（Ollama 等） | 同样走 OpenAI 兼容路径。只写了主机时会自动补上 `/v1` | `http://127.0.0.1:11434/v1` |
+## 许可和作者
 
-「测试连接」发一条很短的请求（模型列表，没有这个路径时再发 `max_tokens: 1` 的对话）。Base URL 和模型名还空着时按钮是禁用的，点了也会立刻提示，不会转圈。Anthropic 还需要 API Key；本地模型的 Key 可以留空。
+## License and authors
 
-右上角 **…** 菜单里的「帮我推一步」是纸面旁边的对话条（不是写在牛皮纸上的字）。它把当前公式和你的一句请求发给已配置的模型，并优先用下面同一套工具：写到纸上用 `page_add_formula`，推导用 `solve_analyze`。模型若不会函数调用，只要返回 `{"add":["…"],"analyze":true,"note":"…"}` 也会照着写到纸上。向量会改写成粗体加等号（`**b** = (1, 2)`）。
+Apache-2.0。见 [LICENSE](./LICENSE) 和 [NOTICE](./NOTICE)。版权人是 DNTOF。提交作者是 DNT_OF。
 
-开发服务器（`npm run dev` / `npm run preview`）会把浏览器的模型请求经本机 `POST /__mathscrap/ai/forward` 转发出去，这样页面不会被浏览器的 CORS 拦住。静态打开 `dist/` 时没有这个转发，浏览器会直接请求你填的地址，对方必须允许跨域。
-
-## MCP
-
-MCP 和上面的 AI API 是两条路。AI API 是设置里填写的 OpenAI 兼容、Anthropic 或 Ollama 对话接口，密钥只留在这台浏览器里，「帮我推一步」用它聊天。MCP 不保存密钥，也不去调用那个聊天接口。它把**同一份工具**交给本机上的外部程序：读这张纸、写式子、做推导、打开坐标系、读笔迹。推导仍由页面里的 Rust/WASM 完成；MCP 进程只负责转发。
-
-工具定义在 `src/ai/specs.ts`，处理函数在页面里（`src/ai/tools.ts`），应用加载后挂到 `window.mathscrap.tools`。可以在控制台试：
-
-```js
-mathscrap.tools.specs
-mathscrap.tools.call('page_read')
-mathscrap.tools.call('solve_analyze', { texts: ['△ABC: a=3, b=4, C=90°'] })
-mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' })
-mathscrap.tools.call('plot_set_view', { x: [-2, 4], y: [-2, 4] })
-mathscrap.tools.call('ink_read', {})
-```
-
-| 工具 | 状态 | 说明 |
-| --- | --- | --- |
-| `page_read` | 本地可用 | 读取这张纸：每个式子的原文、位置，以及笔迹数量 |
-| `page_add_formula` / `page_update_formula` | 本地可用 | 在纸上写一个式子 / 改写某个式子 |
-| `solve_analyze` | 本地可用 | 对一组条件做推导，返回结构化结果（由 Rust 计算） |
-| `plot_open` | 本地可用 | 打开整张纸共享的坐标系（可传 id 决定先看平面还是空间） |
-| `plot_set_view` | 本地可用 | 修改坐标范围、3D 相机、叠加或拿掉哪些式子 |
-| `ink_read` | 本地可用 | 读取手写笔迹的点序列（`pts` 为 x, y, pressure） |
-
-外部 agent 用 stdio MCP 服务器 `mcp/server.ts`（`@modelcontextprotocol/sdk`）。它不计算数学：`tools/call` 经 HTTP 交给正在运行的 Vite 页，页面轮询 `GET /__mathscrap/bridge/wait` 后在本地执行。
-
-1. 终端里 `npm run dev`，浏览器打开 `http://127.0.0.1:47321` 并保持这个标签页。
-2. 把下面的片段放进 Cursor 的 `~/.cursor/mcp.json`（或项目里的 `.cursor/mcp.json`），Claude Desktop 则放进 `claude_desktop_config.json`。把路径换成这台机器上的仓库根目录。
-
-```json
-{
-  "mcpServers": {
-    "mathscrap": {
-      "command": "node",
-      "args": ["--import", "tsx", "mcp/server.ts"],
-      "cwd": "/ABSOLUTE/PATH/TO/mathscrap",
-      "env": {
-        "MATHSCRAP_BRIDGE": "http://127.0.0.1:47321"
-      }
-    }
-  }
-}
-```
-
-`MATHSCRAP_BRIDGE` 可以不写，默认就是 `http://127.0.0.1:47321`。不要用 `npm run mcp` 当作上面的 `command`：npm 会往 stdout 打一行脚本名，stdio 协议会坏。`npm run mcp` 只适合在终端里看进程是否能起来。
-
-页面加载大约一秒后才连上桥，这样不会占住浏览器的空闲网络。页面没开、或刚打开还没连上时，`tools/list` 仍然返回这 7 个工具；`tools/call` 会立刻返回「页面还没连上」，不会一直等。
-
-### 安全
-
-- API Key 只在浏览器 localStorage。测试连接和「帮我推一步」把它放进发往**你填写的 Base URL** 的请求头。代码路径里不打印密钥、Authorization 或 `x-api-key`。
-- MCP 进程看不到密钥。它只把工具名和参数发给 `127.0.0.1` 上的开发服务器。
-- 开发服务器上的转发只允许 GET/POST，路径必须以 `/models`、`/chat/completions` 或 `/messages` 结尾，并拒绝链路本地地址和云元数据主机。
-- 桥接没有单独的口令：谁能访问这个开发端口，谁就能让开着的页面改公式。`npm run dev` 只在本机或你信任的局域网使用，不要把它暴露到公网。
-- 推导仍由 Rust/WASM 完成。模型只负责把题写成本应用的语法，并用自然语言说明下一步。
-
----
-
-## 手写识别（默认开启）
-
-写完一笔稍停（约 1 秒），先看这团笔迹像不像算式（等号、分式、上标、字母上的箭头、坐标点）。像一句普通字就留在纸上，不会送进公式模型，也不会写成非法式子。像算式才走 CoMER：置信度够就写上纸并更新右下角的图。纸上不出现确认条。单独一个字母不是向量也不是点；字母上方有一横箭头时记成 `\vec{a}`。坐标写成 `A(1, 2)` 这种点。认不出就保持笔迹，不会拿 `y = x` 充数，也不会编出 `a = (1, 2, 2)`。设置里可以关掉自动识别（`手写自动识别`，默认开）；按 `R` 会对最近的笔迹再认一次。
-
-候选来自 **CoMER**（ECCV 2022）的 INT8 ONNX。权重由 [ink-on](https://github.com/kimseungdae/ink-on) 以 Apache-2.0 分发（Copyright 2025 kimseungdae）。路径是：笔迹点 → 纯 TypeScript 预处理 → 编码器 / 解码器 → LaTeX。核心在 `src/ocr/comer/`，不引用 React 或 DOM。
-
-```ts
-recognizeStrokes(strokes, encoder, decoder, vocab) → { text, latex, confidence }[]
-```
-
-`text` 是这张纸已经能解析的写法（`a^2 = b`、`(1)/(2)`、`sqrt(x)`）。模型若给出 `\vec{…}` 或 `\overrightarrow{…}`，会收成 `\vec{…}`。Web 演示把 `onnxruntime-web` 的 WASM 接在这个函数外面；确认条调用的就是它。
-
-### 模型文件
-
-已经放在仓库里，开发服务器按静态资源提供，浏览器按普通缓存保存：
-
-| 文件 | 大小 |
-| --- | --- |
-| `public/models/comer/encoder_int8.onnx` | 3.4 MB |
-| `public/models/comer/decoder_int8.onnx` | 4.0 MB |
-| `public/models/comer/vocab.json` | 词表，113 个 token |
-
-出处和 Apache-2.0 说明在 `public/models/comer/NOTICE.md` 与同目录的 `LICENSE`。预处理和 ink-on 一致：大约每 3px 重采样，黑底白字，内容缩放到大约 128px 高，放在高 256、宽为 64 的倍数（128–1024）的左上角。
-
-WASM 运行时不进 git。`npm install` 之后，开发服务器和 `vite preview` 从 `node_modules/onnxruntime-web/dist` 提供 `/ort/ort-wasm-simd-threaded.wasm`（约 12 MB）和对应的 `.mjs`。线程数设为 1，所以不需要跨域隔离。
-
-### 以后接到原生 ONNX Runtime
-
-桌面或手机不走浏览器。加载同一对 `encoder_int8.onnx` / `decoder_int8.onnx` 和 `vocab.json`，用 ONNX Runtime（或把同一计算图转成 Core ML）建两个 session，再调用 `recognizeStrokes`：
-
-1. `preprocessStrokes` 得到 `float32` 图像 `[1,1,256,W]`（`pixel_values`）和 `uint8` 掩码 `[1,256,W]`（`pixel_mask`，0 是内容，1 是补边）。
-2. 编码器输出 `encoder_features`、`encoder_mask`。
-3. 解码器每步吃这两个张量加上 `input_ids`（int64，从 `<sos>` 开始），读最后一步的 `logits`。
-4. 波束宽度 2。`<eos>` 或连续重复 3 次就停。
-
-`src/ocr/comer/decode.ts` 里的循环不绑定某一种 Runtime，session 只要实现 `run(feeds)`。
-
-### 怎么验证
-
-```bash
-npm run smoke:ocr   # 预处理尺寸、词表整理、脚本化的假模型；不加载 ONNX
-npm run ocr:live    # 本机 WASM 跑真正的 INT8，样例笔迹应读成 y = 2、y = x、a^2 = b、(1)/(2)
-npm run dev         # http://127.0.0.1:47321 ，同一局域网用 http://<本机IP>:47321
-```
-
-在纸上写 `y = 2`、`y = x` 或 `a^2 = b`，确认条应给出对应的式子。模型文件缺失或 WASM 加载失败时，确认条是「没认出来」，不会退回以前的几何规则。`src/ocr/inkShape.ts` 只留作回归测试。
-
----
-
-## 项目结构
-
-```
-src/
-  App.tsx                 状态编排、全局快捷键、工具桥
-  board/                  连续纸面（平移、缩放、捏合、笔迹、橡皮）、纸上的墨迹公式、撤销历史、示例
-  input/                  原地书写框、快捷键片段、纸上提示、数学键盘
-  plot/                   共享坐标系面板与角落按钮、Plotly 图形构建、推导结果列表
-  math/                   语句解析与场景推导（调用 WASM）
-  wasm/                   WASM 产物与类型化封装
-  ocr/                    笔迹分组、确认条，以及 CoMER 预处理 / 解码（不依赖 DOM）
-  ai/                     模型客户端、本机配置、MCP 形状的工具定义
-mcp/                    stdio MCP 服务器，以及 Vite 上的本机工具桥 / 请求转发
-  components/             顶栏、工具栏、设置、KaTeX；ui/ 是 shadcn 组件
-crates/mathcore/          Rust 数学核心
-scripts/smoke.ts          Node 端到端冒烟测试（单式 + 整页联立）
-scripts/e2e-plots.ts      浏览器：每个用例的图都真的画出来
-scripts/e2e-sheet.ts      浏览器：在纸上写多个式子 → 同一个坐标系
-```
-
-纸面内容自动保存在 localStorage（`mathscrap.doc.v2`）里，第一次打开是空白纸。旧版本（`v1`）的卡片页不会自动迁移，原数据仍留在浏览器里。「清空这页」可以撤销。
-
----
-
-## License
-
-Apache-2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
+Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE). The copyright holder is DNTOF. Commits are authored by DNT_OF.

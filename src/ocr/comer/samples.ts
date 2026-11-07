@@ -223,6 +223,85 @@ export function arrowLetter(width = 3): InkStroke[] {
   ]
 }
 
+/** One-stroke ∑ the INT8 model already reads as `\sum`. */
+export function sumGlyph(width = 3): InkStroke[] {
+  const corners = [
+    [92, 18],
+    [18, 18],
+    [70, 68],
+    [16, 118],
+    [94, 118],
+  ]
+  const points: StrokePoint[] = []
+  for (let i = 1; i < corners.length; i++) {
+    const [x0, y0] = corners[i - 1]
+    const [x1, y1] = corners[i]
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3))
+    for (let k = 0; k < n; k++) {
+      const t = k / n
+      points.push({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t })
+    }
+  }
+  const last = corners[corners.length - 1]
+  points.push({ x: last[0], y: last[1] })
+  return [{ points, lineWidth: width }]
+}
+
+/**
+ * ∑ drawn as a top bar, a zigzag, and a bottom bar.
+ * The bar used to be read as an over-arrow and the symbol was dropped.
+ * The model score on this ink sits near 0.45.
+ */
+export function sumBar(width = 3): InkStroke[] {
+  return [
+    line(
+      [
+        [18, 16],
+        [96, 16],
+      ],
+      width,
+    ),
+    line(
+      [
+        [90, 22],
+        [28, 62],
+        [78, 78],
+        [22, 112],
+      ],
+      width,
+    ),
+    line(
+      [
+        [16, 118],
+        [96, 118],
+      ],
+      width,
+    ),
+  ]
+}
+
+/**
+ * Compact one-stroke σ. The INT8 model puts `\sigma` near 0.29, behind a bare C
+ * that the sheet drops. The curl is what lets that reading clear the write line.
+ */
+export function isolatedSigma(width = 3): InkStroke[] {
+  return [
+    line(
+      [
+        [62, 8],
+        [36, 6],
+        [16, 20],
+        [12, 40],
+        [22, 58],
+        [42, 64],
+        [60, 52],
+        [74, 36],
+      ],
+      width,
+    ),
+  ]
+}
+
 export function shiftInk(strokes: InkStroke[], dx: number, dy: number): InkStroke[] {
   return strokes.map((s) => ({ points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })), lineWidth: s.lineWidth }))
 }

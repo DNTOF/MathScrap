@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { InkFormula } from './InkFormula'
-import { hitStroke, StrokeDefs, StrokeShape } from './strokes'
+import { hitStroke } from './strokeGeom'
+import { StrokeDefs, StrokeShape } from './strokes'
 import { uid, type Doc, type PenStyle, type Stroke, type Tool, type View } from './types'
 
 export interface PenSettings {
@@ -49,7 +50,9 @@ export function Board(props: Props) {
   const erasingRef = useRef<Set<string>>(new Set())
   const [space, setSpace] = useState(false)
   const viewRef = useRef(view)
-  viewRef.current = view
+  useLayoutEffect(() => {
+    viewRef.current = view
+  }, [view])
   const penSeen = useRef(false)
 
   const toWorld = useCallback((cx: number, cy: number) => {

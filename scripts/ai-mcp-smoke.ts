@@ -144,7 +144,7 @@ try {
 
   assert.match(missingConfig(cfg({ provider: 'openai-compatible', baseUrl: '  ', model: ' ' })) ?? '', /Base URL/)
   assert.equal(missingConfig(cfg({ provider: 'local', baseUrl: base, model: 'demo-model' })), null)
-  assert.match(missingConfig(cfg({ provider: 'anthropic', baseUrl: '', model: 'claude' })) ?? '', /API Key/)
+  assert.match(missingConfig(cfg({ provider: 'anthropic', baseUrl: '', model: 'claude' })) ?? '', /API key/i)
 
   let calls = 0
   const boom: AiTransport = {
@@ -154,27 +154,27 @@ try {
     },
   }
   const t0 = Date.now()
-  await assert.rejects(() => testConnection(cfg({ provider: 'openai-compatible', baseUrl: '', model: '' }), boom), /还没填写/)
-  await assert.rejects(() => testConnection(cfg({ provider: 'openai-compatible', baseUrl: 'ftp://example.com/v1', model: 'demo-model' }), boom), /http 或 https/)
+  await assert.rejects(() => testConnection(cfg({ provider: 'openai-compatible', baseUrl: '', model: '' }), boom), /still empty/)
+  await assert.rejects(() => testConnection(cfg({ provider: 'openai-compatible', baseUrl: 'ftp://example.com/v1', model: 'demo-model' }), boom), /http or https/)
   assert.equal(calls, 0)
   assert.ok(Date.now() - t0 < 200, 'empty config hung')
 
   const openai = await testConnection(cfg({ provider: 'openai-compatible', baseUrl: `${base}/v1`, model: 'demo-model', apiKey: OK_KEY }))
-  assert.match(openai, /OpenAI 兼容接口/)
+  assert.match(openai, /OpenAI-compatible/)
   assert.ok(hits.includes('GET /v1/models'))
   assert.ok(auths.includes(`Bearer ${OK_KEY}`))
 
-  await assert.rejects(() => testConnection(cfg({ provider: 'openai-compatible', baseUrl: `${base}/v1`, model: 'missing-model', apiKey: OK_KEY })), /没有「missing-model」/)
+  await assert.rejects(() => testConnection(cfg({ provider: 'openai-compatible', baseUrl: `${base}/v1`, model: 'missing-model', apiKey: OK_KEY })), /missing-model/)
 
   const rejected = await testConnection(cfg({ provider: 'openai-compatible', baseUrl: `${base}/v1`, model: 'demo-model', apiKey: SECRET })).then(
     () => 'unexpected success',
     (e: unknown) => (e instanceof Error ? e.message : String(e)),
   )
-  assert.equal(rejected, '密钥被拒绝（HTTP 401）')
+  assert.equal(rejected, 'The key was rejected (HTTP 401)')
   assert.ok(!rejected.includes('SHOULD-NOT-LEAK'))
 
   const local = await testConnection(cfg({ provider: 'local', baseUrl: base, model: 'demo-model' }))
-  assert.match(local, /本地模型/)
+  assert.match(local, /local model/)
   assert.ok(hits.includes('GET /v1/models'))
 
   const anthropic = await testConnection(cfg({ provider: 'anthropic', baseUrl: base, model: 'claude', apiKey: OK_KEY }))
@@ -218,7 +218,7 @@ try {
         forwarded = true
         return new Response('no')
       }),
-    /拒绝访问/,
+    /refused/i,
   )
   assert.equal(forwarded, false)
 
@@ -258,7 +258,7 @@ const offline = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {
 })
 const offlineBody = (await offline.json()) as { ok: boolean; error?: string }
 assert.equal(offlineBody.ok, false)
-assert.match(offlineBody.error ?? '', /还没连上/)
+assert.match(offlineBody.error ?? '', /not connected/)
 assert.ok(Date.now() - offlineAt < 500, 'disconnected tool call hung')
 
 const state = {

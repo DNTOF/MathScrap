@@ -1,3 +1,5 @@
+import { t } from '../i18n/locale.ts'
+
 /** Plot commands issued by the local tool bridge. PlotPane applies them when it is mounted. */
 
 export interface Vec3 {
@@ -33,10 +35,10 @@ export function normalizePlotInput(raw: Record<string, unknown>): { ok: true; va
   const x = pair(raw.x)
   const y = pair(raw.y)
   const z = pair(raw.z)
-  if (x === 'bad') return { ok: false, error: 'x 需要是 [min, max] 两个不同的数' }
-  if (y === 'bad') return { ok: false, error: 'y 需要是 [min, max] 两个不同的数' }
-  if (z === 'bad') return { ok: false, error: 'z 需要是 [min, max] 两个不同的数' }
-  if ((x && !y) || (!x && y)) return { ok: false, error: 'x 和 y 范围要一起给' }
+  if (x === 'bad') return { ok: false, error: t('rangePair', { axis: 'x' }) }
+  if (y === 'bad') return { ok: false, error: t('rangePair', { axis: 'y' }) }
+  if (z === 'bad') return { ok: false, error: t('rangePair', { axis: 'z' }) }
+  if ((x && !y) || (!x && y)) return { ok: false, error: t('rangeTogether') }
   if (x && y) {
     value.x = x
     value.y = y
@@ -44,24 +46,24 @@ export function normalizePlotInput(raw: Record<string, unknown>): { ok: true; va
   if (z) value.z = z
   if (raw.camera != null) {
     const camera = cameraOf(raw.camera)
-    if (!camera) return { ok: false, error: 'camera.eye / center / up 需要是 {x, y, z}' }
+    if (!camera) return { ok: false, error: t('cameraShape') }
     value.camera = camera
   }
   if (raw.mode != null && raw.mode !== '') {
     const mode = Number(raw.mode)
-    if (mode !== 2 && mode !== 3) return { ok: false, error: 'mode 只能是 2（平面）或 3（空间）' }
+    if (mode !== 2 && mode !== 3) return { ok: false, error: t('mode23') }
     value.mode = mode
   }
   const only = ids(raw.only)
   const show = ids(raw.show)
   const hide = ids(raw.hide)
-  if (only === 'bad' || show === 'bad' || hide === 'bad') return { ok: false, error: 'only / show / hide 需要是公式 id 数组' }
+  if (only === 'bad' || show === 'bad' || hide === 'bad') return { ok: false, error: t('idList') }
   if (only) value.only = only
   if (show) value.show = show
   if (hide) value.hide = hide
   if (raw.fit === true || raw.fit === 'true') value.fit = true
   if (!value.x && !value.z && !value.camera && !value.mode && !value.only && !value.show && !value.hide && !value.fit) {
-    return { ok: false, error: '需要 x/y 范围、z、camera、mode、only/show/hide 或 fit' }
+    return { ok: false, error: t('needView') }
   }
   return { ok: true, value }
 }

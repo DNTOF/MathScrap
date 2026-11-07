@@ -1,3 +1,4 @@
+import { t } from '@/i18n/locale'
 import { engine } from '@/wasm/engine'
 
 /** A reference to a direction: segment AB (from points) or a named vector. */
@@ -29,6 +30,8 @@ export type Statement =
   /** 𝐩 = 投影(𝐚, 𝐛), 𝐜 = 𝐚 + 𝐛, 𝐜 = 𝐚 − 𝐛 — a vector defined from existing ones. */
   | { kind: 'vectorDef'; name: string; op: 'proj' | 'sum' | 'sub'; a: string; b: string; src: string }
   | { kind: 'constraint'; c: Constraint; src: string }
+  /** Display-only CoMER notation (`\sum_{i=1}^{n} i`, `\int`). Not a curve and not an error. */
+  | { kind: 'notation'; latex: string; src: string }
   | { kind: 'error'; message: string; src: string }
 
 const BOLD_A = 0x1d41a
@@ -125,9 +128,88 @@ function err(src: string, message: string): Statement {
   return { kind: 'error', message, src }
 }
 
+const NOTATION_OPS = ['\\sum', '\\int']
+
+/**
+ * `\sum_{i=1}^{n} i` and the same shape with `\int`. The sheet cannot plot these,
+ * but they are real formulas: the card shows the LaTeX and does not go red.
+ * Spaces inside limits are kept out of the rendered form (`i = 1` → `i=1`).
+ */
+function notationLatex(src: string): string | null {
+  let raw = src.trim().replace(/∑/g, '\\sum').replace(/∫/g, '\\int')
+  let prefix = ''
+  const lead = raw.match(/^y\s*=\s*/)
+  if (lead) {
+    const rest = raw.slice(lead[0].length).trim()
+    if (NOTATION_OPS.some((op) => rest.startsWith(op))) {
+      prefix = 'y = '
+      raw = rest
+    }
+  }
+  const op = NOTATION_OPS.find((name) => raw.startsWith(name) && !/[A-Za-z]/.test(raw[name.length] ?? ''))
+  if (!op) return null
+  let i = op.length
+  let sub: string | null = null
+  let sup: string | null = null
+  const braceAt = (at: number) => {
+    if (raw[at] !== '{') return null
+    let depth = 0
+    for (let j = at; j < raw.length; j++) {
+      if (raw[j] === '{') depth++
+      else if (raw[j] === '}') {
+        depth--
+        if (depth === 0) return { inner: raw.slice(at + 1, j).replace(/\s+/g, ''), next: j + 1 }
+      }
+    }
+    return null
+  }
+  const take = (mark: '_' | '^') => {
+    let j = i
+    while (raw[j] === ' ') j++
+    if (raw.startsWith('\\limits', j)) {
+      j += '\\limits'.length
+      while (raw[j] === ' ') j++
+    }
+    if (raw[j] !== mark) return
+    const brace = braceAt(j + 1)
+    if (!brace) return
+    i = brace.next
+    if (mark === '_') sub = brace.inner
+    else sup = brace.inner
+  }
+  take('_')
+  take('^')
+  if (sub == null) take('_')
+  while (raw[i] === ' ') i++
+  const term = raw.slice(i).trim()
+  if (/[=;]/.test(term)) return null
+  let latex = op
+  if (sub) latex += `_{${sub}}`
+  if (sup) latex += `^{${sup}}`
+  if (term) latex += ` ${term}`
+  return prefix + latex
+}
+
+function asNotation(src: string): Statement | null {
+  const latex = notationLatex(src)
+  if (!latex) return null
+  return { kind: 'notation', latex, src: src.trim() }
+}
+
+/** A lone σ is the symbol. It is not the graph of y = sigma. */
+function asSigma(src: string): Statement | null {
+  const t = src.trim()
+  if (t !== 'sigma' && t !== 'σ' && t !== '\\sigma') return null
+  return { kind: 'notation', latex: '\\sigma', src: t }
+}
+
 function classifyPart(part: string): Statement[] {
   const src = part.trim()
   if (!src) return []
+  const notation = asNotation(src)
+  if (notation) return [notation]
+  const sigma = asSigma(src)
+  if (sigma) return [sigma]
 
   // 过(1,3) / through (1,3) and (2,5) / 过点A
   const through = src.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.*)$/i)
@@ -139,7 +221,7 @@ function classifyPart(part: string): Statement[] {
       const tp = tupleParts(p)
       if (tp) out.push({ kind: 'constraint', c: { type: 'through', coords: tp, point: null }, src: `过 ${p}` })
       else if (/^[A-Z]$/.test(p.trim())) out.push({ kind: 'constraint', c: { type: 'through', coords: null, point: p.trim() }, src: `过 ${p}` })
-      else out.push(err(p, '“过”后面写点坐标，例如 过(1, 3)'))
+      else out.push(err(p, t('errThrough')))
     }
     return out
   }
@@ -153,7 +235,7 @@ function classifyPart(part: string): Statement[] {
   if (rel) {
     const a = parseRef(rel[1])
     const b = parseRef(rel[3])
-    if (!a || !b) return [err(src, '⊥ / ∥ 两边请写线段（如 AB）或粗体向量（如 **a**）')]
+    if (!a || !b) return [err(src, t('errRel'))]
     return [{ kind: 'constraint', c: { type: rel[2] === '⊥' ? 'perp' : 'para', a, b }, src }]
   }
 
@@ -179,10 +261,10 @@ function classifyPart(part: string): Statement[] {
   }
   const plainVec = src.match(/^([a-z])(_\w+)?\s*=\s*(\(.+\))$/)
   if (plainVec && tupleParts(plainVec[3]))
-    return [err(src, `向量要用粗体定义：**${plainVec[1]}** = ${plainVec[3]}（也可写 ${bold(plainVec[1])}、\\mathbf{${plainVec[1]}} 或 \\vec{${plainVec[1]}}）`)]
+    return [err(src, t('errVecBold', { name: plainVec[1], rhs: plainVec[3] }))]
   const lowerPoint = src.match(/^([a-z])\s*(\(.+\))$/)
   if (lowerPoint && tupleParts(lowerPoint[2]) && !(vars(src) ?? []).length)
-    return [err(src, `点用大写字母命名，例如 ${lowerPoint[1].toUpperCase()}${lowerPoint[2]}；向量请写 **${lowerPoint[1]}** = ${lowerPoint[2]}`)]
+    return [err(src, t('errPointCase', { upper: lowerPoint[1].toUpperCase(), lower: lowerPoint[1], tuple: lowerPoint[2] }))]
 
   // derived points: M = 中点(A, B) / M = midpoint(A, B)
   const midDef = src.match(/^([A-Z][0-9']*)\s*=\s*(?:中点|midpoint)\s*\(\s*([A-Z][0-9']*)\s*,\s*([A-Z][0-9']*)\s*\)$/)
@@ -191,7 +273,7 @@ function classifyPart(part: string): Statement[] {
   const sectDef = src.match(/^([A-Z][0-9']*)\s*=\s*(?:分点|定比分点|section)\s*\(\s*([A-Z][0-9']*)\s*,\s*([A-Z][0-9']*)\s*,\s*([^)]+?)\s*\)$/)
   if (sectDef) {
     const ratio = sectDef[4].match(/^([0-9.]+)(?:\s*[:：]\s*([0-9.]+))?$/)
-    if (!ratio) return [err(src, '分点的比写成 1:2（表示 AP : PB = 1 : 2）')]
+    if (!ratio) return [err(src, t('errRatio'))]
     return [{ kind: 'pointDef', name: sectDef[1], a: sectDef[2], b: sectDef[3], m: ratio[1], n: ratio[2] ?? null, src }]
   }
   // derived vectors: 𝐩 = 投影(𝐚, 𝐛), 𝐜 = 𝐚 + 𝐛, 𝐜 = 𝐚 − 𝐛
@@ -212,11 +294,11 @@ function classifyPart(part: string): Statement[] {
   }
 
   const sides = splitTop(src, ['='])
-  if (sides.length > 2) return [err(src, '一个式子里只能有一个等号')]
+  if (sides.length > 2) return [err(src, t('errOneEq'))]
 
   if (sides.length === 1) {
     const v = vars(src)
-    if (!v) return [err(src, engine.inspect(src).error ?? '无法解析')]
+    if (!v) return [err(src, engine.inspect(src).error ?? t('errParse'))]
     if (v.includes('z')) return [{ kind: 'implicit3', F: src, src: `${src} = 0` }]
     if (v.includes('y')) return [{ kind: 'surface', expr: src, src: `z = ${src}` }]
     return [{ kind: 'curve', expr: src, src: `y = ${src}` }]
@@ -234,7 +316,7 @@ function classifyPart(part: string): Statement[] {
   const named = lhsT.match(/^([a-zA-Z](?:_\w+)?)\((x|x,y)\)$/)
   if (lhsT === 'y' || (named && named[2] === 'x')) {
     const v = vars(rhs)
-    if (!v) return [err(src, engine.inspect(rhs).error ?? '无法解析')]
+    if (!v) return [err(src, engine.inspect(rhs).error ?? t('errParse'))]
     const name = named ? named[1] : undefined
     if (v.includes('y')) return [{ kind: 'implicit2', name, F: `(${lhs}) - (${rhs})`, src }]
     if (v.includes('z')) return [{ kind: 'implicit3', name, F: `(${lhsT === 'y' ? 'y' : lhs}) - (${rhs})`, src }]
@@ -242,8 +324,10 @@ function classifyPart(part: string): Statement[] {
   }
   if (lhsT === 'z' || (named && named[2] === 'x,y')) {
     const v = vars(rhs)
-    if (!v) return [err(src, engine.inspect(rhs).error ?? '无法解析')]
+    if (!v) return [err(src, engine.inspect(rhs).error ?? t('errParse'))]
     if (v.includes('z')) return [{ kind: 'implicit3', F: `(z) - (${rhs})`, src }]
+    // z = c (no x/y) is the horizontal plane; keep it as implicit3 so plane tools apply.
+    if (v.length === 0) return [{ kind: 'implicit3', F: `(z) - (${rhs})`, src }]
     return [{ kind: 'surface', name: named ? named[1] : undefined, expr: rhs, src }]
   }
 
@@ -251,14 +335,14 @@ function classifyPart(part: string): Statement[] {
   const v = vars(F)
   if (!v) {
     const e = engine.inspect(lhs).ok ? engine.inspect(rhs).error : engine.inspect(lhs).error
-    return [err(src, e ?? '无法解析')]
+    return [err(src, e ?? t('errParse'))]
   }
   if (v.includes('z')) return [{ kind: 'implicit3', F, src }]
   // `x = 3` is the vertical line; any other equation in x alone is something to solve.
   const verticalLine = lhsT === 'x' && !(vars(rhs) ?? []).includes('x')
   if (v.includes('x') && !v.includes('y') && !verticalLine) return [{ kind: 'equation1', F, lhs, rhs, src }]
   if (v.includes('x') || v.includes('y')) return [{ kind: 'implicit2', F, src }]
-  if (v.length === 0) return [err(src, '这是一个纯数字等式，没有可画的对象')]
+  if (v.length === 0) return [err(src, t('errNumeric'))]
   return [{ kind: 'constraint', c: { type: 'equation', F }, src }]
 }
 
@@ -283,7 +367,7 @@ function parseTriangle(line: string): Statement | null {
     else if (lower.includes(k)) key = 'abc'[lower.indexOf(k)]
     if (key) known[key] = v
   }
-  if (!Object.keys(known).length) return { kind: 'error', message: '三角形请写成 △ABC: a=3, b=4, C=90°（也支持 m_a、h_a、面积 S）', src: line }
+  if (!Object.keys(known).length) return { kind: 'error', message: t('errTriangle'), src: line }
   return { kind: 'triangle', names, known, src: line }
 }
 
@@ -311,7 +395,7 @@ function parseChordLine(line: string): Statement {
   const tan = line.match(TANGENT_RE)
   if (tan) {
     const p = tan[1]
-    if (tan[3] !== p) return { kind: 'error', message: `切线 ${tan[1]}${tan[2]} 和割线 ${tan[3]}… 要从同一点出发，例如 切线 PT、割线 PAB`, src: line }
+    if (tan[3] !== p) return { kind: 'error', message: t('errTangent', { t1: tan[1], t2: tan[2], sec: tan[3] }), src: line }
     const lengths: Record<string, string> = {}
     for (const item of splitTop(tan[6], [','])) {
       const kv = item.match(/^\|?\s*([A-Z])\s*([A-Z])\s*\|?\s*=\s*(.+)$/)
@@ -321,13 +405,13 @@ function parseChordLine(line: string): Statement {
   }
   const m = line.match(CHORDS_RE)
   if (!m) {
-    return { kind: 'error', message: '弦的写法：弦 AB、CD 交于 P, PA = 2, PB = 6, PC = 4（或 切线 PT、割线 PAB）', src: line }
+    return { kind: 'error', message: t('errChord'), src: line }
   }
   const pos0 = m[1] ?? m[4]
   let pos: 'in' | 'out' | null = pos0 === '割线' ? 'out' : pos0 === '弦' ? 'in' : null
   const p = m[7]
   if (p === m[2] || p === m[3] || p === m[5] || p === m[6])
-    return { kind: 'error', message: `交点 ${p} 不能同时是弦的端点`, src: line }
+    return { kind: 'error', message: t('errCrossEnd', { p }), src: line }
   const lengths: Record<string, string> = {}
   let marker: 'in' | 'out' | null = null
   for (const item of splitTop(m[8], [','])) {
@@ -349,28 +433,28 @@ function parseCircleLine(line: string): Statement | null {
   if (!m) return null
   const name = m[1] ?? 'O'
   const body = m[2].trim()
-  if (!body) return { kind: 'error', message: '圆的写法：⊙O: r = 5', src: line }
+  if (!body) return { kind: 'error', message: t('errCircle'), src: line }
   let radius: string | null = null
   const through: { coords: string[] | null; point: string | null }[] = []
   for (const item of splitTop(body, [','])) {
-    const t = item.trim()
-    if (!t) continue
-    const rr = t.match(/^(?:r|R|半径|radius)\s*=\s*(.+)$/)
+    const bit = item.trim()
+    if (!bit) continue
+    const rr = bit.match(/^(?:r|R|半径|radius)\s*=\s*(.+)$/)
     if (rr) {
       radius = rr[1].trim()
       continue
     }
-    const th = t.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.+)$/i)
+    const th = bit.match(/^(?:过|经过|through|passes|pass)\s*(?:点)?\s*(.+)$/i)
     if (th) {
       const tp = tupleParts(th[1])
       if (tp) through.push({ coords: tp, point: null })
       else if (/^[A-Z]$/.test(th[1].trim())) through.push({ coords: null, point: th[1].trim() })
-      else return { kind: 'error', message: '“过”后面写点坐标，例如 ⊙O: 过(3, 4)', src: line }
+      else return { kind: 'error', message: t('errCircleThrough'), src: line }
       continue
     }
-    return { kind: 'error', message: `看不懂圆里的「${t}」：写 r = 5 或 过(3, 4)，点请单独一行写 A(3, 4)`, src: line }
+    return { kind: 'error', message: t('errCircleBit', { bit }), src: line }
   }
-  if (!radius && !through.length) return { kind: 'error', message: '圆的写法：⊙O: r = 5 或 ⊙O: 过(3, 4)', src: line }
+  if (!radius && !through.length) return { kind: 'error', message: t('errCircleNeed'), src: line }
   return { kind: 'circle', name, center: m[1] ?? null, radius, through, src: line }
 }
 
@@ -478,6 +562,8 @@ export function statementLatex(s: Statement): string {
       return `${s.name ? `${s.name}\\left(x,\\ y\\right)` : 'z'} = ${exprLatex(s.expr)}`
     case 'equation1':
       return `${exprLatex(s.lhs)} = ${exprLatex(s.rhs)}`
+    case 'notation':
+      return s.latex
     case 'error':
       return `\\text{${s.src.replace(/[\\{}$&#%_^]/g, ' ')}}`
     default:
@@ -488,34 +574,36 @@ export function statementLatex(s: Statement): string {
 export function kindLabel(s: Statement): string {
   switch (s.kind) {
     case 'curve':
-      return '函数'
+      return t('kindCurve')
     case 'implicit2':
-      return '平面曲线'
+      return t('kindImplicit2')
     case 'equation1':
-      return '方程'
+      return t('kindEquation')
     case 'surface':
-      return '空间曲面'
+      return t('kindSurface')
     case 'implicit3':
-      return '空间方程'
+      return t('kindImplicit3')
     case 'point':
-      return '点'
+      return t('kindPoint')
     case 'vector':
-      return '向量'
+      return t('kindVector')
     case 'param':
-      return '参数曲线'
+      return t('kindParam')
     case 'triangle':
-      return '解三角形'
+      return t('kindTriangle')
     case 'circle':
-      return '圆'
+      return t('kindCircle')
     case 'chords':
-      return '圆中的弦'
+      return t('kindChords')
     case 'pointDef':
-      return '定义点'
+      return t('kindPointDef')
     case 'vectorDef':
-      return '定义向量'
+      return t('kindVectorDef')
     case 'constraint':
-      return '条件'
+      return t('kindConstraint')
+    case 'notation':
+      return t('kindNotation')
     case 'error':
-      return '待修正'
+      return t('kindError')
   }
 }

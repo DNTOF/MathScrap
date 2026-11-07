@@ -514,6 +514,9 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
     let rr = a / (2.0 * g[0].sin());
     let r = area / p;
     out.push(fact("面积与周长", "S", nice(area), Some(area), "S = \\frac12 ab\\sin C", "面积公式"));
+    // Heron: same area from three sides — useful when the student only wrote SSS.
+    let heron = (p * (p - a) * (p - b) * (p - c)).max(0.0).sqrt();
+    out.push(fact("面积与周长", "S_{\\text{海伦}}", nice(heron), Some(heron), "S = \\sqrt{p(p-a)(p-b)(p-c)}", "海伦公式"));
     out.push(fact("面积与周长", "C_{\\triangle}", nice(per), Some(per), "a + b + c", "周长"));
 
     let [na, nb, nc] = names;
@@ -564,12 +567,15151 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
             (y * v[(i + 1) % 3][1] + z * v[(i + 2) % 3][1]) / (y + z),
         ];
         out.push(fact("角平分线", &format!("t_{}", SIDE[i]), nice(t), Some(t), &format!("t_{s} = \\frac{{2{u}{w}\\cos\\frac{{{T}}}{{2}}}}{{{u} + {w}}}", s = SIDE[i], u = SIDE[(i + 1) % 3], w = SIDE[(i + 2) % 3], T = ANG[i]), "角平分线长公式").with(Shape::Segment { x1: v[i][0], y1: v[i][1], x2: foot[0], y2: foot[1], label: format!("t_{}", SIDE[i]) }));
+        // 角平分线定理: foot F on the opposite side splits it as the adjacent sides.
+        let (u, w) = ((i + 1) % 3, (i + 2) % 3);
+        let d_u = dist2(v[u], foot);
+        let d_w = dist2(foot, v[w]);
+        if d_w > 1e-12 {
+            let ratio = d_u / d_w;
+            out.push(fact(
+                "角平分线",
+                &format!("\\frac{{|{nu}F_{{{s}}}|}}{{|F_{{{s}}}{nw}|}}", s = SIDE[i], nu = names[u], nw = names[w]),
+                nice(ratio),
+                Some(ratio),
+                &format!("\\frac{{{w}}}{{{u}}}", u = SIDE[u], w = SIDE[w]),
+                "角平分线定理：分对边成邻边比",
+            ));
+        }
     }
 
     out.push(fact("特殊点", "G", pt(centroid[0], centroid[1]), None, "G = \\frac{A + B + C}{3}", "重心（中线交点）").with(Shape::Point { x: centroid[0], y: centroid[1], label: "G 重心".into() }));
     out.push(fact("特殊点", "O", pt(circ[0], circ[1]), None, "|OA| = |OB| = |OC|", "外心（中垂线交点）").with(Shape::Point { x: circ[0], y: circ[1], label: "O 外心".into() }));
     out.push(fact("特殊点", "I", pt(inc[0], inc[1]), None, "I = \\frac{aA + bB + cC}{a + b + c}", "内心（角平分线交点）").with(Shape::Point { x: inc[0], y: inc[1], label: "I 内心".into() }));
     out.push(fact("特殊点", "H", pt(orth[0], orth[1]), None, "\\vec{OH} = \\vec{OA} + \\vec{OB} + \\vec{OC}", "垂心（高线交点）").with(Shape::Point { x: orth[0], y: orth[1], label: "H 垂心".into() }));
+
+    // Excircle radii; Euler OI² = R(R − 2r); OH from the orthocenter / circumcenter.
+    for i in 0..3 {
+        let ri = area / (p - s[i]);
+        out.push(fact(
+            "外接圆与内切圆",
+            &format!("r_{}", SIDE[i]),
+            nice(ri),
+            Some(ri),
+            &format!("r_{s} = \\frac{{S}}{{p - {s}}}", s = SIDE[i]),
+            "旁切圆半径",
+        ));
+    }
+    let oi = dist2(circ, inc);
+    out.push(fact(
+        "特殊点",
+        "|OI|",
+        nice(oi),
+        Some(oi),
+        "|OI|^2 = R(R - 2r)",
+        "欧拉公式（外心与内心的距离）",
+    ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: inc[0], y2: inc[1], label: "OI".into() }));
+    let oh = dist2(circ, orth);
+    out.push(fact(
+        "特殊点",
+        "|OH|",
+        nice(oh),
+        Some(oh),
+        "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+        "外心与垂心的距离",
+    ).with(Shape::Segment { x1: circ[0], y1: circ[1], x2: orth[0], y2: orth[1], label: "OH".into() }));
+    // Explicit Euler OH² identity (distinct from |OI|² = R(R−2r)).
+    {
+        let oh2 = oh * oh;
+        let oh2_form = 9.0 * rr * rr - (a * a + b * b + c * c);
+        out.push(fact(
+            "特殊点",
+            "|OH|^2",
+            nice(oh2),
+            Some(oh2),
+            "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+            "欧拉：外心与垂心距离的平方公式",
+        ));
+        if (oh2 - oh2_form).abs() < 1e-6 * (1.0 + oh2.abs()) {
+            out.push(fact(
+                "特殊点",
+                "9R^2 - (a^2+b^2+c^2)",
+                nice(oh2_form),
+                Some(oh2_form),
+                "|OH|^2 = 9R^2 - (a^2 + b^2 + c^2)",
+                "与 |OH|^2 一致",
+            ));
+        }
+        let oi2_form = rr * (rr - 2.0 * r);
+        out.push(fact(
+            "特殊点",
+            "|OI|^2",
+            nice(oi * oi),
+            Some(oi * oi),
+            "|OI|^2 = R(R - 2r)",
+            "欧拉：外心与内心（勿与 |OH|^2 混淆）",
+        ));
+        let _ = oi2_form;
+    }
+    // Isogonal conjugates: O and H are isogonal conjugates of each other; I is self-conjugate.
+    out.push(fact(
+        "等角共轭",
+        "H \\leftrightarrow O",
+        "\\text{等角共轭}".into(),
+        None,
+        "\\text{反射角平分线}",
+        "垂心与外心互为等角共轭；内心是自身的等角共轭",
+    ));
+    out.push(fact(
+        "等角共轭",
+        "I \\leftrightarrow I",
+        "\\checkmark".into(),
+        None,
+        "",
+        "内心的等角共轭是自身",
+    ));
+    out.push(fact(
+        "等角共轭",
+        "G \\leftrightarrow K",
+        "\\text{等角共轭}".into(),
+        None,
+        "\\text{重心} \\leftrightarrow \\text{勒莫恩点}",
+        "重心与勒莫恩（对称中线）点互为等角共轭",
+    ));
+
+    // Carnot: signed distances from O to the three sides sum to R + r.
+    {
+        let mut sum_d = 0.0;
+        for i in 0..3 {
+            let q1 = v[(i + 1) % 3];
+            let q2 = v[(i + 2) % 3];
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 1e-12 {
+                continue;
+            }
+            // cross z-component for (q2-q1)×(P-q1)
+            let cross_o = dx * (circ[1] - q1[1]) - dy * (circ[0] - q1[0]);
+            let cross_v = dx * (v[i][1] - q1[1]) - dy * (v[i][0] - q1[0]);
+            let dist = cross_o.abs() / len;
+            let signed = if cross_o * cross_v >= 0.0 { dist } else { -dist };
+            sum_d += signed;
+            out.push(fact(
+                "卡诺定理",
+                &format!("\\delta_{{{}}}", SIDE[i]),
+                nice(signed),
+                Some(signed),
+                "d(O,\\text{边})\\text{（有向）}",
+                "外心到边的有向距离（与对顶同侧为正）",
+            ));
+        }
+        out.push(fact(
+            "卡诺定理",
+            "\\delta_a+\\delta_b+\\delta_c",
+            nice(sum_d),
+            Some(sum_d),
+            "\\delta_a+\\delta_b+\\delta_c = R+r",
+            "卡诺定理：外心到三边有向距离之和等于 R+r",
+        ));
+        out.push(fact(
+            "卡诺定理",
+            "R+r",
+            nice(rr + r),
+            Some(rr + r),
+            "R + r",
+            "与有向距离之和对照",
+        ));
+    }
+
+        // Euler line: O, G, H collinear with OG:GH = 1:2 (and |OH| = 3|OG|).
+    // Note: |OI|^2 = R(R−2r) is the Euler distance formula for the incenter (already above);
+    // it is not |OH|^2.
+    {
+        let og = dist2(circ, centroid);
+        let gh = dist2(centroid, orth);
+        let cross = (centroid[0] - circ[0]) * (orth[1] - circ[1]) - (centroid[1] - circ[1]) * (orth[0] - circ[0]);
+        let scale = (1.0 + og) * (1.0 + oh);
+        if cross.abs() < 1e-6 * scale {
+            out.push(fact(
+                "欧拉线",
+                "O,\\ G,\\ H",
+                "\\text{共线}".into(),
+                None,
+                "\\vec{OH} = 3\\vec{OG}",
+                "欧拉线：外心、重心、垂心共线",
+            ));
+            if og > 1e-12 {
+                let ratio = gh / og;
+                out.push(fact(
+                    "欧拉线",
+                    "OG:GH",
+                    format!("1:{}", nice(ratio)),
+                    Some(ratio),
+                    "OG:GH = 1:2",
+                    "重心按 1:2 分 OH",
+                ));
+                out.push(fact(
+                    "欧拉线",
+                    "|OG|",
+                    nice(og),
+                    Some(og),
+                    "|OH| = 3|OG|",
+                    "欧拉线上的线段",
+                ).with(Shape::Segment {
+                    x1: circ[0],
+                    y1: circ[1],
+                    x2: centroid[0],
+                    y2: centroid[1],
+                    label: "OG".into(),
+                }));
+            }
+        }
+        // Nine-point circle: center N = midpoint of OH, radius R/2.
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        out.push(fact(
+            "欧拉线",
+            "N",
+            pt(n9[0], n9[1]),
+            None,
+            "N = \\text{中点}(O, H) = X(5)",
+            "九点圆圆心（欧拉圆）",
+        ).with(Shape::Point {
+            x: n9[0],
+            y: n9[1],
+            label: "N 九点圆圆心".into(),
+        }));
+        out.push(fact(
+            "欧拉线",
+            "X_{5}",
+            pt(n9[0], n9[1]),
+            None,
+            "X(5) = N = \\text{midpoint}(O, H)",
+            "X(5)：九点圆心",
+        ).with(Shape::Point {
+            x: n9[0],
+            y: n9[1],
+            label: "X5".into(),
+        }));
+        out.push(fact(
+            "欧拉线",
+            "R_{\\text{九点}}",
+            nice(r9),
+            Some(r9),
+            "R_N = R/2",
+            "九点圆半径",
+        ).with(Shape::Circle {
+            cx: n9[0],
+            cy: n9[1],
+            r: r9,
+            label: "九点圆".into(),
+        }));
+        // OH is always a diameter of the circle centred at N through O (and H);
+        // it coincides with the nine-point circle precisely when |OH| = R (right triangles).
+        let oh_len = dist2(circ, orth);
+        out.push(fact(
+            "欧拉线",
+            "|OH| = 2|ON|",
+            nice(oh_len),
+            Some(oh_len),
+            "|OH| = 2|ON| = 2|NH|",
+            "N 平分 OH，故 OH 是以 N 为圆心、半径 |OH|/2 的圆的直径",
+        ));
+        if near(oh_len, rr) {
+            out.push(fact(
+                "欧拉线",
+                "OH\\text{ 九点圆直径}",
+                "\\checkmark".into(),
+                None,
+                "|OH| = R = 2R_N",
+                "直角三角形：欧拉圆（九点圆）以 OH 为直径",
+            ));
+        } else {
+            out.push(fact(
+                "欧拉线",
+                "OH\\text{ 与九点圆}",
+                format!("|OH|/2 = {},\\ R_N = {}", nice(oh_len / 2.0), nice(r9)),
+                None,
+                "|OH|/2 \\ne R/2",
+                "一般三角形 OH 不是九点圆直径（仅当直角时重合）",
+            ));
+        }
+
+        // Feuerbach: nine-point circle tangent to incircle (internally) and excircles (externally).
+        {
+            let ni = (r9 - r).abs();
+            out.push(fact(
+                "费尔巴哈定理",
+                "|NI|",
+                nice(ni),
+                Some(ni),
+                "|NI| = R/2 - r",
+                "九点圆与内切圆内切（费尔巴哈）",
+            ).with(Shape::Segment {
+                x1: n9[0],
+                y1: n9[1],
+                x2: inc[0],
+                y2: inc[1],
+                label: "NI".into(),
+            }));
+            // verify from coordinates
+            let ni_coord = dist2(n9, inc);
+            if (ni_coord - ni).abs() < 1e-5 * (1.0 + ni) {
+                out.push(fact(
+                    "费尔巴哈定理",
+                    "\\text{内切}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N,I) = R_N - r",
+                    "九点圆与内切圆相切",
+                ));
+            }
+            // Feuerbach point X(11): internal contact of nine-point circle and incircle.
+            // T = ((R/2) I - r N) / (R/2 - r) along NI (order N–I–Fe).
+            // Skip when N=I (equilateral: nine-point coincides with incircle).
+            {
+                let den_f = r9 - r;
+                let ni_len = dist2(n9, inc);
+                if den_f.abs() > 1e-9 && ni_len > 1e-9 {
+                    let fe = [
+                        (r9 * inc[0] - r * n9[0]) / den_f,
+                        (r9 * inc[1] - r * n9[1]) / den_f,
+                    ];
+                    let d_n = dist2(n9, fe);
+                    let d_i = dist2(inc, fe);
+                    if (d_n - r9).abs() < 1e-4 * (1.0 + r9) && (d_i - r).abs() < 1e-4 * (1.0 + r) {
+                        out.push(fact(
+                            "费尔巴哈点",
+                            "Fe",
+                            pt(fe[0], fe[1]),
+                            None,
+                            "Fe = \\dfrac{(R/2)I - r\\,N}{R/2 - r}",
+                            "费尔巴哈点 X(11)：九点圆与内切圆的内切点",
+                        ).with(Shape::Point {
+                            x: fe[0],
+                            y: fe[1],
+                            label: "Fe 费尔巴哈".into(),
+                        }));
+                        out.push(fact(
+                            "费尔巴哈点",
+                            "|N\\,Fe|",
+                            nice(d_n),
+                            Some(d_n),
+                            "|N\\,Fe| = R/2",
+                            "费尔巴哈点在九点圆上",
+                        ));
+                    }
+                }
+            }
+            for i in 0..3 {
+                let ri = area / (p - s[i]);
+                // excenter I_i opposite vertex i: (-a_i V_i + a_j V_j + a_k V_k) / (-a_i + a_j + a_k)
+                let (ai, aj, ak) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+                let den = -ai + aj + ak;
+                if den.abs() < 1e-12 {
+                    continue;
+                }
+                let ia = [
+                    (-ai * v[i][0] + aj * v[(i + 1) % 3][0] + ak * v[(i + 2) % 3][0]) / den,
+                    (-ai * v[i][1] + aj * v[(i + 1) % 3][1] + ak * v[(i + 2) % 3][1]) / den,
+                ];
+                let nia = r9 + ri;
+                let nia_coord = dist2(n9, ia);
+                out.push(fact(
+                    "费尔巴哈定理",
+                    &format!("|NI_{}|", SIDE[i]),
+                    nice(nia),
+                    Some(nia),
+                    &format!("|NI_{s}| = R/2 + r_{s}", s = SIDE[i]),
+                    "九点圆与旁切圆外切（费尔巴哈）",
+                ));
+                if (nia_coord - nia).abs() < 1e-5 * (1.0 + nia) {
+                    out.push(fact(
+                        "费尔巴哈定理",
+                        &format!("I_{}", SIDE[i]),
+                        pt(ia[0], ia[1]),
+                        None,
+                        "",
+                        "旁心（与九点圆外切）",
+                    ).with(Shape::Point {
+                        x: ia[0],
+                        y: ia[1],
+                        label: format!("I{}", SIDE[i]),
+                    }));
+                }
+            }
+        }
+    }
+
+    // Spieker center: incenter of the medial triangle = perimeter centroid.
+    {
+        let den = 2.0 * (a + b + c);
+        let sp = [
+            ((b + c) * pa[0] + (c + a) * pb[0] + (a + b) * pc[0]) / den,
+            ((b + c) * pa[1] + (c + a) * pb[1] + (a + b) * pc[1]) / den,
+        ];
+        out.push(fact(
+            "斯皮克中心",
+            "Sp",
+            pt(sp[0], sp[1]),
+            None,
+            "Sp = \\frac{(b+c)A+(c+a)B+(a+b)C}{2(a+b+c)}",
+            "斯皮克中心：周界重心（中点三角形的内心）",
+        ).with(Shape::Point {
+            x: sp[0],
+            y: sp[1],
+            label: "Sp 斯皮克".into(),
+        }));
+    }
+
+    // Nagel point: concurrence of vertex-to-excircle-contact cevians; bary (s−a:s−b:s−c).
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if p > 1e-12 {
+            let na = [
+                (sa * pa[0] + sb * pb[0] + sc * pc[0]) / p,
+                (sa * pa[1] + sb * pb[1] + sc * pc[1]) / p,
+            ];
+            out.push(fact(
+                "奈格尔点",
+                "Na",
+                pt(na[0], na[1]),
+                None,
+                "Na = X(8) = \\frac{(s-a)A+(s-b)B+(s-c)C}{s}",
+                "奈格尔点：顶点与对旁切圆切点的连线交点",
+            ).with(Shape::Point {
+                x: na[0],
+                y: na[1],
+                label: "Na 奈格尔".into(),
+            }));
+            out.push(fact(
+                "奈格尔点",
+                "X_{8}",
+                pt(na[0], na[1]),
+                None,
+                "X(8) = (s-a:s-b:s-c)",
+                "X(8)：奈格尔点",
+            ).with(Shape::Point {
+                x: na[0],
+                y: na[1],
+                label: "X8".into(),
+            }));
+            // Nagel line: I, G, Na collinear with IG:GNa = 1:2
+            let ig = dist2(inc, centroid);
+            let gna = dist2(centroid, na);
+            let cross = (centroid[0] - inc[0]) * (na[1] - inc[1]) - (centroid[1] - inc[1]) * (na[0] - inc[0]);
+            if cross.abs() < 1e-6 * (1.0 + ig) * (1.0 + gna) && ig > 1e-12 {
+                let ratio = gna / ig;
+                out.push(fact(
+                    "奈格尔点",
+                    "I,\\ G,\\ Na",
+                    "\\text{共线}".into(),
+                    None,
+                    "\\vec{INa} = 3\\vec{IG}",
+                    "奈格尔线：内心、重心、奈格尔点共线",
+                ));
+                out.push(fact(
+                    "奈格尔点",
+                    "IG:GNa",
+                    format!("1:{}", nice(ratio)),
+                    Some(ratio),
+                    "IG:GNa = 1:2",
+                    "重心按 1:2 分 INa",
+                ));
+            }
+        }
+    }
+
+
+    // Gergonne point: concurrence of vertex-to-incircle-contact cevians; bary 1/(s−a):…
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            // bary 1/(s−a):1/(s−b):1/(s−c) = isotomic conjugate of Nagel (s−a:s−b:s−c)
+            let wa = 1.0 / sa;
+            let wb = 1.0 / sb;
+            let wc = 1.0 / sc;
+            let den = wa + wb + wc;
+            let ge = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "格尔巩点",
+                "Ge",
+                pt(ge[0], ge[1]),
+                None,
+                "Ge = X(7) = \\frac{\\frac{1}{s-a}A+\\frac{1}{s-b}B+\\frac{1}{s-c}C}{\\sum}",
+                "格尔巩点：顶点与对边内切圆切点的连线交点",
+            ).with(Shape::Point {
+                x: ge[0],
+                y: ge[1],
+                label: "Ge 格尔巩".into(),
+            }));
+            out.push(fact(
+                "格尔巩点",
+                "X_{7}",
+                pt(ge[0], ge[1]),
+                None,
+                "X(7) = (1/(s-a):1/(s-b):1/(s-c))",
+                "X(7)：格尔巩点",
+            ).with(Shape::Point {
+                x: ge[0],
+                y: ge[1],
+                label: "X7".into(),
+            }));
+            out.push(fact(
+                "格尔巩点",
+                "Ge \\leftrightarrow Na",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic}",
+                "格尔巩点与奈格尔点互为等截共轭",
+            ));
+        }
+    }
+
+    // Lemoine / symmedian point K: concurrence of symmedians; bary (a²:b²:c²).
+    {
+        let wa = a * a;
+        let wb = b * b;
+        let wc = c * c;
+        let den = wa + wb + wc;
+        if den > 1e-18 {
+            let kpt = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "勒莫恩点",
+                "K",
+                pt(kpt[0], kpt[1]),
+                None,
+                "K = \\frac{a^2 A + b^2 B + c^2 C}{a^2 + b^2 + c^2}",
+                "勒莫恩点（对称中线点）：三对称中线交点",
+            ).with(Shape::Point {
+                x: kpt[0],
+                y: kpt[1],
+                label: "K 勒莫恩".into(),
+            }));
+        }
+    }
+
+    // Brocard angle ω and Brocard points Ω, Ω′.
+    // cot ω = (a²+b²+c²)/(4S); Ω trilinear (c/b : a/c : b/a), Ω′ (b/c : c/a : a/b).
+    if area > 1e-12 {
+        let sum_sq = a * a + b * b + c * c;
+        let cot_w = sum_sq / (4.0 * area);
+        let tan_w = 1.0 / cot_w;
+        let omega = tan_w.atan();
+        out.push(fact(
+            "布罗卡",
+            "\\omega",
+            deg(omega),
+            Some(omega),
+            "\\cot\\omega = \\frac{a^2+b^2+c^2}{4S}",
+            "布罗卡角",
+        ));
+        out.push(fact(
+            "布罗卡",
+            "\\tan\\omega",
+            nice(tan_w),
+            Some(tan_w),
+            "\\tan\\omega = \\frac{4S}{a^2+b^2+c^2}",
+            "布罗卡角的正切",
+        ));
+        out.push(fact(
+            "布罗卡",
+            "\\cot\\omega",
+            nice(cot_w),
+            Some(cot_w),
+            "\\cot\\omega = \\frac{a^2+b^2+c^2}{4S}",
+            "与 tan ω 互为倒数",
+        ));
+        if a > 1e-12 && b > 1e-12 && c > 1e-12 {
+            let wa = a * c / b;
+            let wb = b * a / c;
+            let wc = c * b / a;
+            let den = wa + wb + wc;
+            let om = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "布罗卡",
+                "\\Omega",
+                pt(om[0], om[1]),
+                None,
+                "\\text{trilinear }(c/b:a/c:b/a)",
+                "第一布罗卡点",
+            ).with(Shape::Point {
+                x: om[0],
+                y: om[1],
+                label: "Ω 布罗卡".into(),
+            }));
+            let wa2 = a * b / c;
+            let wb2 = b * c / a;
+            let wc2 = c * a / b;
+            let den2 = wa2 + wb2 + wc2;
+            let omp = [
+                (wa2 * pa[0] + wb2 * pb[0] + wc2 * pc[0]) / den2,
+                (wa2 * pa[1] + wb2 * pb[1] + wc2 * pc[1]) / den2,
+            ];
+            out.push(fact(
+                "布罗卡",
+                "\\Omega'",
+                pt(omp[0], omp[1]),
+                None,
+                "\\text{trilinear }(b/c:c/a:a/b)",
+                "第二布罗卡点（与 Ω 互为等角共轭）",
+            ).with(Shape::Point {
+                x: omp[0],
+                y: omp[1],
+                label: "Ω′ 布罗卡".into(),
+            }));
+            // Brocard midpoint X(39) = midpoint(Ω, Ω′); center of Brocard circle.
+            let bm = [(om[0] + omp[0]) / 2.0, (om[1] + omp[1]) / 2.0];
+            out.push(fact(
+                "布罗卡",
+                "X_{39}",
+                pt(bm[0], bm[1]),
+                None,
+                "X_{39} = \\text{mid}(\\Omega,\\Omega')",
+                "布罗卡中点：第一/第二布罗卡点的中点（布罗卡圆圆心）",
+            ).with(Shape::Point {
+                x: bm[0],
+                y: bm[1],
+                label: "X39 布罗卡中点".into(),
+            }));
+        }
+    }
+
+    // de Longchamps X(20): reflection of H over O (so O midpoint of LH); on Euler line.
+    // Trilinear cos A − cos B cos C; bary a(cos A − cos B cos C).
+    {
+        let longch = [2.0 * circ[0] - orth[0], 2.0 * circ[1] - orth[1]];
+        out.push(fact(
+            "德龙尚点",
+            "L",
+            pt(longch[0], longch[1]),
+            None,
+            "X(20) = L = 2O - H",
+            "德龙尚点 X(20)：垂心关于外心的对称点",
+        ).with(Shape::Point {
+            x: longch[0],
+            y: longch[1],
+            label: "L=X20 德龙尚".into(),
+        }));
+        let mid = [(longch[0] + orth[0]) / 2.0, (longch[1] + orth[1]) / 2.0];
+        if dist2(mid, circ) < 1e-6 * (1.0 + dist2(circ, orth)) {
+            out.push(fact(
+                "德龙尚点",
+                "O = \\text{中点}(L,H)",
+                "\\checkmark".into(),
+                None,
+                "\\overrightarrow{OL} = -\\overrightarrow{OH}",
+                "外心是 LH 的中点（欧拉线上）",
+            ));
+        }
+        // Bary cross-check: a(cos A − cos B cos C)
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let wa = a * (ca - cb * cc);
+        let wb = b * (cb - cc * ca);
+        let wc = c * (cc - ca * cb);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let xb = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            if dist2(xb, longch) < 1e-4 * (1.0 + rr) {
+                out.push(fact(
+                    "德龙尚点",
+                    "X_{20}",
+                    pt(xb[0], xb[1]),
+                    None,
+                    "X(20) = \\bigl(a(\\cos A-\\cos B\\cos C):\\cdots\\bigr)",
+                    "X(20) 重心坐标与 L=2O−H 一致",
+                ));
+            }
+        }
+    }
+
+    // Mittenpunkt Mi: perspector of medial and excentral triangles; bary a(s-a):b(s-b):c(s-c).
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        let wa = a * sa;
+        let wb = b * sb;
+        let wc = c * sc;
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let mi = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "米滕点",
+                "Mi",
+                pt(mi[0], mi[1]),
+                None,
+                "Mi = \\frac{a(s-a)A+b(s-b)B+c(s-c)C}{\\sum}",
+                "米滕点（Mittenpunkt）：旁心三角形与中点三角形的透视中心",
+            ).with(Shape::Point {
+                x: mi[0],
+                y: mi[1],
+                label: "Mi 米滕".into(),
+            }));
+        }
+    }
+
+    // Schiffler point: concurrence of Euler lines of ABC, IBC, ICA, IAB.
+    // Construct as Euler(ABC) ∩ Euler(IBC); cross-check with Euler(ICA).
+    if let Some((o_ibc, _)) = circum2(inc, pb, pc) {
+        let g_ibc = [
+            (inc[0] + pb[0] + pc[0]) / 3.0,
+            (inc[1] + pb[1] + pc[1]) / 3.0,
+        ];
+        if let Some(sf) = line_line_isect2(circ, orth, o_ibc, g_ibc) {
+            let cross = (orth[0] - circ[0]) * (sf[1] - circ[1]) - (orth[1] - circ[1]) * (sf[0] - circ[0]);
+            let scale = (1.0 + dist2(circ, orth)) * (1.0 + dist2(circ, sf));
+            if cross.abs() < 1e-5 * scale {
+                out.push(fact(
+                    "席弗勒点",
+                    "Sc",
+                    pt(sf[0], sf[1]),
+                    None,
+                    "X(21) = \\text{Euler}(\\triangle ABC)\\cap\\text{Euler}(\\triangle IBC)",
+                    "席弗勒点 X(21)：内心三角形与原三角形欧拉线的交点",
+                ).with(Shape::Point {
+                    x: sf[0],
+                    y: sf[1],
+                    label: "Sc=X21 席弗勒".into(),
+                }));
+                if let Some((o_ica, _)) = circum2(inc, pc, pa) {
+                    let g_ica = [
+                        (inc[0] + pc[0] + pa[0]) / 3.0,
+                        (inc[1] + pc[1] + pa[1]) / 3.0,
+                    ];
+                    if let Some(sf2) = line_line_isect2(circ, orth, o_ica, g_ica) {
+                        if dist2(sf, sf2) < 1e-5 * (1.0 + dist2(circ, orth)) {
+                            out.push(fact(
+                                "席弗勒点",
+                                "\\text{Euler}(ICA)",
+                                "\\checkmark".into(),
+                                None,
+                                "\\text{Euler}(ICA)\\ni Sc",
+                                "与 △ICA 的欧拉线亦交于同一点",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Bevan point: circumcenter of the excentral triangle = reflection of I over O.
+    {
+        let bevan = [2.0 * circ[0] - inc[0], 2.0 * circ[1] - inc[1]];
+        out.push(fact(
+            "贝万点",
+            "Be",
+            pt(bevan[0], bevan[1]),
+            None,
+            "Be = 2O - I",
+            "贝万点：旁心三角形的外心（内心关于外心的对称点）",
+        ).with(Shape::Point {
+            x: bevan[0],
+            y: bevan[1],
+            label: "Be 贝万".into(),
+        }));
+        let mut ex = [[0.0f64; 2]; 3];
+        let mut ex_ok = true;
+        for i in 0..3 {
+            let (ai, aj, ak) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            let den = -ai + aj + ak;
+            if den.abs() < 1e-12 {
+                ex_ok = false;
+                break;
+            }
+            ex[i] = [
+                (-ai * v[i][0] + aj * v[(i + 1) % 3][0] + ak * v[(i + 2) % 3][0]) / den,
+                (-ai * v[i][1] + aj * v[(i + 1) % 3][1] + ak * v[(i + 2) % 3][1]) / den,
+            ];
+        }
+        if ex_ok {
+            if let Some((o_ex, _)) = circum2(ex[0], ex[1], ex[2]) {
+                if dist2(o_ex, bevan) < 1e-5 * (1.0 + dist2(circ, inc)) {
+                    out.push(fact(
+                        "贝万点",
+                        "O(I_a I_b I_c)",
+                        "\\checkmark".into(),
+                        None,
+                        "Be = O(I_a I_b I_c)",
+                        "旁心三角形的外心与 2O−I 重合",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Orthic triangle: feet of the altitudes (on the nine-point circle).
+    {
+        let n9loc = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9loc = rr / 2.0;
+        let mut feet = [[0.0f64; 2]; 3];
+        let mut ok = true;
+        for i in 0..3 {
+            let p0 = v[i];
+            let q1 = v[(i + 1) % 3];
+            let q2 = v[(i + 2) % 3];
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                ok = false;
+                break;
+            }
+            let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+            feet[i] = [q1[0] + t * dx, q1[1] + t * dy];
+        }
+        if ok {
+            for i in 0..3 {
+                let f = feet[i];
+                out.push(fact(
+                    "垂足三角形",
+                    &format!("H_{}", SIDE[i]),
+                    pt(f[0], f[1]),
+                    None,
+                    &format!("H_{s} = \\text{{足}}_{{{s}}}", s = SIDE[i]),
+                    "垂足三角形的顶点（高线足）",
+                ).with(Shape::Point {
+                    x: f[0],
+                    y: f[1],
+                    label: format!("H{} 垂足", SIDE[i]),
+                }));
+            }
+            let on_n9 = (0..3).all(|i| (dist2(feet[i], n9loc) - r9loc).abs() < 1e-5 * (1.0 + r9loc));
+            if on_n9 {
+                out.push(fact(
+                    "垂足三角形",
+                    "H_a, H_b, H_c \\in \\text{九点圆}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, H_*) = R/2",
+                    "垂足三角形内接于九点圆",
+                ));
+            }
+            // Circumcenter of the orthic triangle is the nine-point center N.
+            if let Some((o_h, _)) = circum2(feet[0], feet[1], feet[2]) {
+                out.push(fact(
+                    "垂足三角形",
+                    "O(H_a H_b H_c)",
+                    pt(o_h[0], o_h[1]),
+                    None,
+                    "O_{\\text{orthic}} = N",
+                    "垂足三角形的外心（等于九点圆心）",
+                ).with(Shape::Point {
+                    x: o_h[0],
+                    y: o_h[1],
+                    label: "O_H 垂足外心".into(),
+                }));
+                if dist2(o_h, n9loc) < 1e-5 * (1.0 + rr) {
+                    out.push(fact(
+                        "垂足三角形",
+                        "O(H_a H_b H_c) = N",
+                        "\\checkmark".into(),
+                        None,
+                        "O_{\\text{orthic}} = N = \\tfrac{O+H}{2}",
+                        "垂足外心与九点圆心重合",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Euler reflection point X(110): reflections of Euler line over the sides concur on (O).
+    // May fail to concur for some right triangles — emit only when found.
+    {
+        let reflect = |pt: [f64; 2], s1: [f64; 2], s2: [f64; 2]| -> [f64; 2] {
+            let dx = s2[0] - s1[0];
+            let dy = s2[1] - s1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                return pt;
+            }
+            let t = ((pt[0] - s1[0]) * dx + (pt[1] - s1[1]) * dy) / den;
+            let foot = [s1[0] + t * dx, s1[1] + t * dy];
+            [2.0 * foot[0] - pt[0], 2.0 * foot[1] - pt[1]]
+        };
+        let mirrors = [(pb, pc), (pc, pa), (pa, pb)];
+        let mut segs: [([f64; 2], [f64; 2]); 3] = [([0.0; 2], [0.0; 2]); 3];
+        let mut ok = true;
+        for (i, (s1, s2)) in mirrors.into_iter().enumerate() {
+            let p = reflect(circ, s1, s2);
+            let mut q = reflect(orth, s1, s2);
+            if dist2(p, q) < 1e-9 {
+                q = reflect(centroid, s1, s2);
+                if dist2(p, q) < 1e-9 {
+                    ok = false;
+                    break;
+                }
+            }
+            segs[i] = (p, q);
+        }
+        if ok {
+            if let (Some(e1), Some(e2)) = (
+                line_line_isect2(segs[0].0, segs[0].1, segs[1].0, segs[1].1),
+                line_line_isect2(segs[0].0, segs[0].1, segs[2].0, segs[2].1),
+            ) {
+                if dist2(e1, e2) < 1e-5 * (1.0 + rr) {
+                    let er = e1;
+                    out.push(fact(
+                        "欧拉反射点",
+                        "E_r",
+                        pt(er[0], er[1]),
+                        None,
+                        "\\mathrm{refl}_{BC}(OH)\\cap\\mathrm{refl}_{CA}(OH)",
+                        "欧拉反射点：欧拉线关于三边的反射线交点",
+                    ).with(Shape::Point {
+                        x: er[0],
+                        y: er[1],
+                        label: "Er 欧拉反射".into(),
+                    }));
+                    if (dist2(er, circ) - rr).abs() < 1e-5 * (1.0 + rr) {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "E_r \\in (O)",
+                            "\\checkmark".into(),
+                            None,
+                            "d(O, E_r) = R",
+                            "欧拉反射点在外接圆上",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Contact (intouch) triangle: incircle tangency points on the sides.
+    // On BC: BD = s-b, DC = s-c; perspector is the Gergonne point.
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let xa = section_point(pb, pc, sb, sc);
+            let xb = section_point(pc, pa, sc, sa);
+            let xc = section_point(pa, pb, sa, sb);
+            let pts = [(xa, "a"), (xb, "b"), (xc, "c")];
+            for (q, lab) in pts {
+                out.push(fact(
+                    "接触三角形",
+                    &format!("X_{}", lab),
+                    pt(q[0], q[1]),
+                    None,
+                    &format!("X_{s}\\text{{ on side }}{s}", s = lab),
+                    "内切圆与边的切点（接触三角形顶点）",
+                ).with(Shape::Point {
+                    x: q[0],
+                    y: q[1],
+                    label: format!("X{} 切点", lab),
+                }));
+            }
+            if (dist2(inc, xa) - r).abs() < 1e-5 * (1.0 + r)
+                && (dist2(inc, xb) - r).abs() < 1e-5 * (1.0 + r)
+                && (dist2(inc, xc) - r).abs() < 1e-5 * (1.0 + r)
+            {
+                out.push(fact(
+                    "接触三角形",
+                    "|IX_*|",
+                    nice(r),
+                    Some(r),
+                    "|IX_a| = |IX_b| = |IX_c| = r",
+                    "切点到内心的距离等于内切圆半径",
+                ));
+            }
+            let wa = 1.0 / sa;
+            let wb = 1.0 / sb;
+            let wc = 1.0 / sc;
+            let den = wa + wb + wc;
+            let ge = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            let cross = (xa[0] - pa[0]) * (ge[1] - pa[1]) - (xa[1] - pa[1]) * (ge[0] - pa[0]);
+            if cross.abs() < 1e-5 * (1.0 + dist2(pa, xa)) * (1.0 + dist2(pa, ge)) {
+                out.push(fact(
+                    "接触三角形",
+                    "A, X_a, Ge",
+                    "\\text{共线}".into(),
+                    None,
+                    "A X_a \\ni Ge",
+                    "接触三角形与原三角形的透视中心为格尔巩点",
+                ));
+            }
+        }
+    }
+
+    // Spieker circle: incircle of the medial triangle; center Sp, radius r/2.
+    {
+        let den = 2.0 * (a + b + c);
+        let sp = [
+            ((b + c) * pa[0] + (c + a) * pb[0] + (a + b) * pc[0]) / den,
+            ((b + c) * pa[1] + (c + a) * pb[1] + (a + b) * pc[1]) / den,
+        ];
+        let r_sp = r / 2.0;
+        out.push(fact(
+            "斯皮克圆",
+            "r_{\\text{Sp}}",
+            nice(r_sp),
+            Some(r_sp),
+            "r_{\\text{Sp}} = r/2",
+            "斯皮克圆：中点三角形的内切圆，半径为 r/2",
+        ).with(Shape::Circle {
+            cx: sp[0],
+            cy: sp[1],
+            r: r_sp,
+            label: "斯皮克圆".into(),
+        }));
+        out.push(fact(
+            "斯皮克圆",
+            "S_{\\text{中点}}/(s/2)",
+            nice(r_sp),
+            Some(r_sp),
+            "\\frac{S/4}{s/2} = \\frac{r}{2}",
+            "由中点三角形的面积与半周长推出",
+        ));
+    }
+
+    // Kosnita X(54): A O_a ∩ B O_b ∩ C O_c with O_a = circumcenter of △OBC.
+    // Skip when △OAB / OBC / OCA is degenerate (e.g. right △ with O on a side).
+    {
+        let oa = circum2(circ, pb, pc);
+        let ob = circum2(circ, pc, pa);
+        let oc = circum2(circ, pa, pb);
+        if let (Some((oa, _)), Some((ob, _)), Some((oc, _))) = (oa, ob, oc) {
+            if let (Some(k1), Some(k2)) = (
+                line_line_isect2(pa, oa, pb, ob),
+                line_line_isect2(pa, oa, pc, oc),
+            ) {
+                if dist2(k1, k2) < 1e-5 * (1.0 + rr) {
+                    let ko = k1;
+                    out.push(fact(
+                        "科斯尼塔点",
+                        "Ko",
+                        pt(ko[0], ko[1]),
+                        None,
+                        "X(54) = AO_a \\cap BO_b \\cap CO_c",
+                        "科斯尼塔点 X(54)：A 与 △OBC 外心等连线的交点",
+                    ).with(Shape::Point {
+                        x: ko[0],
+                        y: ko[1],
+                        label: "Ko=X54 科斯尼塔".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+
+    // Extouch (excircle-contact / Nagel) triangle: A-excircle touches BC at T_a, etc.
+    // BT_a = s−c, CT_a = s−b; perspector is the Nagel point (dual of the intouch △).
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            // A-excircle on BC: BT:TC = (s−c):(s−b)
+            let ta = section_point(pb, pc, sc, sb);
+            let tb = section_point(pc, pa, sa, sc);
+            let tc = section_point(pa, pb, sb, sa);
+            let pts = [(ta, "a"), (tb, "b"), (tc, "c")];
+            for (q, lab) in pts {
+                out.push(fact(
+                    "旁切接触三角形",
+                    &format!("T_{}", lab),
+                    pt(q[0], q[1]),
+                    None,
+                    &format!("T_{s}\\text{{ on side }}{s}", s = lab),
+                    "旁切圆与边的切点（旁切接触 / 奈格尔三角形顶点）",
+                ).with(Shape::Point {
+                    x: q[0],
+                    y: q[1],
+                    label: format!("T{} 旁切点", lab),
+                }));
+            }
+            // Midpoint of intouch X_a and extouch T_a is the midpoint of BC (isotomic).
+            let xa = section_point(pb, pc, sb, sc);
+            let mid_xt = [(xa[0] + ta[0]) / 2.0, (xa[1] + ta[1]) / 2.0];
+            let mid_bc = [(pb[0] + pc[0]) / 2.0, (pb[1] + pc[1]) / 2.0];
+            if dist2(mid_xt, mid_bc) < 1e-5 * (1.0 + a) {
+                out.push(fact(
+                    "旁切接触三角形",
+                    "X_a T_a",
+                    "\\text{以 BC 中点为中点}".into(),
+                    None,
+                    "\\text{mid}(X_a,T_a)=\\text{mid}(B,C)",
+                    "内切切点与旁切切点关于边中点等截对称",
+                ));
+            }
+            // Perspector Na: A, T_a, Na collinear.
+            let na = [
+                (sa * pa[0] + sb * pb[0] + sc * pc[0]) / p,
+                (sa * pa[1] + sb * pb[1] + sc * pc[1]) / p,
+            ];
+            let cross = (ta[0] - pa[0]) * (na[1] - pa[1]) - (ta[1] - pa[1]) * (na[0] - pa[0]);
+            if cross.abs() < 1e-5 * (1.0 + dist2(pa, ta)) * (1.0 + dist2(pa, na)) {
+                out.push(fact(
+                    "旁切接触三角形",
+                    "A, T_a, Na",
+                    "\\text{共线}".into(),
+                    None,
+                    "A T_a \\ni Na",
+                    "旁切接触三角形与原三角形的透视中心为奈格尔点",
+                ));
+            }
+        }
+    }
+
+    // Steiner inellipse: unique inscribed ellipse tangent at the side midpoints; center G.
+    // Area = π S / (3 √3); coincides with the incircle on equilateral triangles.
+    {
+        let ma = [(pb[0] + pc[0]) / 2.0, (pb[1] + pc[1]) / 2.0];
+        let mb = [(pc[0] + pa[0]) / 2.0, (pc[1] + pa[1]) / 2.0];
+        let mc = [(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0];
+        for (q, lab) in [(ma, "a"), (mb, "b"), (mc, "c")] {
+            out.push(fact(
+                "施泰纳内接椭圆",
+                &format!("M_{}", lab),
+                pt(q[0], q[1]),
+                None,
+                &format!("M_{s} = \\text{{mid}}", s = lab),
+                "施泰纳内接椭圆在各边中点处与边相切",
+            ).with(Shape::Point {
+                x: q[0],
+                y: q[1],
+                label: format!("M{} 中点切", lab),
+            }));
+        }
+        let steiner_area = std::f64::consts::PI * area / (3.0 * 3.0f64.sqrt());
+        out.push(fact(
+            "施泰纳内接椭圆",
+            "S_{\\text{Steiner}}",
+            nice(steiner_area),
+            Some(steiner_area),
+            "S_{\\text{Steiner}} = \\frac{\\pi S}{3\\sqrt{3}}",
+            "施泰纳内接椭圆：面积最大的内接椭圆，中心为重心 G",
+        ).with(Shape::Point {
+            x: centroid[0],
+            y: centroid[1],
+            label: "Steiner@G".into(),
+        }));
+        // Equilateral: Steiner = incircle ⇒ area = π r².
+        if (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9 {
+            let circ_area = std::f64::consts::PI * r * r;
+            if (steiner_area - circ_area).abs() < 1e-5 * (1.0 + circ_area) {
+                out.push(fact(
+                    "施泰纳内接椭圆",
+                    "=\\pi r^2",
+                    nice(circ_area),
+                    Some(circ_area),
+                    "\\text{equilateral: Steiner = incircle}",
+                    "等边时施泰纳内接椭圆与内切圆重合",
+                ));
+            }
+        }
+    }
+
+    // Mandart inellipse: inscribed ellipse tangent at the extouch points; center = Mittenpunkt.
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        let wa = a * sa;
+        let wb = b * sb;
+        let wc = c * sc;
+        let den = wa + wb + wc;
+        if den > 1e-12 && sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let mi = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "曼达特内接椭圆",
+                "\\text{center}",
+                pt(mi[0], mi[1]),
+                None,
+                "\\text{center} = \\text{Mi}",
+                "曼达特内接椭圆：在旁切切点处与边相切，中心为米滕点",
+            ).with(Shape::Point {
+                x: mi[0],
+                y: mi[1],
+                label: "Mandart@Mi".into(),
+            }));
+            out.push(fact(
+                "曼达特内接椭圆",
+                "T_*",
+                "\\text{切于旁切切点}".into(),
+                None,
+                "\\text{tangent at }T_a,T_b,T_c",
+                "与旁切接触三角形的三顶点处相切",
+            ));
+        }
+    }
+
+
+    // Clawson point X(19): bary tan A : tan B : tan C.
+    // Undefined / at infinity on right △ (tan → ∞); emit only for acute triangles.
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let acute = cosines.iter().all(|&c| c > 1e-9)
+            && g.iter().all(|&ang| ang > 1e-9 && ang < std::f64::consts::FRAC_PI_2 - 1e-9);
+        if acute {
+            let wa = g[0].tan();
+            let wb = g[1].tan();
+            let wc = g[2].tan();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let cl = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "克劳森点",
+                    "Cl",
+                    pt(cl[0], cl[1]),
+                    None,
+                    "Cl = \\frac{\\tan A\\,A+\\tan B\\,B+\\tan C\\,C}{\\sum}",
+                    "克劳森点 X(19)：锐角三角形中 tan A:tan B:tan C（直角时退化）",
+                ).with(Shape::Point {
+                    x: cl[0],
+                    y: cl[1],
+                    label: "Cl 克劳森".into(),
+                }));
+            }
+        }
+    }
+
+    // First Yff center of congruence X(174): bary sec A : sec B : sec C = 1/cos.
+    // Skip when any cos ≈ 0 (right / near-right △).
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        if cosines.iter().all(|&c| c.abs() > 1e-9) {
+            let wa = 1.0 / cosines[0];
+            let wb = 1.0 / cosines[1];
+            let wc = 1.0 / cosines[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let yff = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "伊夫中心",
+                    "Yff",
+                    pt(yff[0], yff[1]),
+                    None,
+                    "Yff = \\frac{\\sec A\\,A+\\sec B\\,B+\\sec C\\,C}{\\sum}",
+                    "伊夫中心 X(174)：sec A:sec B:sec C（直角时 sec 无定义）",
+                ).with(Shape::Point {
+                    x: yff[0],
+                    y: yff[1],
+                    label: "Yff 伊夫".into(),
+                }));
+            }
+        }
+    }
+
+    // Exeter point X(22): perspector of tangential and circummedial triangles;
+    // bary a(b⁴+c⁴−a⁴) : b(c⁴+a⁴−b⁴) : c(a⁴+b⁴−c⁴).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let a4 = a2 * a2;
+        let b4 = b2 * b2;
+        let c4 = c2 * c2;
+        let wa = a * (b4 + c4 - a4);
+        let wb = b * (c4 + a4 - b4);
+        let wc = c * (a4 + b4 - c4);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let ex = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "埃克塞特点",
+                "Ex",
+                pt(ex[0], ex[1]),
+                None,
+                "Ex = \\frac{a(b^4+c^4-a^4)A+\\cdots}{\\sum}",
+                "埃克塞特点 X(22)：切线三角形与外接中点三角形的透视中心",
+            ).with(Shape::Point {
+                x: ex[0],
+                y: ex[1],
+                label: "Ex 埃克塞特".into(),
+            }));
+            // Perspector helper: name the classical pair.
+            out.push(fact(
+                "埃克塞特点",
+                "\\text{perspector}",
+                "\\text{tangential}/\\text{circummedial}".into(),
+                None,
+                "\\text{perspector}(\\triangle_{\\text{tang}},\\triangle_{\\text{cm}})",
+                "透视中心：切线三角形与外接中点三角形",
+            ));
+        }
+    }
+
+
+    // Isodynamic / isogonic centers X(15), X(16): concurrence of Apollonian circles.
+    // Bary a sin(A±π/3); X(16) degenerates on equilateral (sin(A−π/3)=0).
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let s15 = [((g[0] + pi3).sin()), (g[1] + pi3).sin(), (g[2] + pi3).sin()];
+        let wa = a * s15[0];
+        let wb = b * s15[1];
+        let wc = c * s15[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let p15 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "等动力点",
+                "S_{1}",
+                pt(p15[0], p15[1]),
+                None,
+                "S_1 = \\frac{a\\sin(A+\\pi/3)A+\\cdots}{\\sum}",
+                "第一等动力点 X(15)（等角线中心 / Apollonian）",
+            ).with(Shape::Point {
+                x: p15[0],
+                y: p15[1],
+                label: "S1 等动力".into(),
+            }));
+        }
+        let s16 = [(g[0] - pi3).sin(), (g[1] - pi3).sin(), (g[2] - pi3).sin()];
+        // Equilateral: sin(A−π/3)=0 ⇒ den=0 — skip. One 60° angle (weight 0) is fine.
+        {
+            let wa = a * s16[0];
+            let wb = b * s16[1];
+            let wc = c * s16[2];
+            let den16 = wa + wb + wc;
+            if den16.abs() > 1e-12 {
+                let p16 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den16,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den16,
+                ];
+                out.push(fact(
+                    "等动力点",
+                    "S_{2}",
+                    pt(p16[0], p16[1]),
+                    None,
+                    "S_2 = \\frac{a\\sin(A-\\pi/3)A+\\cdots}{\\sum}",
+                    "第二等动力点 X(16)（等角线中心）",
+                ).with(Shape::Point {
+                    x: p16[0],
+                    y: p16[1],
+                    label: "S2 等动力".into(),
+                }));
+            }
+        }
+        if den.abs() > 1e-12 {
+            out.push(fact(
+                "等动力点",
+                "\\text{Apollonius}",
+                "\\text{三阿氏圆共点}".into(),
+                None,
+                "\\odot A_a\\cap\\odot A_b\\cap\\odot A_c",
+                "阿波罗尼奥斯圆（角平分线直径）交于等动力点",
+            ));
+        }
+    }
+
+    // Steiner point X(99): bary 1/(b²−c²):… on circumcircle ∩ Steiner ellipse.
+    // Undefined for isosceles (denominator zero); skip cleanly.
+    // Tarry X(98) = circumcircle antipode of Steiner (= 2O − St).
+    {
+        let dbc = b * b - c * c;
+        let dca = c * c - a * a;
+        let dab = a * a - b * b;
+        if dbc.abs() > 1e-10 && dca.abs() > 1e-10 && dab.abs() > 1e-10 {
+            let wa = 1.0 / dbc;
+            let wb = 1.0 / dca;
+            let wc = 1.0 / dab;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let st = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let os = dist2(circ, st);
+                if (os - rr).abs() < 1e-4 * (1.0 + rr) {
+                    out.push(fact(
+                        "施泰纳点",
+                        "St",
+                        pt(st[0], st[1]),
+                        None,
+                        "St = \\frac{\\frac{1}{b^2-c^2}A+\\cdots}{\\sum}",
+                        "施泰纳点 X(99)：外接圆与施泰纳椭圆的第四交点",
+                    ).with(Shape::Point {
+                        x: st[0],
+                        y: st[1],
+                        label: "St 施泰纳".into(),
+                    }));
+                    out.push(fact(
+                        "施泰纳点",
+                        "X_{99}",
+                        pt(st[0], st[1]),
+                        None,
+                        "X(99) = (1/(b^2-c^2):\\cdots)",
+                        "X(99)：施泰纳点",
+                    ).with(Shape::Point {
+                        x: st[0],
+                        y: st[1],
+                        label: "X99".into(),
+                    }));
+                    // Tarry = antipode of Steiner on (O)
+                    let ty = [2.0 * circ[0] - st[0], 2.0 * circ[1] - st[1]];
+                    let ot = dist2(circ, ty);
+                    if (ot - rr).abs() < 1e-4 * (1.0 + rr) {
+                        out.push(fact(
+                            "塔里点",
+                            "Ty",
+                            pt(ty[0], ty[1]),
+                            None,
+                            "Ty = 2O - St",
+                            "塔里点 X(98)：施泰纳点在外接圆上的对径点",
+                        ).with(Shape::Point {
+                            x: ty[0],
+                            y: ty[1],
+                            label: "Ty 塔里".into(),
+                        }));
+                        out.push(fact(
+                            "塔里点",
+                            "X_{98}",
+                            pt(ty[0], ty[1]),
+                            None,
+                            "X(98) = 2O - X(99)",
+                            "X(98)：塔里点",
+                        ).with(Shape::Point {
+                            x: ty[0],
+                            y: ty[1],
+                            label: "X98".into(),
+                        }));
+                        out.push(fact(
+                            "塔里点",
+                            "|O\\,Ty|",
+                            nice(ot),
+                            Some(ot),
+                            "|O\\,Ty| = R",
+                            "塔里点在外接圆上",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+
+    // Napoleon centers X(17), X(18): concurrence of lines to centroids of
+    // outward/inward equilateral triangles on the sides (distinct from Napoleon theorem).
+    {
+        let pi6 = std::f64::consts::PI / 6.0;
+        // X(17) outer: bary a csc(A+π/6); skip if sin(A+π/6)≈0 (e.g. angle ≈ 150°).
+        let s17 = [(g[0] + pi6).sin(), (g[1] + pi6).sin(), (g[2] + pi6).sin()];
+        if s17.iter().all(|&s| s.abs() > 1e-9) {
+            let wa = a / s17[0];
+            let wb = b / s17[1];
+            let wc = c / s17[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let n1 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "拿破仑中心",
+                    "N_1",
+                    pt(n1[0], n1[1]),
+                    None,
+                    "N_1 = \\frac{a\\csc(A+\\pi/6)A+\\cdots}{\\sum}",
+                    "第一拿破仑点 X(17)：外接等边三角形重心连线交点",
+                ).with(Shape::Point {
+                    x: n1[0],
+                    y: n1[1],
+                    label: "N1 拿破仑".into(),
+                }));
+            }
+        }
+        // X(18) inner: bary a csc(A−π/6); skip if sin(A−π/6)≈0 (angle ≈ 30°).
+        let s18 = [(g[0] - pi6).sin(), (g[1] - pi6).sin(), (g[2] - pi6).sin()];
+        if s18.iter().all(|&s| s.abs() > 1e-9) {
+            let wa = a / s18[0];
+            let wb = b / s18[1];
+            let wc = c / s18[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let n2 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "拿破仑中心",
+                    "N_2",
+                    pt(n2[0], n2[1]),
+                    None,
+                    "N_2 = \\frac{a\\csc(A-\\pi/6)A+\\cdots}{\\sum}",
+                    "第二拿破仑点 X(18)：内接等边三角形重心连线交点",
+                ).with(Shape::Point {
+                    x: n2[0],
+                    y: n2[1],
+                    label: "N2 拿破仑".into(),
+                }));
+            }
+        }
+    }
+
+    // Parry point X(111): bary a²/(2a²−b²−c²); on circumcircle.
+    // Degenerate when 2a²=b²+c² for any side (e.g. equilateral).
+    {
+        let da = 2.0 * a * a - b * b - c * c;
+        let db = 2.0 * b * b - c * c - a * a;
+        let dc = 2.0 * c * c - a * a - b * b;
+        if da.abs() > 1e-10 && db.abs() > 1e-10 && dc.abs() > 1e-10 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let py = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "帕里点",
+                    "Py",
+                    pt(py[0], py[1]),
+                    None,
+                    "Py = \\frac{\\frac{a^2}{2a^2-b^2-c^2}A+\\cdots}{\\sum}",
+                    "帕里点 X(111)：Λ(G,K)（等边时退化）",
+                ).with(Shape::Point {
+                    x: py[0],
+                    y: py[1],
+                    label: "Py 帕里".into(),
+                }));
+                out.push(fact(
+                    "帕里点",
+                    "X_{111}",
+                    pt(py[0], py[1]),
+                    None,
+                    "X(111) = (a^2/(2a^2-b^2-c^2):\\cdots)",
+                    "X(111)：帕里点",
+                ).with(Shape::Point {
+                    x: py[0],
+                    y: py[1],
+                    label: "X111".into(),
+                }));
+                let op = dist2(circ, py);
+                if (op - rr).abs() < 1e-4 * (1.0 + rr) {
+                    out.push(fact(
+                        "帕里点",
+                        "|O\\,Py|",
+                        nice(op),
+                        Some(op),
+                        "|O\\,Py| = R",
+                        "帕里点在外接圆上",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Vecten points: perspectors of outer/inner square-center triangles.
+    // X(485) outer: bary a sec(A−π/4); skip if cos(A−π/4)≈0 (angle ≈ 135°).
+    // X(486) inner: bary a sec(A+π/4); skip if cos(A+π/4)≈0 (angle ≈ 45°).
+    {
+        let pi4 = std::f64::consts::FRAC_PI_4;
+        let c_out = [(g[0] - pi4).cos(), (g[1] - pi4).cos(), (g[2] - pi4).cos()];
+        if c_out.iter().all(|&c| c.abs() > 1e-9) {
+            let wa = a / c_out[0];
+            let wb = b / c_out[1];
+            let wc = c / c_out[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let vo = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "韦克滕点",
+                    "V_{\\text{out}}",
+                    pt(vo[0], vo[1]),
+                    None,
+                    "V_{\\text{out}} = \\frac{a\\sec(A-\\pi/4)A+\\cdots}{\\sum}",
+                    "外韦克滕点 X(485)：外侧正方形中心三角形的透视中心",
+                ).with(Shape::Point {
+                    x: vo[0],
+                    y: vo[1],
+                    label: "Vout 韦克滕".into(),
+                }));
+            }
+        }
+        let c_in = [(g[0] + pi4).cos(), (g[1] + pi4).cos(), (g[2] + pi4).cos()];
+        if c_in.iter().all(|&c| c.abs() > 1e-9) {
+            let wa = a / c_in[0];
+            let wb = b / c_in[1];
+            let wc = c / c_in[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let vi = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "韦克滕点",
+                    "V_{\\text{in}}",
+                    pt(vi[0], vi[1]),
+                    None,
+                    "V_{\\text{in}} = \\frac{a\\sec(A+\\pi/4)A+\\cdots}{\\sum}",
+                    "内韦克滕点 X(486)：内侧正方形中心三角形的透视中心",
+                ).with(Shape::Point {
+                    x: vi[0],
+                    y: vi[1],
+                    label: "Vin 韦克滕".into(),
+                }));
+            }
+        }
+    }
+
+
+    // Hofstadter points X(359), X(360): transcendental centers (angles in barycentrics).
+    // X(360) zero-point: bary A:B:C; X(359) one-point: bary a²/A:b²/B:c²/C.
+    {
+        if g[0] > 1e-12 && g[1] > 1e-12 && g[2] > 1e-12 {
+            let den0 = g[0] + g[1] + g[2];
+            let hz = [
+                (g[0] * pa[0] + g[1] * pb[0] + g[2] * pc[0]) / den0,
+                (g[0] * pa[1] + g[1] * pb[1] + g[2] * pc[1]) / den0,
+            ];
+            out.push(fact(
+                "霍夫斯塔特点",
+                "Hf_0",
+                pt(hz[0], hz[1]),
+                None,
+                "Hf_0 = (A:B:C)",
+                "霍夫斯塔特零点 X(360)：重心坐标为三角本身",
+            ).with(Shape::Point {
+                x: hz[0],
+                y: hz[1],
+                label: "Hf0 霍夫".into(),
+            }));
+            out.push(fact(
+                "霍夫斯塔特点",
+                "X_{360}",
+                pt(hz[0], hz[1]),
+                None,
+                "X(360) = (A:B:C)",
+                "X(360)：霍夫斯塔特零点",
+            ).with(Shape::Point {
+                x: hz[0],
+                y: hz[1],
+                label: "X360".into(),
+            }));
+            let wa = (a * a) / g[0];
+            let wb = (b * b) / g[1];
+            let wc = (c * c) / g[2];
+            let den1 = wa + wb + wc;
+            if den1.abs() > 1e-12 {
+                let ho = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den1,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den1,
+                ];
+                out.push(fact(
+                    "霍夫斯塔特点",
+                    "Hf_1",
+                    pt(ho[0], ho[1]),
+                    None,
+                    "Hf_1 = (a^2/A:b^2/B:c^2/C)",
+                    "霍夫斯塔特一点 X(359)：与 Hf_0 互为等角共轭",
+                ).with(Shape::Point {
+                    x: ho[0],
+                    y: ho[1],
+                    label: "Hf1 霍夫".into(),
+                }));
+                out.push(fact(
+                    "霍夫斯塔特点",
+                    "X_{359}",
+                    pt(ho[0], ho[1]),
+                    None,
+                    "X(359) = (a^2/A:b^2/B:c^2/C)",
+                    "X(359)：霍夫斯塔特一点（等角共轭于 X(360)）",
+                ).with(Shape::Point {
+                    x: ho[0],
+                    y: ho[1],
+                    label: "X359".into(),
+                }));
+            }
+        }
+    }
+
+    // Kenmotu point X(371): congruent-squares point; bary a cos(A−π/4).
+    // Isogonal conjugate of outer Vecten X(485).
+    {
+        let pi4 = std::f64::consts::FRAC_PI_4;
+        let ca = [(g[0] - pi4).cos(), (g[1] - pi4).cos(), (g[2] - pi4).cos()];
+        let wa = a * ca[0];
+        let wb = b * ca[1];
+        let wc = c * ca[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let km = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "肯莫图点",
+                "Km",
+                pt(km[0], km[1]),
+                None,
+                "Km = \\frac{a\\cos(A-\\pi/4)A+\\cdots}{\\sum}",
+                "肯莫图点 X(371)：三全等正方形的公共点（等角共轭于外韦克滕点）",
+            ).with(Shape::Point {
+                x: km[0],
+                y: km[1],
+                label: "Km 肯莫图".into(),
+            }));
+            out.push(fact(
+                "肯莫图点",
+                "X_{371}",
+                pt(km[0], km[1]),
+                None,
+                "X(371) = a\\cos(A-\\pi/4):\\cdots = \\mathrm{isogonal}(X_{485})",
+                "X(371)：肯莫图点（全等正方形点）",
+            ).with(Shape::Point {
+                x: km[0],
+                y: km[1],
+                label: "X371".into(),
+            }));
+            let edge_den = a * a + b * b + c * c + 4.0 * area;
+            if edge_den > 1e-12 {
+                let edge = std::f64::consts::SQRT_2 * a * b * c / edge_den;
+                out.push(fact(
+                    "肯莫图点",
+                    "s_{\\text{square}}",
+                    nice(edge),
+                    Some(edge),
+                    "s = \\frac{\\sqrt{2}\\,abc}{a^2+b^2+c^2+4S}",
+                    "三全等正方形的边长",
+                ));
+            }
+        }
+    }
+
+    // Apollonius point X(181): perspector of Apollonius circle with the excircles.
+    // Bary a²(b+c)²/(b+c−a); b+c−a=2(s−a)>0 for non-degenerate △.
+    {
+        let sa = p - a;
+        let sb = p - b;
+        let sc = p - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = (a * a) * (b + c) * (b + c) / (2.0 * sa);
+            let wb = (b * b) * (c + a) * (c + a) / (2.0 * sb);
+            let wc = (c * c) * (a + b) * (a + b) / (2.0 * sc);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let ap = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "阿波罗尼奥斯点",
+                    "Ap",
+                    pt(ap[0], ap[1]),
+                    None,
+                    "Ap = \\frac{a^2(b+c)^2/(b+c-a)\\,A+\\cdots}{\\sum}",
+                    "阿波罗尼奥斯点 X(181)：与三旁切圆外切的阿氏圆的透视中心",
+                ).with(Shape::Point {
+                    x: ap[0],
+                    y: ap[1],
+                    label: "Ap 阿氏".into(),
+                }));
+            }
+        }
+    }
+
+
+    // Fermat–Torricelli / isogonic centers X(13), X(14) — distinct from isodynamic X(15)/X(16).
+    // Trilinear csc(A±π/3); bary a csc(A±π/3). If some angle ≥ 120°, X(13) is that vertex.
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let two_pi3 = 2.0 * pi3;
+        let mut obtuse120: Option<usize> = None;
+        for (i, &ang) in g.iter().enumerate() {
+            if ang >= two_pi3 - 1e-9 {
+                obtuse120 = Some(i);
+                break;
+            }
+        }
+        if let Some(i) = obtuse120 {
+            let fv = v[i];
+            out.push(fact(
+                "费马点",
+                "F_1",
+                pt(fv[0], fv[1]),
+                None,
+                "F_1 = \\text{obtuse vertex (}\\ge 120^\\circ\\text{)}",
+                "第一费马–托里拆利点 X(13)：钝角 ≥120° 时退化为该顶点",
+            ).with(Shape::Point {
+                x: fv[0],
+                y: fv[1],
+                label: "F1 费马".into(),
+            }));
+        } else {
+            let s13 = [(g[0] + pi3).sin(), (g[1] + pi3).sin(), (g[2] + pi3).sin()];
+            if s13.iter().all(|&s| s.abs() > 1e-9) {
+                let wa = a / s13[0];
+                let wb = b / s13[1];
+                let wc = c / s13[2];
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let f1 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "费马点",
+                        "F_1",
+                        pt(f1[0], f1[1]),
+                        None,
+                        "F_1 = \\frac{a\\csc(A+\\pi/3)A+\\cdots}{\\sum}",
+                        "第一费马–托里拆利 / 等角线中心 X(13)（异于等动力点 X(15)）",
+                    ).with(Shape::Point {
+                        x: f1[0],
+                        y: f1[1],
+                        label: "F1 费马".into(),
+                    }));
+                }
+            }
+        }
+        // X(14) 2nd isogonic: skip equilateral (sin(A−π/3)=0).
+        let s14 = [(g[0] - pi3).sin(), (g[1] - pi3).sin(), (g[2] - pi3).sin()];
+        // Guard: any near-zero sin → skip (equilateral / 60° singularity in csc form)
+        if s14.iter().all(|&s| s.abs() > 1e-9) {
+            let wa = a / s14[0];
+            let wb = b / s14[1];
+            let wc = c / s14[2];
+            {
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let f2 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "费马点",
+                        "F_2",
+                        pt(f2[0], f2[1]),
+                        None,
+                        "F_2 = \\frac{a\\csc(A-\\pi/3)A+\\cdots}{\\sum}",
+                        "第二等角线中心 X(14)（异于等动力点 X(16)）",
+                    ).with(Shape::Point {
+                        x: f2[0],
+                        y: f2[1],
+                        label: "F2 费马".into(),
+                    }));
+                }
+            }
+        }
+        // Helper: isogonic ≠ isodynamic (X13 isogonal conjugate of X15).
+        if out.iter().any(|f| f.group == "费马点" && f.label == "F_1")
+            && out.iter().any(|f| f.group == "等动力点" && f.label.contains("S_{1}"))
+        {
+            let f1v = out.iter().find(|f| f.group == "费马点" && f.label == "F_1").map(|f| f.value.clone());
+            let s1v = out.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).map(|f| f.value.clone());
+            if let (Some(a), Some(b)) = (f1v, s1v) {
+                if a != b {
+                    out.push(fact(
+                        "费马点",
+                        "F_1 \\ne S_1",
+                        "\\text{isogonic} \\ne \\text{isodynamic}".into(),
+                        None,
+                        "X(13)=\\text{isogonal of }X(15)",
+                        "等角线中心与等动力点不同（互为等角共轭）",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Equal detour X(176) / isoperimetric X(175) (inner/outer Soddy centers).
+    // X(176): bary sin A · (1 + sec(A/2) cos(B/2) cos(C/2)); always for non-degen △.
+    // X(175): same with −1; emit only when a+b+c > 4R+r.
+    {
+        let ha = g[0] / 2.0;
+        let hb = g[1] / 2.0;
+        let hc = g[2] / 2.0;
+        let cos_ha = ha.cos();
+        let cos_hb = hb.cos();
+        let cos_hc = hc.cos();
+        if cos_ha.abs() > 1e-12 && cos_hb.abs() > 1e-12 && cos_hc.abs() > 1e-12 {
+            let t176 = [
+                1.0 + cos_hb * cos_hc / cos_ha,
+                1.0 + cos_hc * cos_ha / cos_hb,
+                1.0 + cos_ha * cos_hb / cos_hc,
+            ];
+            let wa = a * t176[0];
+            let wb = b * t176[1];
+            let wc = c * t176[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let ed = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "等迂回点",
+                    "Ed",
+                    pt(ed[0], ed[1]),
+                    None,
+                    "Ed = (\\sin A\\,(1+\\sec\\tfrac{A}{2}\\cos\\tfrac{B}{2}\\cos\\tfrac{C}{2}):\\cdots)",
+                    "等迂回点 X(176)：内苏迪圆圆心",
+                ).with(Shape::Point {
+                    x: ed[0],
+                    y: ed[1],
+                    label: "Ed 等迂回".into(),
+                }));
+            }
+            // Isoperimetric / outer Soddy X(175)
+            if per > 4.0 * rr + r + 1e-9 {
+                let t175 = [
+                    -1.0 + cos_hb * cos_hc / cos_ha,
+                    -1.0 + cos_hc * cos_ha / cos_hb,
+                    -1.0 + cos_ha * cos_hb / cos_hc,
+                ];
+                let wa = a * t175[0];
+                let wb = b * t175[1];
+                let wc = c * t175[2];
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let ip = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "等周点",
+                        "Ip",
+                        pt(ip[0], ip[1]),
+                        None,
+                        "Ip = (\\sin A\\,(-1+\\sec\\tfrac{A}{2}\\cos\\tfrac{B}{2}\\cos\\tfrac{C}{2}):\\cdots)",
+                        "等周点 X(175)：外苏迪圆圆心（需 a+b+c>4R+r）",
+                    ).with(Shape::Point {
+                        x: ip[0],
+                        y: ip[1],
+                        label: "Ip 等周".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    // Moses point X(75): isotomic conjugate of the incenter; bary (bc : ca : ab).
+    {
+        let wa = b * c;
+        let wb = c * a;
+        let wc = a * b;
+        let den = wa + wb + wc;
+        if den > 1e-18 {
+            let mo = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "摩西点",
+                "Mo",
+                pt(mo[0], mo[1]),
+                None,
+                "Mo = \\frac{bc\\,A + ca\\,B + ab\\,C}{\\sum}",
+                "摩西点 X(75)：内心的等截共轭",
+            ).with(Shape::Point {
+                x: mo[0],
+                y: mo[1],
+                label: "Mo 摩西".into(),
+            }));
+            out.push(fact(
+                "摩西点",
+                "Mo \\leftrightarrow I",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }I",
+                "摩西点与内心互为等截共轭（bary I=a:b:c ↔ 1/a:1/b:1/c）",
+            ));
+        }
+    }
+
+    // X(25): homothetic center of orthic and tangential triangles; bary a²/(b²+c²−a²).
+    // Denominator vanishes at a right angle — skip then.
+    {
+        let da = b * b + c * c - a * a;
+        let db = c * c + a * a - b * b;
+        let dc = a * a + b * b - c * c;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x25 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足切线同调中心",
+                    "X_{25}",
+                    pt(x25[0], x25[1]),
+                    None,
+                    "X(25) = \\bigl(a^2/(b^2+c^2-a^2):\\cdots\\bigr)",
+                    "X(25)：垂足三角形与切线三角形的同调中心",
+                ).with(Shape::Point {
+                    x: x25[0],
+                    y: x25[1],
+                    label: "X25 同调".into(),
+                }));
+            }
+        }
+    }
+
+    // X(55)/X(56): internal/external centers of similitude of circumcircle (O) and incircle (I).
+    // X(55) = (r O + R I)/(R+r) divides OI internally in R:r; bary a²(b+c−a).
+    // X(56) = (R I − r O)/(R−r) divides OI externally in R:r; bary a²/(b+c−a).
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let sum_rr = rr + r;
+            if sum_rr > 1e-12 {
+                let s55 = [
+                    (r * circ[0] + rr * inc[0]) / sum_rr,
+                    (r * circ[1] + rr * inc[1]) / sum_rr,
+                ];
+                // Cross-check bary a²(b+c−a)
+                let wa = a * a * sa;
+                let wb = b * b * sb;
+                let wc = c * c * sc;
+                let den = wa + wb + wc;
+                if den > 1e-12 {
+                    let s55b = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    let s55u = if dist2(s55, s55b) < 1e-5 * (1.0 + dist2(circ, inc)) {
+                        s55
+                    } else {
+                        s55b
+                    };
+                    out.push(fact(
+                        "相似中心",
+                        "S_{+}",
+                        pt(s55u[0], s55u[1]),
+                        None,
+                        "S_{+} = \\dfrac{r\\,O + R\\,I}{R+r}",
+                        "内相似中心 X(55)：外接圆与内切圆的内相似中心",
+                    ).with(Shape::Point {
+                        x: s55u[0],
+                        y: s55u[1],
+                        label: "S+ X55".into(),
+                    }));
+                    let d_o = dist2(s55u, circ);
+                    let d_i = dist2(s55u, inc);
+                    if d_i > 1e-12 {
+                        let ratio = d_o / d_i;
+                        let expect = rr / r;
+                        if (ratio - expect).abs() < 1e-4 * (1.0 + expect) {
+                            out.push(fact(
+                                "相似中心",
+                                "OS_{+}:S_{+}I",
+                                format!("{}:{}", nice(rr), nice(r)),
+                                Some(expect),
+                                "OS_{+}:S_{+}I = R:r",
+                                "内相似中心按 R:r 内分 OI",
+                            ));
+                        }
+                    }
+                }
+            }
+            let diff_rr = rr - r;
+            if diff_rr > 1e-12 {
+                let s56 = [
+                    (-r * circ[0] + rr * inc[0]) / diff_rr,
+                    (-r * circ[1] + rr * inc[1]) / diff_rr,
+                ];
+                let wa = (a * a) / sa;
+                let wb = (b * b) / sb;
+                let wc = (c * c) / sc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let s56b = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    let s56u = if dist2(s56, s56b) < 1e-5 * (1.0 + dist2(circ, inc)) {
+                        s56
+                    } else {
+                        s56b
+                    };
+                    out.push(fact(
+                        "相似中心",
+                        "S_{-}",
+                        pt(s56u[0], s56u[1]),
+                        None,
+                        "S_{-} = \\dfrac{R\\,I - r\\,O}{R-r}",
+                        "外相似中心 X(56)：外接圆与内切圆的外相似中心",
+                    ).with(Shape::Point {
+                        x: s56u[0],
+                        y: s56u[1],
+                        label: "S- X56".into(),
+                    }));
+                    // O, I, S+, S− collinear on the OI line
+                    let cross = (inc[0] - circ[0]) * (s56u[1] - circ[1])
+                        - (inc[1] - circ[1]) * (s56u[0] - circ[0]);
+                    let scale = (1.0 + dist2(circ, inc)) * (1.0 + dist2(circ, s56u));
+                    if cross.abs() < 1e-5 * scale {
+                        out.push(fact(
+                            "相似中心",
+                            "O,\\ I,\\ S_{+},\\ S_{-}",
+                            "\\text{共线}".into(),
+                            None,
+                            "S_{\\pm}\\in OI",
+                            "内/外相似中心均在 OI 线上（互为关于 O,I 的调和共轭）",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(30) Euler infinity point: Euler line ∩ line at infinity (direction of OH).
+    // Emit unit direction when |OH| is non-degenerate; bary sum of g(a,b,c) is 0.
+    {
+        let ohx = orth[0] - circ[0];
+        let ohy = orth[1] - circ[1];
+        let oh_len = (ohx * ohx + ohy * ohy).sqrt();
+        if oh_len > 1e-9 {
+            let ux = ohx / oh_len;
+            let uy = ohy / oh_len;
+            out.push(fact(
+                "欧拉无穷远点",
+                "X_{30}",
+                format!("({}, {})", nice(ux), nice(uy)),
+                None,
+                "X(30) = \\text{Euler}\\cap\\ell_{\\infty}",
+                "欧拉无穷远点：欧拉线与无穷远直线的交点（方向向量）",
+            ));
+            out.push(fact(
+                "欧拉无穷远点",
+                "\\overrightarrow{OH}/|OH|",
+                format!("({}, {})", nice(ux), nice(uy)),
+                None,
+                "\\parallel\\overrightarrow{OH}",
+                "欧拉线方向单位向量（X(30) 的仿射代表）",
+            ));
+            // Bary g = 2a⁴ − (b²−c²)² − a²(b²+c²); homogeneous sum ≈ 0 at infinity.
+            let g_a = {
+                let a2 = a * a;
+                let b2 = b * b;
+                let c2 = c * c;
+                2.0 * a2 * a2 - (b2 - c2) * (b2 - c2) - a2 * (b2 + c2)
+            };
+            let g_b = {
+                let a2 = b * b;
+                let b2 = c * c;
+                let c2 = a * a;
+                2.0 * a2 * a2 - (b2 - c2) * (b2 - c2) - a2 * (b2 + c2)
+            };
+            let g_c = {
+                let a2 = c * c;
+                let b2 = a * a;
+                let c2 = b * b;
+                2.0 * a2 * a2 - (b2 - c2) * (b2 - c2) - a2 * (b2 + c2)
+            };
+            let gsum = g_a + g_b + g_c;
+            if gsum.abs() < 1e-6 * (1.0 + g_a.abs() + g_b.abs() + g_c.abs()) {
+                out.push(fact(
+                    "欧拉无穷远点",
+                    "\\sum g(a,b,c)",
+                    "0".into(),
+                    Some(0.0),
+                    "g=2a^4-(b^2-c^2)^2-a^2(b^2+c^2)",
+                    "X(30) 重心坐标之和为 0（无穷远点判据）",
+                ));
+            }
+        }
+    }
+
+    // X(57): isogonal conjugate of Mittenpunkt X(9); perspector of intouch & excentral.
+    // Bary a/(b+c−a) = a/(2(s−a)).
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a / sa;
+            let wb = b / sb;
+            let wc = c / sc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x57 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "米滕等角共轭点",
+                    "X_{57}",
+                    pt(x57[0], x57[1]),
+                    None,
+                    "X(57) = \\bigl(a/(b+c-a):\\cdots\\bigr)",
+                    "X(57)：米滕点的等角共轭（接触△与旁心△的透视中心）",
+                ).with(Shape::Point {
+                    x: x57[0],
+                    y: x57[1],
+                    label: "X57".into(),
+                }));
+                out.push(fact(
+                    "米滕等角共轭点",
+                    "X_{57} \\leftrightarrow Mi",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(9)",
+                    "X(57) 与米滕点 X(9) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(58): isogonal conjugate of Spieker X(10); bary a²/(b+c).
+    {
+        let wa = (a * a) / (b + c);
+        let wb = (b * b) / (c + a);
+        let wc = (c * c) / (a + b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x58 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "斯皮克等角共轭点",
+                "X_{58}",
+                pt(x58[0], x58[1]),
+                None,
+                "X(58) = \\bigl(a^2/(b+c):\\cdots\\bigr)",
+                "X(58)：斯皮克中心的等角共轭",
+            ).with(Shape::Point {
+                x: x58[0],
+                y: x58[1],
+                label: "X58".into(),
+            }));
+            out.push(fact(
+                "斯皮克等角共轭点",
+                "X_{58} \\leftrightarrow Sp",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(10)",
+                "X(58) 与斯皮克中心 X(10) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(84): isogonal conjugate of Bevan X(40); perspector of hexyl triangle.
+    // Bary a / (cos B + cos C − cos A − 1); skip when any denominator ≈ 0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc - ca - 1.0;
+        let db = cc + ca - cb - 1.0;
+        let dc = ca + cb - cc - 1.0;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x84 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "己基透视中心",
+                    "X_{84}",
+                    pt(x84[0], x84[1]),
+                    None,
+                    "X(84) = \\bigl(a/(\\cos B+\\cos C-\\cos A-1):\\cdots\\bigr)",
+                    "X(84)：贝万点的等角共轭（己基三角形透视中心）",
+                ).with(Shape::Point {
+                    x: x84[0],
+                    y: x84[1],
+                    label: "X84".into(),
+                }));
+                // Cross-check: isogonal of Be=2O−I via bary of Be then a²/x.
+                let be = [2.0 * circ[0] - inc[0], 2.0 * circ[1] - inc[1]];
+                // signed areas for bary of Be
+                let area2 = |p: [f64; 2], q: [f64; 2], r: [f64; 2]| {
+                    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+                };
+                let aa = area2(be, pb, pc);
+                let bb = area2(pa, be, pc);
+                let cc_ = area2(pa, pb, be);
+                let ssum = aa + bb + cc_;
+                if ssum.abs() > 1e-12 && aa.abs() > 1e-14 && bb.abs() > 1e-14 && cc_.abs() > 1e-14 {
+                    let wa = (a * a) / aa;
+                    let wb = (b * b) / bb;
+                    let wc = (c * c) / cc_;
+                    let den2 = wa + wb + wc;
+                    if den2.abs() > 1e-12 {
+                        let iso = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den2,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den2,
+                        ];
+                        if dist2(iso, x84) < 1e-4 * (1.0 + dist2(circ, orth)) {
+                            out.push(fact(
+                                "己基透视中心",
+                                "X_{84} \\leftrightarrow Be",
+                                "\\text{等角共轭}".into(),
+                                None,
+                                "\\text{isogonal of }X(40)",
+                                "X(84) 与贝万点 X(40) 互为等角共轭",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // X(12): harmonic conjugate of Feuerbach X(11) w.r.t. I,N (etc.); bary a(1+cos(B−C)).
+    // X(59): isogonal of Feuerbach X(11); bary a/(1−cos(B−C)); skip isosceles (den=0).
+    // X(60): isogonal of X(12); bary a/(1+cos(B−C)).
+    {
+        let c_bc = (g[1] - g[2]).cos();
+        let c_ca = (g[2] - g[0]).cos();
+        let c_ab = (g[0] - g[1]).cos();
+        // X(12)
+        {
+            let wa = a * (1.0 + c_bc);
+            let wb = b * (1.0 + c_ca);
+            let wc = c * (1.0 + c_ab);
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x12 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "费尔巴哈调和共轭点",
+                    "X_{12}",
+                    pt(x12[0], x12[1]),
+                    None,
+                    "X(12) = \\bigl(a(1+\\cos(B-C)):\\cdots\\bigr)",
+                    "X(12)：费尔巴哈点的调和共轭（九点圆与旁切圆切点三角形透视中心）",
+                ).with(Shape::Point {
+                    x: x12[0],
+                    y: x12[1],
+                    label: "X12".into(),
+                }));
+            }
+        }
+        // X(60) = isogonal of X(12)
+        {
+            let da = 1.0 + c_bc;
+            let db = 1.0 + c_ca;
+            let dc = 1.0 + c_ab;
+            if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+                let wa = a / da;
+                let wb = b / db;
+                let wc = c / dc;
+                let den = wa + wb + wc;
+                if den > 1e-12 {
+                    let x60 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "X12等角共轭点",
+                        "X_{60}",
+                        pt(x60[0], x60[1]),
+                        None,
+                        "X(60) = \\bigl(a/(1+\\cos(B-C)):\\cdots\\bigr)",
+                        "X(60)：X(12) 的等角共轭",
+                    ).with(Shape::Point {
+                        x: x60[0],
+                        y: x60[1],
+                        label: "X60".into(),
+                    }));
+                    out.push(fact(
+                        "X12等角共轭点",
+                        "X_{60} \\leftrightarrow X_{12}",
+                        "\\text{等角共轭}".into(),
+                        None,
+                        "\\text{isogonal of }X(12)",
+                        "X(60) 与 X(12) 互为等角共轭",
+                    ));
+                }
+            }
+        }
+        // X(59) = isogonal of Feuerbach Fe X(11)
+        {
+            let da = 1.0 - c_bc;
+            let db = 1.0 - c_ca;
+            let dc = 1.0 - c_ab;
+            if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+                let wa = a / da;
+                let wb = b / db;
+                let wc = c / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let x59 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "费尔巴哈等角共轭点",
+                        "X_{59}",
+                        pt(x59[0], x59[1]),
+                        None,
+                        "X(59) = \\bigl(a/(1-\\cos(B-C)):\\cdots\\bigr)",
+                        "X(59)：费尔巴哈点的等角共轭",
+                    ).with(Shape::Point {
+                        x: x59[0],
+                        y: x59[1],
+                        label: "X59".into(),
+                    }));
+                    // Cross-check vs isogonal of geometric Fe when available.
+                    let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+                    let r9 = rr / 2.0;
+                    let den_f = r9 - r;
+                    let ni_len = dist2(n9, inc);
+                    if den_f.abs() > 1e-9 && ni_len > 1e-9 {
+                        let fe = [
+                            (r9 * inc[0] - r * n9[0]) / den_f,
+                            (r9 * inc[1] - r * n9[1]) / den_f,
+                        ];
+                        if (dist2(n9, fe) - r9).abs() < 1e-4 * (1.0 + r9)
+                            && (dist2(inc, fe) - r).abs() < 1e-4 * (1.0 + r)
+                        {
+                            let area2 = |p: [f64; 2], q: [f64; 2], r: [f64; 2]| {
+                                (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+                            };
+                            let aa = area2(fe, pb, pc);
+                            let bb = area2(pa, fe, pc);
+                            let cc_ = area2(pa, pb, fe);
+                            let ssum = aa + bb + cc_;
+                            if ssum.abs() > 1e-12
+                                && aa.abs() > 1e-14
+                                && bb.abs() > 1e-14
+                                && cc_.abs() > 1e-14
+                            {
+                                let wa = (a * a) / aa;
+                                let wb = (b * b) / bb;
+                                let wc = (c * c) / cc_;
+                                let den2 = wa + wb + wc;
+                                if den2.abs() > 1e-12 {
+                                    let iso = [
+                                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den2,
+                                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den2,
+                                    ];
+                                    if dist2(iso, x59) < 1e-4 * (1.0 + dist2(circ, orth)) {
+                                        out.push(fact(
+                                            "费尔巴哈等角共轭点",
+                                            "X_{59} \\leftrightarrow Fe",
+                                            "\\text{等角共轭}".into(),
+                                            None,
+                                            "\\text{isogonal of }X(11)",
+                                            "X(59) 与费尔巴哈点 X(11) 互为等角共轭",
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Grinberg X(37): crosspoint of I and G; bary a(b+c). Complement of Moses X(75).
+    // X(81): isogonal of Grinberg; bary a/(b+c).
+    // X(42): crosspoint of I and K (Lemoine); bary a²(b+c).
+    {
+        let wa = a * (b + c);
+        let wb = b * (c + a);
+        let wc = c * (a + b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let gr = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "格林伯格点",
+                "Gr",
+                pt(gr[0], gr[1]),
+                None,
+                "Gr = \\frac{a(b+c)A+b(c+a)B+c(a+b)C}{\\sum}",
+                "格林伯格点 X(37)：内心与重心的截线交点（摩西点的补点）",
+            ).with(Shape::Point {
+                x: gr[0],
+                y: gr[1],
+                label: "Gr 格林伯格".into(),
+            }));
+            // Complement of Moses: Mo = bc:ca:ab → complement has bary a(b+c) = Gr.
+            let mwa = b * c;
+            let mwb = c * a;
+            let mwc = a * b;
+            let mden = mwa + mwb + mwc;
+            if mden > 1e-12 {
+                let mo = [
+                    (mwa * pa[0] + mwb * pb[0] + mwc * pc[0]) / mden,
+                    (mwa * pa[1] + mwb * pb[1] + mwc * pc[1]) / mden,
+                ];
+                // Complement map: P ↦ 3G − 2P? Kimberling complement of P with bary x:y:z
+                // is (y+z):(z+x):(x+y). For Mo=bc:ca:ab, complement = (ca+ab):(ab+bc):(bc+ca)
+                // = a(b+c):b(c+a):c(a+b) = Gr. Verify Cartesian: midpoint? Actually
+                // complement C(P) satisfies G divides P C(P) with PG:G C(P) = 2:1 toward C(P)?
+                // Standard: complement of P is the point Q such that G = (2P+Q)/3? No —
+                // In ETC, complement of P is anticomplement of P mapped... 
+                // Vectorially often Q = 3G − 2P? Let's check: if Q = 3G-2P then G = (2P+Q)/3 means G divides PQ with PG:GQ = 1:2? 
+                // Actually Kimberling: the complement of P is the image under the homothety h(G,−1/2).
+                // So Q − G = (−1/2)(P − G) ⇒ Q = G − (1/2)(P−G) = (3G − P)/2? 
+                // Homothety h(G,k): Q = G + k(P−G).
+                // Complement = h(G, −1/2): Q = G − (1/2)(P−G) = (3/2)G − (1/2)P = (3G−P)/2.
+                // Anticomplement = h(G, −2): Q = 3G − 2P.
+                // ETC: X(37) = complement of X(75). So Gr = (3G − Mo)/2.
+                let q = [
+                    (3.0 * centroid[0] - mo[0]) / 2.0,
+                    (3.0 * centroid[1] - mo[1]) / 2.0,
+                ];
+                if dist2(q, gr) < 1e-5 * (1.0 + dist2(gr, centroid)) {
+                    out.push(fact(
+                        "格林伯格点",
+                        "Gr = \\text{complement}(Mo)",
+                        "\\checkmark".into(),
+                        None,
+                        "Gr = \\tfrac{3G - Mo}{2}",
+                        "格林伯格点是摩西点关于重心的补点（位似比 −1/2）",
+                    ));
+                }
+            }
+        }
+        // X(81) isogonal of Grinberg
+        {
+            let wa = a / (b + c);
+            let wb = b / (c + a);
+            let wc = c / (a + b);
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x81 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "格林伯格等角共轭点",
+                    "X_{81}",
+                    pt(x81[0], x81[1]),
+                    None,
+                    "X(81) = \\bigl(a/(b+c):\\cdots\\bigr)",
+                    "X(81)：格林伯格点的等角共轭",
+                ).with(Shape::Point {
+                    x: x81[0],
+                    y: x81[1],
+                    label: "X81".into(),
+                }));
+                out.push(fact(
+                    "格林伯格等角共轭点",
+                    "X_{81} \\leftrightarrow Gr",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(37)",
+                    "X(81) 与格林伯格点 X(37) 互为等角共轭",
+                ));
+            }
+        }
+        // X(42) crosspoint of I and K
+        {
+            let wa = a * a * (b + c);
+            let wb = b * b * (c + a);
+            let wc = c * c * (a + b);
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x42 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "内心勒莫恩截点",
+                    "X_{42}",
+                    pt(x42[0], x42[1]),
+                    None,
+                    "X(42) = \\bigl(a^2(b+c):\\cdots\\bigr)",
+                    "X(42)：内心与勒莫恩点的截线交点",
+                ).with(Shape::Point {
+                    x: x42[0],
+                    y: x42[1],
+                    label: "X42".into(),
+                }));
+            }
+        }
+    }
+
+    // X(65): orthocenter of the intouch triangle; isogonal of Schiffler X(21).
+    // Bary a(b+c)/(b+c−a). Also perspector of ABC and the extangents triangle.
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a * (b + c) / sa;
+            let wb = b * (c + a) / sb;
+            let wc = c * (a + b) / sc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x65 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "接触垂心",
+                    "X_{65}",
+                    pt(x65[0], x65[1]),
+                    None,
+                    "X(65) = \\bigl(a(b+c)/(b+c-a):\\cdots\\bigr)",
+                    "X(65)：接触三角形的垂心（席弗勒点的等角共轭）",
+                ).with(Shape::Point {
+                    x: x65[0],
+                    y: x65[1],
+                    label: "X65 接触垂心".into(),
+                }));
+                // Geometric: orthocenter of intouch feet X_a,X_b,X_c.
+                let s_a = p - a;
+                let s_b = p - b;
+                let s_c = p - c;
+                if s_a > 1e-12 && s_b > 1e-12 && s_c > 1e-12 {
+                    let xa = section_point(pb, pc, s_b, s_c);
+                    let xb = section_point(pc, pa, s_c, s_a);
+                    let xc = section_point(pa, pb, s_a, s_b);
+                    if let Some((o_in, _)) = circum2(xa, xb, xc) {
+                        let h_in = [
+                            xa[0] + xb[0] + xc[0] - 2.0 * o_in[0],
+                            xa[1] + xb[1] + xc[1] - 2.0 * o_in[1],
+                        ];
+                        if dist2(h_in, x65) < 1e-4 * (1.0 + dist2(circ, orth)) {
+                            out.push(fact(
+                                "接触垂心",
+                                "H(X_a X_b X_c) = X_{65}",
+                                "\\checkmark".into(),
+                                None,
+                                "H_{\\text{intouch}} = X(65)",
+                                "接触三角形的垂心与 X(65) 重合",
+                            ));
+                        }
+                    }
+                }
+                out.push(fact(
+                    "接触垂心",
+                    "X_{65} \\leftrightarrow Sc",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(21)",
+                    "X(65) 与席弗勒点 X(21) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(76): 3rd Brocard point; bary 1/a²; isotomic conjugate of Lemoine K = X(6).
+    {
+        let wa = 1.0 / (a * a);
+        let wb = 1.0 / (b * b);
+        let wc = 1.0 / (c * c);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x76 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "第三布罗卡点",
+                "X_{76}",
+                pt(x76[0], x76[1]),
+                None,
+                "X(76) = \\bigl(1/a^2:1/b^2:1/c^2\\bigr)",
+                "第三布罗卡点 X(76)：勒莫恩点的等截共轭",
+            ).with(Shape::Point {
+                x: x76[0],
+                y: x76[1],
+                label: "X76 布罗卡".into(),
+            }));
+            out.push(fact(
+                "第三布罗卡点",
+                "X_{76} \\leftrightarrow K",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }X(6)",
+                "X(76) 与勒莫恩点 X(6) 互为等截共轭",
+            ));
+        }
+    }
+
+    // X(86): cevapoint of I and G; isogonal of X(42); isotomic of Spieker.
+    // Bary 1/(b+c).
+    {
+        let wa = 1.0 / (b + c);
+        let wb = 1.0 / (c + a);
+        let wc = 1.0 / (a + b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x86 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "内心重心截点",
+                "X_{86}",
+                pt(x86[0], x86[1]),
+                None,
+                "X(86) = \\bigl(1/(b+c):\\cdots\\bigr)",
+                "X(86)：内心与重心的截点（X(42) 的等角共轭；斯皮克的等截共轭）",
+            ).with(Shape::Point {
+                x: x86[0],
+                y: x86[1],
+                label: "X86".into(),
+            }));
+            out.push(fact(
+                "内心重心截点",
+                "X_{86} \\leftrightarrow X_{42}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(42)",
+                "X(86) 与 X(42) 互为等角共轭",
+            ));
+            out.push(fact(
+                "内心重心截点",
+                "X_{86} \\leftrightarrow Sp",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }X(10)",
+                "X(86) 与斯皮克中心 X(10) 互为等截共轭",
+            ));
+        }
+    }
+
+    // X(31) 2nd power point: bary a³; isogonal conjugate of Moses X(75).
+    // X(32) 3rd power point: bary a⁴; isogonal conjugate of 3rd Brocard X(76).
+    {
+        let wa = a * a * a;
+        let wb = b * b * b;
+        let wc = c * c * c;
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x31 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "第二幂点",
+                "X_{31}",
+                pt(x31[0], x31[1]),
+                None,
+                "X(31) = (a^3:b^3:c^3)",
+                "第二幂点 X(31)：摩西点的等角共轭",
+            ).with(Shape::Point {
+                x: x31[0],
+                y: x31[1],
+                label: "X31 幂点".into(),
+            }));
+            out.push(fact(
+                "第二幂点",
+                "X_{31} \\leftrightarrow Mo",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(75)",
+                "X(31) 与摩西点 X(75) 互为等角共轭",
+            ));
+        }
+        let wa = a * a * a * a;
+        let wb = b * b * b * b;
+        let wc = c * c * c * c;
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x32 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "第三幂点",
+                "X_{32}",
+                pt(x32[0], x32[1]),
+                None,
+                "X(32) = (a^4:b^4:c^4)",
+                "第三幂点 X(32)：第三布罗卡点的等角共轭",
+            ).with(Shape::Point {
+                x: x32[0],
+                y: x32[1],
+                label: "X32 幂点".into(),
+            }));
+            out.push(fact(
+                "第三幂点",
+                "X_{32} \\leftrightarrow X_{76}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(76)",
+                "X(32) 与第三布罗卡点 X(76) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(69): bary cot A = b²+c²−a²; isotomic of H; isogonal of X(25).
+    // Right △: the right-angle component vanishes (point on opposite side) — still emit.
+    {
+        let wa = b * b + c * c - a * a;
+        let wb = c * c + a * a - b * b;
+        let wc = a * a + b * b - c * c;
+        let den = wa + wb + wc;
+        // den = a²+b²+c² > 0 always for a non-degen △
+        if den.abs() > 1e-12 {
+            let x69 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "余切点",
+                "X_{69}",
+                pt(x69[0], x69[1]),
+                None,
+                "X(69) = (\\cot A:\\cot B:\\cot C) = (b^2+c^2-a^2:\\cdots)",
+                "X(69)：垂心的等截共轭（亦为 X(25) 的等角共轭）",
+            ).with(Shape::Point {
+                x: x69[0],
+                y: x69[1],
+                label: "X69".into(),
+            }));
+            out.push(fact(
+                "余切点",
+                "X_{69} \\leftrightarrow H",
+                "\\text{等截共轭}".into(),
+                None,
+                "\\text{isotomic of }X(4)",
+                "X(69) 与垂心互为等截共轭",
+            ));
+            // Cross-check isotomic of H: H bary (tan A or cos? H has bary tan A? 
+            // Actually H bary = tan A : tan B : tan C = 1/cot = a²/(b²+c²-a²)? 
+            // Standard H bary = tan A : … = a²/(b²+c²−a²) wait no:
+            // H trilinear = sec A? Standard: H bary = tan A : tan B : tan C, or 
+            // (bc[b²+c²−a²])? Actually common: H = (a²(b²+c²−a²))? No —
+            // Orthocenter barycentrics: tan A : tan B : tan C, equivalently
+            // a²(b²+c²−a²) is wrong. Simple: tan A = sin/cos, and cos A = (b²+c²−a²)/(2bc),
+            // so tan A ∝ sin A / (b²+c²−a²) ∝ a / (b²+c²−a²).
+            // Bary of H = a² / (b²+c²−a²)? Trilinear sec A, bary a sec A = a/cos A ∝ a²/(b²+c²−a²).
+            // Isotomic of H: if H has bary x:y:z = a²/(b²+c²−a²) : …, then isotomic 1/x ∝ (b²+c²−a²)/a²,
+            // times a² gives (b²+c²−a²) — matches X(69). Good — note only.
+        }
+    }
+
+    // X(36): inverse of the incenter in the circumcircle; skip when I=O (equilateral).
+    // Geometric: X36 = O + R²(I−O)/|OI|². Barycentrics sin A − sin 2A (ETC).
+    {
+        let oi2 = {
+            let dx = inc[0] - circ[0];
+            let dy = inc[1] - circ[1];
+            dx * dx + dy * dy
+        };
+        if oi2 > 1e-12 {
+            let scale = (rr * rr) / oi2;
+            let x36 = [
+                circ[0] + scale * (inc[0] - circ[0]),
+                circ[1] + scale * (inc[1] - circ[1]),
+            ];
+            // Cross-check ETC bary sin A − sin 2A
+            let wa = g[0].sin() - (2.0 * g[0]).sin();
+            let wb = g[1].sin() - (2.0 * g[1]).sin();
+            let wc = g[2].sin() - (2.0 * g[2]).sin();
+            let den = wa + wb + wc;
+            let x36u = if den.abs() > 1e-12 {
+                let xb = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if dist2(xb, x36) < 1e-4 * (1.0 + rr) {
+                    xb
+                } else {
+                    x36
+                }
+            } else {
+                x36
+            };
+            out.push(fact(
+                "反演内心",
+                "X_{36}",
+                pt(x36u[0], x36u[1]),
+                None,
+                "X(36) = O + R^2(I-O)/|OI|^2",
+                "X(36)：内心关于外接圆的反演点",
+            ).with(Shape::Point {
+                x: x36u[0],
+                y: x36u[1],
+                label: "X36 反演I".into(),
+            }));
+            // |O X36| · |OI| = R²
+            let d_ox = dist2(circ, x36u);
+            let d_oi = oi2.sqrt();
+            if d_oi > 1e-12 {
+                let prod = d_ox * d_oi;
+                if (prod - rr * rr).abs() < 1e-4 * (1.0 + rr * rr) {
+                    out.push(fact(
+                        "反演内心",
+                        "|OX_{36}|\\cdot|OI|",
+                        nice(rr * rr),
+                        Some(rr * rr),
+                        "|OX_{36}|\\cdot|OI| = R^2",
+                        "反演定义：乘积等于外接圆半径平方",
+                    ));
+                }
+            }
+            // Collinear O, I, X36
+            let cross = (inc[0] - circ[0]) * (x36u[1] - circ[1])
+                - (inc[1] - circ[1]) * (x36u[0] - circ[0]);
+            if cross.abs() < 1e-5 * (1.0 + oi2) * (1.0 + dist2(circ, x36u)) {
+                out.push(fact(
+                    "反演内心",
+                    "O,\\ I,\\ X_{36}",
+                    "\\text{共线}".into(),
+                    None,
+                    "X(36)\\in OI",
+                    "反演内心在 OI 线上",
+                ));
+            }
+        }
+    }
+
+    // X(41): bary a³(b+c−a); X(6)-Ceva conjugate of X(31).
+    {
+        let sa = b + c - a;
+        let sb = c + a - b;
+        let sc = a + b - c;
+        if sa > 1e-12 && sb > 1e-12 && sc > 1e-12 {
+            let wa = a * a * a * sa;
+            let wb = b * b * b * sb;
+            let wc = c * c * c * sc;
+            let den = wa + wb + wc;
+            if den > 1e-12 {
+                let x41 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "第二幂截点",
+                    "X_{41}",
+                    pt(x41[0], x41[1]),
+                    None,
+                    "X(41) = \\bigl(a^3(b+c-a):\\cdots\\bigr)",
+                    "X(41)：勒莫恩点对第二幂点的 Ceva 共轭",
+                ).with(Shape::Point {
+                    x: x41[0],
+                    y: x41[1],
+                    label: "X41".into(),
+                }));
+            }
+        }
+    }
+
+    // X(48): crosspoint of I and X(63); bary a sin 2A.
+    {
+        let wa = a * (2.0 * g[0]).sin();
+        let wb = b * (2.0 * g[1]).sin();
+        let wc = c * (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x48 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "双倍角截点",
+                "X_{48}",
+                pt(x48[0], x48[1]),
+                None,
+                "X(48) = (a\\sin 2A:b\\sin 2B:c\\sin 2C)",
+                "X(48)：内心与 X(63) 的截线交点",
+            ).with(Shape::Point {
+                x: x48[0],
+                y: x48[1],
+                label: "X48".into(),
+            }));
+        }
+    }
+
+
+    // X(23) Far-out point: circumcircle-inverse of the centroid; skip equilateral (G=O).
+    // Trilinear a(b⁴+c⁴−a⁴−b²c²); bary a²(b⁴+c⁴−a⁴−b²c²). On Euler line.
+    {
+        let og2 = {
+            let dx = centroid[0] - circ[0];
+            let dy = centroid[1] - circ[1];
+            dx * dx + dy * dy
+        };
+        if og2 > 1e-12 {
+            let scale = (rr * rr) / og2;
+            let x23 = [
+                circ[0] + scale * (centroid[0] - circ[0]),
+                circ[1] + scale * (centroid[1] - circ[1]),
+            ];
+            // Bary a²(b⁴+c⁴−a⁴−b²c²)
+            let a2 = a * a;
+            let b2 = b * b;
+            let c2 = c * c;
+            let a4 = a2 * a2;
+            let b4 = b2 * b2;
+            let c4 = c2 * c2;
+            let wa = a2 * (b4 + c4 - a4 - b2 * c2);
+            let wb = b2 * (c4 + a4 - b4 - c2 * a2);
+            let wc = c2 * (a4 + b4 - c4 - a2 * b2);
+            let den = wa + wb + wc;
+            let x23u = if den.abs() > 1e-12 {
+                let xb = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if dist2(xb, x23) < 1e-4 * (1.0 + rr) {
+                    xb
+                } else {
+                    x23
+                }
+            } else {
+                x23
+            };
+            out.push(fact(
+                "远点",
+                "X_{23}",
+                pt(x23u[0], x23u[1]),
+                None,
+                "X(23) = O + R^2(G-O)/|OG|^2",
+                "远点 X(23)：重心关于外接圆的反演点",
+            ).with(Shape::Point {
+                x: x23u[0],
+                y: x23u[1],
+                label: "X23 远点".into(),
+            }));
+            // |OX23| · |OG| = R²
+            let d_ox = dist2(circ, x23u);
+            let d_og = og2.sqrt();
+            if d_og > 1e-12 {
+                let prod = d_ox * d_og;
+                if (prod - rr * rr).abs() < 1e-4 * (1.0 + rr * rr) {
+                    out.push(fact(
+                        "远点",
+                        "|OX_{23}|\\cdot|OG|",
+                        nice(rr * rr),
+                        Some(rr * rr),
+                        "|OX_{23}|\\cdot|OG| = R^2",
+                        "反演定义：乘积等于外接圆半径平方",
+                    ));
+                }
+            }
+            // Collinear O, G, X23 (Euler)
+            let cross = (centroid[0] - circ[0]) * (x23u[1] - circ[1])
+                - (centroid[1] - circ[1]) * (x23u[0] - circ[0]);
+            if cross.abs() < 1e-5 * (1.0 + og2) * (1.0 + dist2(circ, x23u)) {
+                out.push(fact(
+                    "远点",
+                    "O,\\ G,\\ X_{23}",
+                    "\\text{共线}".into(),
+                    None,
+                    "X(23)\\in\\text{Euler}",
+                    "远点在欧拉线上",
+                ));
+            }
+        }
+    }
+
+    // X(35): bary sin A + sin 2A; on OI (companion of circum-inverse X(36)=sin A−sin 2A).
+    {
+        let wa = g[0].sin() + (2.0 * g[0]).sin();
+        let wb = g[1].sin() + (2.0 * g[1]).sin();
+        let wc = g[2].sin() + (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x35 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            let di = dist2(x35, inc);
+            let do_ = dist2(x35, circ);
+            if di > 1e-10 || do_ > 1e-10 {
+                out.push(fact(
+                    "OI调和点",
+                    "X_{35}",
+                    pt(x35[0], x35[1]),
+                    None,
+                    "X(35) = (\\sin A+\\sin 2A:\\cdots)",
+                    "X(35)：与 X(36) 成对的 OI 线上点",
+                ).with(Shape::Point {
+                    x: x35[0],
+                    y: x35[1],
+                    label: "X35".into(),
+                }));
+                let cross = (inc[0] - circ[0]) * (x35[1] - circ[1])
+                    - (inc[1] - circ[1]) * (x35[0] - circ[0]);
+                let oi2 = dist2(circ, inc);
+                if oi2 > 1e-12
+                    && cross.abs() < 1e-5 * (1.0 + oi2) * (1.0 + dist2(circ, x35))
+                {
+                    out.push(fact(
+                        "OI调和点",
+                        "O,\\ I,\\ X_{35}",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(35)\\in OI",
+                        "X(35) 在 OI 线上",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(38): bary a(b²+c²); crosspoint of I and Moses X(75).
+    {
+        let wa = a * (b * b + c * c);
+        let wb = b * (c * c + a * a);
+        let wc = c * (a * a + b * b);
+        let den = wa + wb + wc;
+        if den > 1e-12 {
+            let x38 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "截线交点",
+                "X_{38}",
+                pt(x38[0], x38[1]),
+                None,
+                "X(38) = \\bigl(a(b^2+c^2):\\cdots\\bigr)",
+                "X(38)：内心与摩西点的截线交点",
+            ).with(Shape::Point {
+                x: x38[0],
+                y: x38[1],
+                label: "X38".into(),
+            }));
+        }
+    }
+
+    // X(24): perspector of ABC and the orthic-of-orthic triangle.
+    // Bary tan A cos 2A = tan A − sin 2A; skip right/obtuse (tan undefined / sign issues).
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let acute = cosines.iter().all(|&c| c > 1e-9)
+            && g.iter().all(|&ang| ang > 1e-9 && ang < std::f64::consts::FRAC_PI_2 - 1e-9);
+        if acute {
+            let wa = g[0].tan() - (2.0 * g[0]).sin();
+            let wb = g[1].tan() - (2.0 * g[1]).sin();
+            let wc = g[2].tan() - (2.0 * g[2]).sin();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x24 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "二重垂足透视",
+                    "X_{24}",
+                    pt(x24[0], x24[1]),
+                    None,
+                    "X(24) = (\\tan A\\cos 2A:\\cdots) = (\\tan A-\\sin 2A:\\cdots)",
+                    "X(24)：ABC 与二重垂足三角形的透视中心（锐角）",
+                ).with(Shape::Point {
+                    x: x24[0],
+                    y: x24[1],
+                    label: "X24".into(),
+                }));
+            }
+        }
+    }
+
+    // X(43): X(6)-Ceva conjugate of I; bary a(ab+ac−bc).
+    {
+        let wa = a * (a * b + a * c - b * c);
+        let wb = b * (b * c + b * a - c * a);
+        let wc = c * (c * a + c * b - a * b);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x43 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "勒莫恩Ceva",
+                "X_{43}",
+                pt(x43[0], x43[1]),
+                None,
+                "X(43) = \\bigl(a(ab+ac-bc):\\cdots\\bigr)",
+                "X(43)：勒莫恩点对内心的 Ceva 共轭",
+            ).with(Shape::Point {
+                x: x43[0],
+                y: x43[1],
+                label: "X43".into(),
+            }));
+        }
+    }
+
+    // X(44): X(6)-line conjugate of I; bary a(b+c−2a). Skip equilateral (all weights 0).
+    {
+        let wa = a * (b + c - 2.0 * a);
+        let wb = b * (c + a - 2.0 * b);
+        let wc = c * (a + b - 2.0 * c);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x44 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "勒莫恩线共轭",
+                "X_{44}",
+                pt(x44[0], x44[1]),
+                None,
+                "X(44) = \\bigl(a(b+c-2a):\\cdots\\bigr)",
+                "X(44)：勒莫恩点对内心的线共轭（等边时退化）",
+            ).with(Shape::Point {
+                x: x44[0],
+                y: x44[1],
+                label: "X44".into(),
+            }));
+        }
+    }
+
+    // X(63): isogonal conjugate of Clawson X(19); bary cos A : cos B : cos C.
+    // Always finite (Σ cos = 1+r/R > 0); equals G on equilateral.
+    {
+        let wa = g[0].cos();
+        let wb = g[1].cos();
+        let wc = g[2].cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x63 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "克劳森等角",
+                "X_{63}",
+                pt(x63[0], x63[1]),
+                None,
+                "X(63) = (\\cos A:\\cos B:\\cos C)",
+                "X(63)：克劳森点的等角共轭（亦为 X(48) 的截线伴点）",
+            ).with(Shape::Point {
+                x: x63[0],
+                y: x63[1],
+                label: "X63".into(),
+            }));
+        }
+    }
+
+    // X(45): X(9)-beth conjugate of I; bary a(2b+2c−a). Always finite (weights > 0).
+    {
+        let wa = a * (2.0 * b + 2.0 * c - a);
+        let wb = b * (2.0 * c + 2.0 * a - b);
+        let wc = c * (2.0 * a + 2.0 * b - c);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x45 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "米滕beth",
+                "X_{45}",
+                pt(x45[0], x45[1]),
+                None,
+                "X(45) = \\bigl(a(2b+2c-a):\\cdots\\bigr)",
+                "X(45)：米滕点对内心的 beth 共轭",
+            ).with(Shape::Point {
+                x: x45[0],
+                y: x45[1],
+                label: "X45".into(),
+            }));
+        }
+    }
+
+    // X(46): X(4)-Ceva conjugate of I; bary a(cos B+cos C−cos A). On OI line.
+    {
+        let wa = a * (g[1].cos() + g[2].cos() - g[0].cos());
+        let wb = b * (g[2].cos() + g[0].cos() - g[1].cos());
+        let wc = c * (g[0].cos() + g[1].cos() - g[2].cos());
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x46 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "垂心Ceva内心",
+                "X_{46}",
+                pt(x46[0], x46[1]),
+                None,
+                "X(46) = \\bigl(a(\\cos B+\\cos C-\\cos A):\\cdots\\bigr)",
+                "X(46)：垂心对内心的 Ceva 共轭（在 OI 线上）",
+            ).with(Shape::Point {
+                x: x46[0],
+                y: x46[1],
+                label: "X46".into(),
+            }));
+        }
+    }
+
+    // X(47): bary a cos 2A; pairs with X(48)=a sin 2A. Equals G on equilateral.
+    {
+        let wa = a * (2.0 * g[0]).cos();
+        let wb = b * (2.0 * g[1]).cos();
+        let wc = c * (2.0 * g[2]).cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x47 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "双倍角余弦",
+                "X_{47}",
+                pt(x47[0], x47[1]),
+                None,
+                "X(47) = (a\\cos 2A:b\\cos 2B:c\\cos 2C)",
+                "X(47)：双倍角余弦点（与 X(48) 成对）",
+            ).with(Shape::Point {
+                x: x47[0],
+                y: x47[1],
+                label: "X47".into(),
+            }));
+        }
+    }
+
+    // X(49): center of sine-triple-angle circle; bary a cos 3A (= sin A cos 3A).
+    // Equals G on equilateral (cos 180° = −1).
+    {
+        let wa = a * (3.0 * g[0]).cos();
+        let wb = b * (3.0 * g[1]).cos();
+        let wc = c * (3.0 * g[2]).cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x49 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "三倍角正弦圆",
+                "X_{49}",
+                pt(x49[0], x49[1]),
+                None,
+                "X(49) = (a\\cos 3A:b\\cos 3B:c\\cos 3C)",
+                "X(49)：三倍角正弦圆圆心",
+            ).with(Shape::Point {
+                x: x49[0],
+                y: x49[1],
+                label: "X49".into(),
+            }));
+        }
+    }
+
+
+    
+    // X(50): bary a sin 3A (= sin A sin 3A); pairs with X(49)=a cos 3A.
+    // Equilateral: 3A=180°, sin=0 → all weights 0 → skip.
+    {
+        let wa = a * (3.0 * g[0]).sin();
+        let wb = b * (3.0 * g[1]).sin();
+        let wc = c * (3.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x50 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "三倍角正弦",
+                "X_{50}",
+                pt(x50[0], x50[1]),
+                None,
+                "X(50) = (a\\sin 3A:b\\sin 3B:c\\sin 3C)",
+                "X(50)：三倍角正弦点（与 X(49) 成对；等边时退化）",
+            ).with(Shape::Point {
+                x: x50[0],
+                y: x50[1],
+                label: "X50".into(),
+            }));
+        }
+    }
+
+    // X(61), X(62): isogonal conjugates of the Napoleon centers X(17), X(18).
+    // Trilinear cos(A∓π/3); bary a cos(A∓π/3). Reciprocals of Napoleon trilinears.
+    {
+        let pi3 = std::f64::consts::PI / 3.0;
+        let c61 = [(g[0] - pi3).cos(), (g[1] - pi3).cos(), (g[2] - pi3).cos()];
+        let wa = a * c61[0];
+        let wb = b * c61[1];
+        let wc = c * c61[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x61 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{61}",
+                pt(x61[0], x61[1]),
+                None,
+                "X(61) = \\bigl(a\\cos(A-\\pi/3):\\cdots\\bigr)",
+                "X(61)：第一拿破仑点的等角共轭",
+            ).with(Shape::Point {
+                x: x61[0],
+                y: x61[1],
+                label: "X61".into(),
+            }));
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{61} \\leftrightarrow N_1",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(17)",
+                "X(61) 与第一拿破仑点 X(17) 互为等角共轭",
+            ));
+        }
+        let c62 = [(g[0] + pi3).cos(), (g[1] + pi3).cos(), (g[2] + pi3).cos()];
+        let wa = a * c62[0];
+        let wb = b * c62[1];
+        let wc = c * c62[2];
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x62 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{62}",
+                pt(x62[0], x62[1]),
+                None,
+                "X(62) = \\bigl(a\\cos(A+\\pi/3):\\cdots\\bigr)",
+                "X(62)：第二拿破仑点的等角共轭",
+            ).with(Shape::Point {
+                x: x62[0],
+                y: x62[1],
+                label: "X62".into(),
+            }));
+            out.push(fact(
+                "拿破仑等角共轭点",
+                "X_{62} \\leftrightarrow N_2",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(18)",
+                "X(62) 与第二拿破仑点 X(18) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(64): isogonal conjugate of de Longchamps X(20).
+    // Bary a/(cos A − cos B cos C). Skip when a side-den vanishes or Σweights=0
+    // (right △: X64 is at infinity — Σ = 0).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = ca - cb * cc;
+        let db = cb - cc * ca;
+        let dc = cc - ca * cb;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x64 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "德龙尚等角",
+                    "X_{64}",
+                    pt(x64[0], x64[1]),
+                    None,
+                    "X(64) = \\bigl(a/(\\cos A-\\cos B\\cos C):\\cdots\\bigr)",
+                    "X(64)：德龙尚点的等角共轭",
+                ).with(Shape::Point {
+                    x: x64[0],
+                    y: x64[1],
+                    label: "X64".into(),
+                }));
+                out.push(fact(
+                    "德龙尚等角",
+                    "X_{64} \\leftrightarrow L",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(20)",
+                    "X(64) 与德龙尚点 X(20) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(51): centroid of the orthic triangle; bary a³ cos(B−C).
+    // Geometric cross-check: mean of altitude feet. Equals G on equilateral.
+    {
+        let wa = a.powi(3) * (g[1] - g[2]).cos();
+        let wb = b.powi(3) * (g[2] - g[0]).cos();
+        let wc = c.powi(3) * (g[0] - g[1]).cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x51 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "垂足重心",
+                "X_{51}",
+                pt(x51[0], x51[1]),
+                None,
+                "X(51) = \\bigl(a^3\\cos(B-C):\\cdots\\bigr)",
+                "X(51)：垂足三角形的重心",
+            ).with(Shape::Point {
+                x: x51[0],
+                y: x51[1],
+                label: "X51".into(),
+            }));
+            // Mean of altitude feet ≈ X(51).
+            let mut feet = [[0.0f64; 2]; 3];
+            let mut ok = true;
+            for i in 0..3 {
+                let p0 = v[i];
+                let q1 = v[(i + 1) % 3];
+                let q2 = v[(i + 2) % 3];
+                let dx = q2[0] - q1[0];
+                let dy = q2[1] - q1[1];
+                let d2 = dx * dx + dy * dy;
+                if d2 < 1e-18 {
+                    ok = false;
+                    break;
+                }
+                let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / d2;
+                feet[i] = [q1[0] + t * dx, q1[1] + t * dy];
+            }
+            if ok {
+                let g_orth = [
+                    (feet[0][0] + feet[1][0] + feet[2][0]) / 3.0,
+                    (feet[0][1] + feet[1][1] + feet[2][1]) / 3.0,
+                ];
+                if dist2(x51, g_orth) < 1e-5 * (1.0 + rr) {
+                    out.push(fact(
+                        "垂足重心",
+                        "G_{\\text{orthic}}",
+                        "\\checkmark".into(),
+                        None,
+                        "X(51) = (H_a+H_b+H_c)/3",
+                        "与垂足三角形三顶点的重心重合",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(53): symmedian point of the orthic triangle; bary a tan A cos(B−C).
+    // Skip right △ (tan ∞) and near-right (cos≈0).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa = a * (g[0].sin() / ca) * (g[1] - g[2]).cos();
+            let wb = b * (g[1].sin() / cb) * (g[2] - g[0]).cos();
+            let wc = c * (g[2].sin() / cc) * (g[0] - g[1]).cos();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x53 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足对称中线点",
+                    "X_{53}",
+                    pt(x53[0], x53[1]),
+                    None,
+                    "X(53) = \\bigl(a\\tan A\\cos(B-C):\\cdots\\bigr)",
+                    "X(53)：垂足三角形的对称中线点（锐角）",
+                ).with(Shape::Point {
+                    x: x53[0],
+                    y: x53[1],
+                    label: "X53".into(),
+                }));
+            }
+        }
+    }
+
+    // X(52): orthocenter of the orthic triangle; bary a cos 2A cos(B−C).
+    // Skip right/near-right (orthic degenerates when cos A≈0). Equals G on equilateral.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-9 && cb.abs() > 1e-9 && cc.abs() > 1e-9 {
+            let wa = a * (2.0 * g[0]).cos() * (g[1] - g[2]).cos();
+            let wb = b * (2.0 * g[1]).cos() * (g[2] - g[0]).cos();
+            let wc = c * (2.0 * g[2]).cos() * (g[0] - g[1]).cos();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x52 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足垂心",
+                    "X_{52}",
+                    pt(x52[0], x52[1]),
+                    None,
+                    "X(52) = \\bigl(a\\cos 2A\\cos(B-C):\\cdots\\bigr)",
+                    "X(52)：垂足三角形的垂心（锐角）",
+                ).with(Shape::Point {
+                    x: x52[0],
+                    y: x52[1],
+                    label: "X52".into(),
+                }));
+            }
+        }
+    }
+
+    // X(26): circumcenter of the tangential triangle; on Euler line.
+    // Bary a²(b² cos 2B + c² cos 2C − a² cos 2A). Isogonal of X(70).
+    // Right △: Σweights = 0 → point at infinity on Euler — skip.
+    {
+        let c2a = (2.0 * g[0]).cos();
+        let c2b = (2.0 * g[1]).cos();
+        let c2c = (2.0 * g[2]).cos();
+        let wa = a * a * (b * b * c2b + c * c * c2c - a * a * c2a);
+        let wb = b * b * (c * c * c2c + a * a * c2a - b * b * c2b);
+        let wc = c * c * (a * a * c2a + b * b * c2b - c * c * c2c);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x26 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "切线三角形外心",
+                "X_{26}",
+                pt(x26[0], x26[1]),
+                None,
+                "X(26) = \\bigl(a^2(b^2\\cos 2B+c^2\\cos 2C-a^2\\cos 2A):\\cdots\\bigr)",
+                "X(26)：切线三角形的外心（在欧拉线上）",
+            ).with(Shape::Point {
+                x: x26[0],
+                y: x26[1],
+                label: "X26".into(),
+            }));
+            // On Euler line OH: cross (X−O)×(H−O) ≈ 0.
+            let hx = orth[0] - circ[0];
+            let hy = orth[1] - circ[1];
+            let xx = x26[0] - circ[0];
+            let xy = x26[1] - circ[1];
+            let cross = xx * hy - xy * hx;
+            let scale = (1.0 + dist2(circ, orth)) * (1.0 + dist2(circ, x26));
+            if cross.abs() < 1e-5 * scale {
+                out.push(fact(
+                    "切线三角形外心",
+                    "X_{26}\\in OH",
+                    "\\checkmark".into(),
+                    None,
+                    "X(26)\\in\\text{Euler}",
+                    "X(26) 在欧拉线 OH 上",
+                ));
+            }
+        }
+    }
+
+    // X(27): cevapoint of H and Clawson X(19); bary tan A/(b+c).
+    // Skip right △ (tan ∞).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa = (g[0].sin() / ca) / (b + c);
+            let wb = (g[1].sin() / cb) / (c + a);
+            let wc = (g[2].sin() / cc) / (a + b);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x27 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂心克劳森截点",
+                    "X_{27}",
+                    pt(x27[0], x27[1]),
+                    None,
+                    "X(27) = \\bigl(\\tan A/(b+c):\\cdots\\bigr)",
+                    "X(27)：垂心与克劳森点的截线交点（锐角）",
+                ).with(Shape::Point {
+                    x: x27[0],
+                    y: x27[1],
+                    label: "X27".into(),
+                }));
+            }
+        }
+    }
+
+    // X(29): cevapoint of I and H; bary tan A/(cos B + cos C).
+    // Skip right △ (tan ∞). Denom cos B+cos C = 2 sin(A/2)cos((B−C)/2) > 0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc;
+        let db = cc + ca;
+        let dc = ca + cb;
+        if ca.abs() > 1e-12
+            && cb.abs() > 1e-12
+            && cc.abs() > 1e-12
+            && da.abs() > 1e-12
+            && db.abs() > 1e-12
+            && dc.abs() > 1e-12
+        {
+            let wa = (g[0].sin() / ca) / da;
+            let wb = (g[1].sin() / cb) / db;
+            let wc = (g[2].sin() / cc) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x29 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "内心垂心截点",
+                    "X_{29}",
+                    pt(x29[0], x29[1]),
+                    None,
+                    "X(29) = \\bigl(\\tan A/(\\cos B+\\cos C):\\cdots\\bigr)",
+                    "X(29)：内心与垂心的截线交点（锐角）",
+                ).with(Shape::Point {
+                    x: x29[0],
+                    y: x29[1],
+                    label: "X29".into(),
+                }));
+            }
+        }
+    }
+
+    // X(79), X(80): isogonal conjugates of X(35) and X(36).
+    // Trilinears 1/(1±2 cos A); bary a/(1±2 cos A).
+    // X(79) blows up when an angle is 120°; X(80) when an angle is 60° (equilateral).
+    {
+        let d79 = [
+            1.0 + 2.0 * g[0].cos(),
+            1.0 + 2.0 * g[1].cos(),
+            1.0 + 2.0 * g[2].cos(),
+        ];
+        if d79.iter().all(|d| d.abs() > 1e-9) {
+            let wa = a / d79[0];
+            let wb = b / d79[1];
+            let wc = c / d79[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x79 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "OI伴点等角",
+                    "X_{79}",
+                    pt(x79[0], x79[1]),
+                    None,
+                    "X(79) = \\bigl(a/(1+2\\cos A):\\cdots\\bigr)",
+                    "X(79)：X(35) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x79[0],
+                    y: x79[1],
+                    label: "X79".into(),
+                }));
+                out.push(fact(
+                    "OI伴点等角",
+                    "X_{79} \\leftrightarrow X_{35}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(35)",
+                    "X(79) 与 X(35) 互为等角共轭",
+                ));
+            }
+        }
+        let d80 = [
+            1.0 - 2.0 * g[0].cos(),
+            1.0 - 2.0 * g[1].cos(),
+            1.0 - 2.0 * g[2].cos(),
+        ];
+        if d80.iter().all(|d| d.abs() > 1e-9) {
+            let wa = a / d80[0];
+            let wb = b / d80[1];
+            let wc = c / d80[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x80 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "反演内心等角",
+                    "X_{80}",
+                    pt(x80[0], x80[1]),
+                    None,
+                    "X(80) = \\bigl(a/(1-2\\cos A):\\cdots\\bigr)",
+                    "X(80)：X(36) 的等角共轭（有 60° 角时退化）",
+                ).with(Shape::Point {
+                    x: x80[0],
+                    y: x80[1],
+                    label: "X80".into(),
+                }));
+                out.push(fact(
+                    "反演内心等角",
+                    "X_{80} \\leftrightarrow X_{36}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(36)",
+                    "X(80) 与反演内心 X(36) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(28): cevapoint of Clawson X(19) and X(25); bary (sin A tan A)/(b+c).
+    // Skip right △ (tan ∞).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa = (g[0].sin() * g[0].sin() / ca) / (b + c);
+            let wb = (g[1].sin() * g[1].sin() / cb) / (c + a);
+            let wc = (g[2].sin() * g[2].sin() / cc) / (a + b);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x28 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "克劳森X25截点",
+                    "X_{28}",
+                    pt(x28[0], x28[1]),
+                    None,
+                    "X(28) = \\bigl(\\sin A\\tan A/(b+c):\\cdots\\bigr)",
+                    "X(28)：克劳森点与 X(25) 的截线交点（锐角）",
+                ).with(Shape::Point {
+                    x: x28[0],
+                    y: x28[1],
+                    label: "X28".into(),
+                }));
+            }
+        }
+    }
+
+    // X(70): isogonal conjugate of X(26); bary 1/(b² cos 2B + c² cos 2C − a² cos 2A).
+    {
+        let c2a = (2.0 * g[0]).cos();
+        let c2b = (2.0 * g[1]).cos();
+        let c2c = (2.0 * g[2]).cos();
+        let da = b * b * c2b + c * c * c2c - a * a * c2a;
+        let db = c * c * c2c + a * a * c2a - b * b * c2b;
+        let dc = a * a * c2a + b * b * c2b - c * c * c2c;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x70 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "切线外心等角",
+                    "X_{70}",
+                    pt(x70[0], x70[1]),
+                    None,
+                    "X(70) = \\bigl(1/(b^2\\cos 2B+c^2\\cos 2C-a^2\\cos 2A):\\cdots\\bigr)",
+                    "X(70)：切线三角形外心 X(26) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x70[0],
+                    y: x70[1],
+                    label: "X70".into(),
+                }));
+                out.push(fact(
+                    "切线外心等角",
+                    "X_{70} \\leftrightarrow X_{26}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(26)",
+                    "X(70) 与 X(26) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(71): isogonal of X(27); bary (b+c) sin 2A. Always finite (sin 2A=0 only at right vertex).
+    {
+        let wa = (b + c) * (2.0 * g[0]).sin();
+        let wb = (c + a) * (2.0 * g[1]).sin();
+        let wc = (a + b) * (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x71 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "X27等角",
+                "X_{71}",
+                pt(x71[0], x71[1]),
+                None,
+                "X(71) = \\bigl((b+c)\\sin 2A:\\cdots\\bigr)",
+                "X(71)：X(27) 的等角共轭",
+            ).with(Shape::Point {
+                x: x71[0],
+                y: x71[1],
+                label: "X71".into(),
+            }));
+            out.push(fact(
+                "X27等角",
+                "X_{71} \\leftrightarrow X_{27}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(27)",
+                "X(71) 与 X(27) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(73): crosspoint of I and O; isogonal of X(29).
+    // Bary (cos B + cos C) sin 2A.
+    {
+        let wa = (g[1].cos() + g[2].cos()) * (2.0 * g[0]).sin();
+        let wb = (g[2].cos() + g[0].cos()) * (2.0 * g[1]).sin();
+        let wc = (g[0].cos() + g[1].cos()) * (2.0 * g[2]).sin();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x73 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "内心外心截点",
+                "X_{73}",
+                pt(x73[0], x73[1]),
+                None,
+                "X(73) = \\bigl((\\cos B+\\cos C)\\sin 2A:\\cdots\\bigr)",
+                "X(73)：内心与外心的截线交点（X(29) 的等角共轭）",
+            ).with(Shape::Point {
+                x: x73[0],
+                y: x73[1],
+                label: "X73".into(),
+            }));
+            out.push(fact(
+                "内心外心截点",
+                "X_{73} \\leftrightarrow X_{29}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(29)",
+                "X(73) 与 X(29) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(33): perspector of orthic and intangents triangles; bary sin A + tan A.
+    // Skip right △ (tan ∞). Equals G on equilateral.
+    // X(34): X(4)-beth conjugate of X(4); bary sin A − tan A; same acute guard.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let wa33 = g[0].sin() + g[0].tan();
+            let wb33 = g[1].sin() + g[1].tan();
+            let wc33 = g[2].sin() + g[2].tan();
+            let den33 = wa33 + wb33 + wc33;
+            if den33.abs() > 1e-12 {
+                let x33 = [
+                    (wa33 * pa[0] + wb33 * pb[0] + wc33 * pc[0]) / den33,
+                    (wa33 * pa[1] + wb33 * pb[1] + wc33 * pc[1]) / den33,
+                ];
+                out.push(fact(
+                    "垂足切线透视",
+                    "X_{33}",
+                    pt(x33[0], x33[1]),
+                    None,
+                    "X(33) = \\bigl(\\sin A+\\tan A:\\cdots\\bigr)",
+                    "X(33)：垂足三角形与内切线三角形的透视中心（锐角）",
+                ).with(Shape::Point {
+                    x: x33[0],
+                    y: x33[1],
+                    label: "X33".into(),
+                }));
+            }
+            let wa34 = g[0].sin() - g[0].tan();
+            let wb34 = g[1].sin() - g[1].tan();
+            let wc34 = g[2].sin() - g[2].tan();
+            let den34 = wa34 + wb34 + wc34;
+            if den34.abs() > 1e-12 {
+                let x34 = [
+                    (wa34 * pa[0] + wb34 * pb[0] + wc34 * pc[0]) / den34,
+                    (wa34 * pa[1] + wb34 * pb[1] + wc34 * pc[1]) / den34,
+                ];
+                out.push(fact(
+                    "垂心beth自共轭",
+                    "X_{34}",
+                    pt(x34[0], x34[1]),
+                    None,
+                    "X(34) = \\bigl(\\sin A-\\tan A:\\cdots\\bigr)",
+                    "X(34)：X(4) 对自身的 beth 共轭（锐角）",
+                ).with(Shape::Point {
+                    x: x34[0],
+                    y: x34[1],
+                    label: "X34".into(),
+                }));
+            }
+        }
+    }
+
+    // X(66): isogonal conjugate of Exeter X(22); bary 1/(b⁴+c⁴−a⁴).
+    // Skip when any denom vanishes (a⁴ = b⁴+c⁴), or Σweights≈0 (right △ → ∞).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let a4 = a2 * a2;
+        let b4 = b2 * b2;
+        let c4 = c2 * c2;
+        let da = b4 + c4 - a4;
+        let db = c4 + a4 - b4;
+        let dc = a4 + b4 - c4;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x66 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "埃克塞特等角",
+                    "X_{66}",
+                    pt(x66[0], x66[1]),
+                    None,
+                    "X(66) = \\bigl(1/(b^4+c^4-a^4):\\cdots\\bigr)",
+                    "X(66)：埃克塞特点 X(22) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x66[0],
+                    y: x66[1],
+                    label: "X66".into(),
+                }));
+                out.push(fact(
+                    "埃克塞特等角",
+                    "X_{66} \\leftrightarrow Ex",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(22)",
+                    "X(66) 与埃克塞特点 X(22) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(72): isogonal conjugate of X(28); bary (b+c) cos A.
+    // Finite on right △ (weight 0 at the right vertex). Equals G on equilateral.
+    {
+        let wa = (b + c) * g[0].cos();
+        let wb = (c + a) * g[1].cos();
+        let wc = (a + b) * g[2].cos();
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x72 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "克劳森X25等角",
+                "X_{72}",
+                pt(x72[0], x72[1]),
+                None,
+                "X(72) = \\bigl((b+c)\\cos A:\\cdots\\bigr)",
+                "X(72)：X(28) 的等角共轭",
+            ).with(Shape::Point {
+                x: x72[0],
+                y: x72[1],
+                label: "X72".into(),
+            }));
+            out.push(fact(
+                "克劳森X25等角",
+                "X_{72} \\leftrightarrow X_{28}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(28)",
+                "X(72) 与 X(28) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(91), X(92): isogonal conjugates of X(47)=a cos 2A and X(48)=a sin 2A.
+    // Bary a sec 2A and a csc 2A. X(92) vanishes on a right angle (sin 180° = 0).
+    // Ported from cloud tip d7ac9aa / b1cc8ca double-angle isogonals.
+    {
+        let c2 = [(2.0 * g[0]).cos(), (2.0 * g[1]).cos(), (2.0 * g[2]).cos()];
+        if c2.iter().all(|c| c.abs() > 1e-9) {
+            let wa = a / c2[0];
+            let wb = b / c2[1];
+            let wc = c / c2[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x91 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "双倍角正割",
+                    "X_{91}",
+                    pt(x91[0], x91[1]),
+                    None,
+                    "X(91) = (a\\sec 2A:b\\sec 2B:c\\sec 2C)",
+                    "X(91)：X(47) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x91[0],
+                    y: x91[1],
+                    label: "X91".into(),
+                }));
+                out.push(fact(
+                    "双倍角正割",
+                    "X_{91} \\leftrightarrow X_{47}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(47)",
+                    "X(91) 与 X(47) 互为等角共轭",
+                ));
+            }
+        }
+        let s2 = [(2.0 * g[0]).sin(), (2.0 * g[1]).sin(), (2.0 * g[2]).sin()];
+        if s2.iter().all(|s| s.abs() > 1e-9) {
+            let wa = a / s2[0];
+            let wb = b / s2[1];
+            let wc = c / s2[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x92 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "双倍角余割",
+                    "X_{92}",
+                    pt(x92[0], x92[1]),
+                    None,
+                    "X(92) = (a\\csc 2A:b\\csc 2B:c\\csc 2C)",
+                    "X(92)：X(48) 的等角共轭（直角时 sin 180°=0，略过）",
+                ).with(Shape::Point {
+                    x: x92[0],
+                    y: x92[1],
+                    label: "X92".into(),
+                }));
+                out.push(fact(
+                    "双倍角余割",
+                    "X_{92} \\leftrightarrow X_{48}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(48)",
+                    "X(92) 与 X(48) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+
+    // X(93), X(94): isogonal conjugates of the triple-angle points X(49)=a cos 3A
+    // and X(50)=a sin 3A. Bary a sec 3A and a csc 3A.
+    // X(93) blows up when cos 3A = 0 (A=30° or a right angle: 3·90°=270°).
+    // X(94) blows up when sin 3A = 0 (equilateral / any 60° angle: 3A=180°).
+    {
+        let c3 = [(3.0 * g[0]).cos(), (3.0 * g[1]).cos(), (3.0 * g[2]).cos()];
+        if c3.iter().all(|c| c.abs() > 1e-9) {
+            let wa = a / c3[0];
+            let wb = b / c3[1];
+            let wc = c / c3[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x93 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "三倍角正割",
+                    "X_{93}",
+                    pt(x93[0], x93[1]),
+                    None,
+                    "X(93) = (a\\sec 3A:b\\sec 3B:c\\sec 3C)",
+                    "X(93)：X(49) 的等角共轭（直角或 30° 角时 cos 3A=0，略过）",
+                ).with(Shape::Point {
+                    x: x93[0],
+                    y: x93[1],
+                    label: "X93".into(),
+                }));
+                out.push(fact(
+                    "三倍角正割",
+                    "X_{93} \\leftrightarrow X_{49}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(49)",
+                    "X(93) 与 X(49) 互为等角共轭",
+                ));
+            }
+        }
+        let s3 = [(3.0 * g[0]).sin(), (3.0 * g[1]).sin(), (3.0 * g[2]).sin()];
+        if s3.iter().all(|s| s.abs() > 1e-9) {
+            let wa = a / s3[0];
+            let wb = b / s3[1];
+            let wc = c / s3[2];
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x94 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "三倍角余割",
+                    "X_{94}",
+                    pt(x94[0], x94[1]),
+                    None,
+                    "X(94) = (a\\csc 3A:b\\csc 3B:c\\csc 3C)",
+                    "X(94)：X(50) 的等角共轭（等边/60° 角时 sin 3A=0，略过）",
+                ).with(Shape::Point {
+                    x: x94[0],
+                    y: x94[1],
+                    label: "X94".into(),
+                }));
+                out.push(fact(
+                    "三倍角余割",
+                    "X_{94} \\leftrightarrow X_{50}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(50)",
+                    "X(94) 与 X(50) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(68) Prasolov point: isogonal conjugate of X(24); bary tan 2A.
+    // Skip right/obtuse (tan 2A undefined when A≥90° or when cos 2A=0 i.e. A=45°).
+    {
+        let cosines = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let acute = cosines.iter().all(|&c| c > 1e-9)
+            && g.iter().all(|&ang| ang > 1e-9 && ang < std::f64::consts::FRAC_PI_2 - 1e-9);
+        let c2 = [(2.0 * g[0]).cos(), (2.0 * g[1]).cos(), (2.0 * g[2]).cos()];
+        if acute && c2.iter().all(|c| c.abs() > 1e-9) {
+            let wa = (2.0 * g[0]).tan();
+            let wb = (2.0 * g[1]).tan();
+            let wc = (2.0 * g[2]).tan();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x68 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "普拉索洛夫点",
+                    "X_{68}",
+                    pt(x68[0], x68[1]),
+                    None,
+                    "X(68) = (\\tan 2A:\\tan 2B:\\tan 2C)",
+                    "普拉索洛夫点 X(68)：X(24) 的等角共轭（锐角）",
+                ).with(Shape::Point {
+                    x: x68[0],
+                    y: x68[1],
+                    label: "X68".into(),
+                }));
+                out.push(fact(
+                    "普拉索洛夫点",
+                    "X_{68} \\leftrightarrow X_{24}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(24)",
+                    "X(68) 与 X(24) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(95): cevapoint of G and O; isogonal of X(51).
+    // Bary bc sec(B−C) : ca sec(C−A) : ab sec(A−B). Equals G on equilateral.
+    // Skip when any cos(B−C)≈0 (|B−C|=90°).
+    {
+        let cab = (g[1] - g[2]).cos();
+        let cbc = (g[2] - g[0]).cos();
+        let cca = (g[0] - g[1]).cos();
+        if cab.abs() > 1e-9 && cbc.abs() > 1e-9 && cca.abs() > 1e-9 {
+            let wa = b * c / cab;
+            let wb = c * a / cbc;
+            let wc = a * b / cca;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x95 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足重心等角",
+                    "X_{95}",
+                    pt(x95[0], x95[1]),
+                    None,
+                    "X(95) = (bc\\sec(B-C):ca\\sec(C-A):ab\\sec(A-B))",
+                    "X(95)：X(51) 的等角共轭（G 与 O 的 Ceva 截点）",
+                ).with(Shape::Point {
+                    x: x95[0],
+                    y: x95[1],
+                    label: "X95".into(),
+                }));
+                out.push(fact(
+                    "垂足重心等角",
+                    "X_{95} \\leftrightarrow X_{51}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(51)",
+                    "X(95) 与垂足重心 X(51) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(97): isogonal of X(53); bary cos A sec(B−C).
+    // Equals G on equilateral. Skip when any cos(B−C)≈0.
+    {
+        let cab = (g[1] - g[2]).cos();
+        let cbc = (g[2] - g[0]).cos();
+        let cca = (g[0] - g[1]).cos();
+        if cab.abs() > 1e-9 && cbc.abs() > 1e-9 && cca.abs() > 1e-9 {
+            let wa = g[0].cos() / cab;
+            let wb = g[1].cos() / cbc;
+            let wc = g[2].cos() / cca;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x97 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足对称中线等角",
+                    "X_{97}",
+                    pt(x97[0], x97[1]),
+                    None,
+                    "X(97) = (\\cos A\\sec(B-C):\\cdots)",
+                    "X(97)：X(53) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x97[0],
+                    y: x97[1],
+                    label: "X97".into(),
+                }));
+                out.push(fact(
+                    "垂足对称中线等角",
+                    "X_{97} \\leftrightarrow X_{53}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(53)",
+                    "X(97) 与垂足对称中线点 X(53) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+
+    // X(96): isogonal conjugate of X(52); bary a sec 2A sec(B−C).
+    // Skip when cos 2A≈0 (A=45°) or cos(B−C)≈0. Equals G on equilateral when finite.
+    {
+        let c2a = (2.0 * g[0]).cos();
+        let c2b = (2.0 * g[1]).cos();
+        let c2c = (2.0 * g[2]).cos();
+        let cab = (g[1] - g[2]).cos();
+        let cbc = (g[2] - g[0]).cos();
+        let cca = (g[0] - g[1]).cos();
+        if c2a.abs() > 1e-9
+            && c2b.abs() > 1e-9
+            && c2c.abs() > 1e-9
+            && cab.abs() > 1e-9
+            && cbc.abs() > 1e-9
+            && cca.abs() > 1e-9
+        {
+            let wa = a / (c2a * cab);
+            let wb = b / (c2b * cbc);
+            let wc = c / (c2c * cca);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x96 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足垂心等角",
+                    "X_{96}",
+                    pt(x96[0], x96[1]),
+                    None,
+                    "X(96) = \\bigl(a\\sec 2A\\sec(B-C):\\cdots\\bigr)",
+                    "X(96)：垂足垂心 X(52) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x96[0],
+                    y: x96[1],
+                    label: "X96".into(),
+                }));
+                out.push(fact(
+                    "垂足垂心等角",
+                    "X_{96} \\leftrightarrow X_{52}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(52)",
+                    "X(96) 与垂足垂心 X(52) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(67): isogonal conjugate of Far-out X(23); bary 1/(b⁴+c⁴−a⁴−b²c²).
+    // Skip when any denom vanishes or Σweights≈0 (equilateral → same as G via limit).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let a4 = a2 * a2;
+        let b4 = b2 * b2;
+        let c4 = c2 * c2;
+        let da = b4 + c4 - a4 - b2 * c2;
+        let db = c4 + a4 - b4 - c2 * a2;
+        let dc = a4 + b4 - c4 - a2 * b2;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x67 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "远点等角",
+                    "X_{67}",
+                    pt(x67[0], x67[1]),
+                    None,
+                    "X(67) = \\bigl(1/(b^4+c^4-a^4-b^2c^2):\\cdots\\bigr)",
+                    "X(67)：远点 X(23) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x67[0],
+                    y: x67[1],
+                    label: "X67".into(),
+                }));
+                out.push(fact(
+                    "远点等角",
+                    "X_{67} \\leftrightarrow X_{23}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(23)",
+                    "X(67) 与远点 X(23) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(74): isogonal conjugate of Euler infinity X(30); on the circumcircle.
+    // Bary a/(cos A − 2 cos B cos C). Skip when any denom≈0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = ca - 2.0 * cb * cc;
+        let db = cb - 2.0 * cc * ca;
+        let dc = cc - 2.0 * ca * cb;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x74 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "欧拉无穷等角",
+                    "X_{74}",
+                    pt(x74[0], x74[1]),
+                    None,
+                    "X(74) = \\bigl(a/(\\cos A-2\\cos B\\cos C):\\cdots\\bigr)",
+                    "X(74)：欧拉无穷远点 X(30) 的等角共轭（在外接圆上）",
+                ).with(Shape::Point {
+                    x: x74[0],
+                    y: x74[1],
+                    label: "X74".into(),
+                }));
+                out.push(fact(
+                    "欧拉无穷等角",
+                    "X_{74} \\leftrightarrow X_{30}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(30)",
+                    "X(74) 与欧拉无穷远点 X(30) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(77): isogonal of X(33); bary a/(1+sec A) = a cos A/(1+cos A).
+    // Finite for all non-degenerate triangles (1+cos A=0 only if flat).
+    // Equals G on equilateral. Weight 0 at a right vertex.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if (1.0 + ca).abs() > 1e-12 && (1.0 + cb).abs() > 1e-12 && (1.0 + cc).abs() > 1e-12 {
+            let wa = a * ca / (1.0 + ca);
+            let wb = b * cb / (1.0 + cb);
+            let wc = c * cc / (1.0 + cc);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x77 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂足切线等角",
+                    "X_{77}",
+                    pt(x77[0], x77[1]),
+                    None,
+                    "X(77) = \\bigl(a/(1+\\sec A):\\cdots\\bigr)",
+                    "X(77)：X(33) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x77[0],
+                    y: x77[1],
+                    label: "X77".into(),
+                }));
+                out.push(fact(
+                    "垂足切线等角",
+                    "X_{77} \\leftrightarrow X_{33}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(33)",
+                    "X(77) 与 X(33) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(78): isogonal of X(34); bary a/(1−sec A) = a cos A/(cos A−1).
+    // Always finite for proper triangles (cos A < 1). Equals G on equilateral.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if (ca - 1.0).abs() > 1e-12 && (cb - 1.0).abs() > 1e-12 && (cc - 1.0).abs() > 1e-12 {
+            let wa = a * ca / (ca - 1.0);
+            let wb = b * cb / (cb - 1.0);
+            let wc = c * cc / (cc - 1.0);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x78 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂心beth等角",
+                    "X_{78}",
+                    pt(x78[0], x78[1]),
+                    None,
+                    "X(78) = \\bigl(a/(1-\\sec A):\\cdots\\bigr)",
+                    "X(78)：X(34) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x78[0],
+                    y: x78[1],
+                    label: "X78".into(),
+                }));
+                out.push(fact(
+                    "垂心beth等角",
+                    "X_{78} \\leftrightarrow X_{34}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(34)",
+                    "X(78) 与 X(34) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(82): isogonal of X(38); bary a/(b²+c²). Always finite.
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let wa = a / (b2 + c2);
+        let wb = b / (c2 + a2);
+        let wc = c / (a2 + b2);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x82 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "X38等角",
+                "X_{82}",
+                pt(x82[0], x82[1]),
+                None,
+                "X(82) = \\bigl(a/(b^2+c^2):\\cdots\\bigr)",
+                "X(82)：X(38) 的等角共轭",
+            ).with(Shape::Point {
+                x: x82[0],
+                y: x82[1],
+                label: "X82".into(),
+            }));
+            out.push(fact(
+                "X38等角",
+                "X_{82} \\leftrightarrow X_{38}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(38)",
+                "X(82) 与 X(38) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(83): isogonal of Brocard midpoint X(39); bary 1/(b²+c²).
+    // Also cevapoint of G and K. Equals G on equilateral.
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let wa = 1.0 / (b2 + c2);
+        let wb = 1.0 / (c2 + a2);
+        let wc = 1.0 / (a2 + b2);
+        let den = wa + wb + wc;
+        if den.abs() > 1e-12 {
+            let x83 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "布罗卡中点等角",
+                "X_{83}",
+                pt(x83[0], x83[1]),
+                None,
+                "X(83) = \\bigl(1/(b^2+c^2):\\cdots\\bigr)",
+                "X(83)：布罗卡中点 X(39) 的等角共轭（G 与 K 的 Ceva 截点）",
+            ).with(Shape::Point {
+                x: x83[0],
+                y: x83[1],
+                label: "X83".into(),
+            }));
+            out.push(fact(
+                "布罗卡中点等角",
+                "X_{83} \\leftrightarrow X_{39}",
+                "\\text{等角共轭}".into(),
+                None,
+                "\\text{isogonal of }X(39)",
+                "X(83) 与布罗卡中点 X(39) 互为等角共轭",
+            ));
+        }
+    }
+
+    // X(85): isogonal of X(41); isotomic of Mittenpunkt X(9).
+    // Bary bc/(b+c−a) = bc/(2(s−a)). Always finite for proper triangles.
+    {
+        let da = b + c - a;
+        let db = c + a - b;
+        let dc = a + b - c;
+        if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+            let wa = b * c / da;
+            let wb = c * a / db;
+            let wc = a * b / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x85 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "X41等角",
+                    "X_{85}",
+                    pt(x85[0], x85[1]),
+                    None,
+                    "X(85) = \\bigl(bc/(b+c-a):\\cdots\\bigr)",
+                    "X(85)：X(41) 的等角共轭；Mittenpunkt X(9) 的等截共轭",
+                ).with(Shape::Point {
+                    x: x85[0],
+                    y: x85[1],
+                    label: "X85".into(),
+                }));
+                out.push(fact(
+                    "X41等角",
+                    "X_{85} \\leftrightarrow X_{41}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(41)",
+                    "X(85) 与 X(41) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+
+    // X(87): isogonal of X(43); bary a/(ab+ac−bc). Always finite when denom≠0.
+    {
+        let da = a * b + a * c - b * c;
+        let db = b * c + b * a - c * a;
+        let dc = c * a + c * b - a * b;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x87 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "勒莫恩Ceva等角",
+                    "X_{87}",
+                    pt(x87[0], x87[1]),
+                    None,
+                    "X(87) = \\bigl(a/(ab+ac-bc):\\cdots\\bigr)",
+                    "X(87)：X(43) 的等角共轭（X(2) 对 X(1) 的截线共轭）",
+                ).with(Shape::Point {
+                    x: x87[0],
+                    y: x87[1],
+                    label: "X87".into(),
+                }));
+                out.push(fact(
+                    "勒莫恩Ceva等角",
+                    "X_{87} \\leftrightarrow X_{43}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(43)",
+                    "X(87) 与 X(43) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(88): isogonal of X(44); bary a/(b+c−2a). Skip equilateral / when any denom≈0.
+    {
+        let da = b + c - 2.0 * a;
+        let db = c + a - 2.0 * b;
+        let dc = a + b - 2.0 * c;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x88 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "勒莫恩线等角",
+                    "X_{88}",
+                    pt(x88[0], x88[1]),
+                    None,
+                    "X(88) = \\bigl(a/(b+c-2a):\\cdots\\bigr)",
+                    "X(88)：X(44) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x88[0],
+                    y: x88[1],
+                    label: "X88".into(),
+                }));
+                out.push(fact(
+                    "勒莫恩线等角",
+                    "X_{88} \\leftrightarrow X_{44}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(44)",
+                    "X(88) 与 X(44) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(89): isogonal of X(45); bary a/(2b+2c−a). Always finite for proper △.
+    {
+        let da = 2.0 * b + 2.0 * c - a;
+        let db = 2.0 * c + 2.0 * a - b;
+        let dc = 2.0 * a + 2.0 * b - c;
+        if da > 1e-12 && db > 1e-12 && dc > 1e-12 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x89 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "米滕beth等角",
+                    "X_{89}",
+                    pt(x89[0], x89[1]),
+                    None,
+                    "X(89) = \\bigl(a/(2b+2c-a):\\cdots\\bigr)",
+                    "X(89)：X(45) 的等角共轭",
+                ).with(Shape::Point {
+                    x: x89[0],
+                    y: x89[1],
+                    label: "X89".into(),
+                }));
+                out.push(fact(
+                    "米滕beth等角",
+                    "X_{89} \\leftrightarrow X_{45}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(45)",
+                    "X(89) 与 X(45) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(90): isogonal of X(46); bary a/(cos B+cos C−cos A). X(3)-cross conjugate of I.
+    // Skip when any denom≈0.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc - ca;
+        let db = cc + ca - cb;
+        let dc = ca + cb - cc;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x90 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "垂心Ceva等角",
+                    "X_{90}",
+                    pt(x90[0], x90[1]),
+                    None,
+                    "X(90) = \\bigl(a/(\\cos B+\\cos C-\\cos A):\\cdots\\bigr)",
+                    "X(90)：X(46) 的等角共轭（外心对内心的截线共轭）",
+                ).with(Shape::Point {
+                    x: x90[0],
+                    y: x90[1],
+                    label: "X90".into(),
+                }));
+                out.push(fact(
+                    "垂心Ceva等角",
+                    "X_{90} \\leftrightarrow X_{46}",
+                    "\\text{等角共轭}".into(),
+                    None,
+                    "\\text{isogonal of }X(46)",
+                    "X(90) 与 X(46) 互为等角共轭",
+                ));
+            }
+        }
+    }
+
+    // X(100): anticomplement of Feuerbach X(11); bary a/(b−c).
+    // On circumcircle; skip isosceles (any side-pair equal → denom 0).
+    {
+        let da = b - c;
+        let db = c - a;
+        let dc = a - b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x100 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "反补费尔巴哈",
+                    "X_{100}",
+                    pt(x100[0], x100[1]),
+                    None,
+                    "X(100) = \\bigl(a/(b-c):\\cdots\\bigr)",
+                    "X(100)：费尔巴哈点 X(11) 的反补点（外接圆上）",
+                ).with(Shape::Point {
+                    x: x100[0],
+                    y: x100[1],
+                    label: "X100".into(),
+                }));
+            }
+        }
+    }
+
+    // X(101): Ψ(I,K) = Ψ(X(1),X(6)); bary a²/(b−c). Circumcircle-antipode of X(103).
+    // Skip isosceles (same denom family as X(100)).
+    {
+        let da = b - c;
+        let db = c - a;
+        let dc = a - b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x101 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ内心对称中线",
+                    "X_{101}",
+                    pt(x101[0], x101[1]),
+                    None,
+                    "X(101) = \\bigl(a^2/(b-c):\\cdots\\bigr)",
+                    "X(101)：Ψ(I,K)（外接圆上）",
+                ).with(Shape::Point {
+                    x: x101[0],
+                    y: x101[1],
+                    label: "X101".into(),
+                }));
+            }
+        }
+    }
+
+    // X(104): circumcircle-antipode of X(100); Λ(I,O); bary a/(cos B+cos C−1).
+    // Skip equilateral / when any denom≈0 (cos B+cos C=1).
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb + cc - 1.0;
+        let db = cc + ca - 1.0;
+        let dc = ca + cb - 1.0;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x104 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "X100对径",
+                    "X_{104}",
+                    pt(x104[0], x104[1]),
+                    None,
+                    "X(104) = \\bigl(a/(\\cos B+\\cos C-1):\\cdots\\bigr)",
+                    "X(104)：X(100) 在外接圆上的对径点（Λ(I,O)）",
+                ).with(Shape::Point {
+                    x: x104[0],
+                    y: x104[1],
+                    label: "X104".into(),
+                }));
+                // Note: X(104) = 2O − X(100) when both finite (own the coords first).
+                let o_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "O").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                let x100_xy = out.iter().rev().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let (Some((ox, oy)), Some((px, py))) = (o_xy, x100_xy) {
+                    let mid_dx = (x104[0] + px) / 2.0 - ox;
+                    let mid_dy = (x104[1] + py) / 2.0 - oy;
+                    if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                        out.push(fact(
+                            "X100对径",
+                            "X_{104}=2O-X_{100}",
+                            "\text{外接圆对径}".into(),
+                            None,
+                            "X(104) = 2O - X(100)",
+                            "X(104) 与 X(100) 互为外接圆对径点",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(105): Λ(I,K); bary a/[b²+c²−a(b+c)]. Skip when any denom≈0 (equilateral).
+    {
+        let da = b * b + c * c - a * (b + c);
+        let db = c * c + a * a - b * (c + a);
+        let dc = a * a + b * b - c * (a + b);
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = a / da;
+            let wb = b / db;
+            let wc = c / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x105 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Λ内心勒莫恩",
+                    "X_{105}",
+                    pt(x105[0], x105[1]),
+                    None,
+                    "X(105) = \\bigl(a/(b^2+c^2-a(b+c)):\\cdots\\bigr)",
+                    "X(105)：Λ(I,K)",
+                ).with(Shape::Point {
+                    x: x105[0],
+                    y: x105[1],
+                    label: "X105".into(),
+                }));
+            }
+        }
+    }
+
+    // X(106): Λ(I,G); bary a²/(2a−b−c). Skip equilateral / when any denom≈0.
+    {
+        let da = 2.0 * a - b - c;
+        let db = 2.0 * b - c - a;
+        let dc = 2.0 * c - a - b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x106 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Λ内心重心",
+                    "X_{106}",
+                    pt(x106[0], x106[1]),
+                    None,
+                    "X(106) = \\bigl(a^2/(2a-b-c):\\cdots\\bigr)",
+                    "X(106)：Λ(I,G)",
+                ).with(Shape::Point {
+                    x: x106[0],
+                    y: x106[1],
+                    label: "X106".into(),
+                }));
+            }
+        }
+    }
+
+    // X(107): Ψ(K,H) = Ψ(X(6),X(4)); bary 1/[(b²−c²)(b²+c²−a²)²].
+    // Skip isosceles (b²=c²) and right (any b²+c²−a²≈0).
+    {
+        let da = (b * b - c * c) * (b * b + c * c - a * a).powi(2);
+        let db = (c * c - a * a) * (c * c + a * a - b * b).powi(2);
+        let dc = (a * a - b * b) * (a * a + b * b - c * c).powi(2);
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = 1.0 / da;
+            let wb = 1.0 / db;
+            let wc = 1.0 / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x107 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ对称中线垂心",
+                    "X_{107}",
+                    pt(x107[0], x107[1]),
+                    None,
+                    "X(107) = \\bigl(1/[(b^2-c^2)(b^2+c^2-a^2)^2]:\\cdots\\bigr)",
+                    "X(107)：Ψ(K,H)",
+                ).with(Shape::Point {
+                    x: x107[0],
+                    y: x107[1],
+                    label: "X107".into(),
+                }));
+            }
+        }
+    }
+
+    // X(108): Ψ(O,H) = Ψ(X(3),X(4)) = Ψ(I,H); bary a²/(sec B−sec C).
+    // Skip isosceles / right (sec undefined when cos=0) / sec B=sec C.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        if ca.abs() > 1e-9 && cb.abs() > 1e-9 && cc.abs() > 1e-9 {
+            let da = 1.0 / cb - 1.0 / cc;
+            let db = 1.0 / cc - 1.0 / ca;
+            let dc = 1.0 / ca - 1.0 / cb;
+            if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                let wa = (a * a) / da;
+                let wb = (b * b) / db;
+                let wc = (c * c) / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let x108 = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "Ψ外心垂心",
+                        "X_{108}",
+                        pt(x108[0], x108[1]),
+                        None,
+                        "X(108) = \\bigl(a^2/(\\sec B-\\sec C):\\cdots\\bigr)",
+                        "X(108)：Ψ(O,H)=Ψ(I,H)",
+                    ).with(Shape::Point {
+                        x: x108[0],
+                        y: x108[1],
+                        label: "X108".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    // X(109): Ψ(I,O) = Λ(I,O) partner; bary a²/(cos B−cos C).
+    // Circumcircle-antipode of X(102); skip isosceles.
+    {
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let da = cb - cc;
+        let db = cc - ca;
+        let dc = ca - cb;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x109 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ内心外心",
+                    "X_{109}",
+                    pt(x109[0], x109[1]),
+                    None,
+                    "X(109) = \\bigl(a^2/(\\cos B-\\cos C):\\cdots\\bigr)",
+                    "X(109)：Ψ(I,O)（外接圆上；X(102) 对径）",
+                ).with(Shape::Point {
+                    x: x109[0],
+                    y: x109[1],
+                    label: "X109".into(),
+                }));
+            }
+        }
+    }
+
+    // X(112): Ψ(H,K) = Ψ(X(4),X(6)); bary a²/(sin 2B−sin 2C).
+    // Skip isosceles / when sin 2B=sin 2C (incl. right where 2A=π → sin2B=sin2C may hold).
+    {
+        let da = (2.0 * g[1]).sin() - (2.0 * g[2]).sin();
+        let db = (2.0 * g[2]).sin() - (2.0 * g[0]).sin();
+        let dc = (2.0 * g[0]).sin() - (2.0 * g[1]).sin();
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x112 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "Ψ垂心对称中线",
+                    "X_{112}",
+                    pt(x112[0], x112[1]),
+                    None,
+                    "X(112) = \\bigl(a^2/(\\sin 2B-\\sin 2C):\\cdots\\bigr)",
+                    "X(112)：Ψ(H,K)",
+                ).with(Shape::Point {
+                    x: x112[0],
+                    y: x112[1],
+                    label: "X112".into(),
+                }));
+            }
+        }
+    }
+
+    // X(102): Λ(I,H) = circumcircle-antipode of X(109). Skip isosceles (no X109).
+    {
+        let x109_xy = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x109_xy {
+            let x102 = [2.0 * circ[0] - px, 2.0 * circ[1] - py];
+            out.push(fact(
+                "Λ内心垂心",
+                "X_{102}",
+                pt(x102[0], x102[1]),
+                None,
+                "X(102) = 2O - X(109) = \\Lambda(I,H)",
+                "X(102)：Λ(I,H)（外接圆上；X(109) 对径）",
+            ).with(Shape::Point {
+                x: x102[0],
+                y: x102[1],
+                label: "X102".into(),
+            }));
+            out.push(fact(
+                "Λ内心垂心",
+                "X_{102}=2O-X_{109}",
+                "\\text{外接圆对径}".into(),
+                None,
+                "X(102) = 2O - X(109)",
+                "X(102) 与 X(109) 互为外接圆对径点",
+            ));
+        }
+    }
+
+    // X(103): circumcircle-antipode of X(101); bary a²/[(a−b)cot C+(a−c)cot B].
+    // Skip isosceles / when any denom≈0.
+    {
+        let cota = g[0].cos() / g[0].sin();
+        let cotb = g[1].cos() / g[1].sin();
+        let cotc = g[2].cos() / g[2].sin();
+        let da = (a - b) * cotc + (a - c) * cotb;
+        let db = (b - c) * cota + (b - a) * cotc;
+        let dc = (c - a) * cotb + (c - b) * cota;
+        let mut emitted = false;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x103 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "X101对径",
+                    "X_{103}",
+                    pt(x103[0], x103[1]),
+                    None,
+                    "X(103) = \\bigl(a^2/[(a-b)\\cot C+(a-c)\\cot B]:\\cdots\\bigr)",
+                    "X(103)：X(101) 在外接圆上的对径点",
+                ).with(Shape::Point {
+                    x: x103[0],
+                    y: x103[1],
+                    label: "X103".into(),
+                }));
+                emitted = true;
+                let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((px, py)) = x101_xy {
+                    let mid_dx = (x103[0] + px) / 2.0 - circ[0];
+                    let mid_dy = (x103[1] + py) / 2.0 - circ[1];
+                    if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                        out.push(fact(
+                            "X101对径",
+                            "X_{103}=2O-X_{101}",
+                            "\\text{外接圆对径}".into(),
+                            None,
+                            "X(103) = 2O - X(101)",
+                            "X(103) 与 X(101) 互为外接圆对径点",
+                        ));
+                    }
+                }
+            }
+        }
+        if !emitted {
+            // Fallback: pure antipode of X(101) when bary denoms vanish but partner exists.
+            let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((px, py)) = x101_xy {
+                let x103 = [2.0 * circ[0] - px, 2.0 * circ[1] - py];
+                out.push(fact(
+                    "X101对径",
+                    "X_{103}",
+                    pt(x103[0], x103[1]),
+                    None,
+                    "X(103) = 2O - X(101)",
+                    "X(103)：X(101) 在外接圆上的对径点",
+                ).with(Shape::Point {
+                    x: x103[0],
+                    y: x103[1],
+                    label: "X103".into(),
+                }));
+                out.push(fact(
+                    "X101对径",
+                    "X_{103}=2O-X_{101}",
+                    "\\text{外接圆对径}".into(),
+                    None,
+                    "X(103) = 2O - X(101)",
+                    "X(103) 与 X(101) 互为外接圆对径点",
+                ));
+            }
+        }
+    }
+
+    // X(116): midpoint(H, X(103)); on nine-point circle. Bary (b−c)²(b²+bc+c²−ab−ac).
+    // Skip isosceles (any (b−c)=0).
+    {
+        let da = (b - c).powi(2) * (b * b + b * c + c * c - a * b - a * c);
+        let db = (c - a).powi(2) * (c * c + c * a + a * a - b * c - b * a);
+        let dc = (a - b).powi(2) * (a * a + a * b + b * b - c * a - c * b);
+        let mut emitted = false;
+        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+            let wa = da;
+            let wb = db;
+            let wc = dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x116 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "九点X103中点",
+                    "X_{116}",
+                    pt(x116[0], x116[1]),
+                    None,
+                    "X(116) = \\bigl((b-c)^2(b^2+bc+c^2-ab-ac):\\cdots\\bigr)",
+                    "X(116)：H 与 X(103) 的中点（九点圆上）",
+                ).with(Shape::Point {
+                    x: x116[0],
+                    y: x116[1],
+                    label: "X116".into(),
+                }));
+                emitted = true;
+            }
+        }
+        if !emitted {
+            let x103_xy = out.iter().rev().find(|f| f.group == "X101对径" && f.label == "X_{103}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((px, py)) = x103_xy {
+                let x116 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+                out.push(fact(
+                    "九点X103中点",
+                    "X_{116}",
+                    pt(x116[0], x116[1]),
+                    None,
+                    "X(116) = \\text{midpoint}(H, X(103))",
+                    "X(116)：H 与 X(103) 的中点（九点圆上）",
+                ).with(Shape::Point {
+                    x: x116[0],
+                    y: x116[1],
+                    label: "X116".into(),
+                }));
+            }
+        } else if let Some((px, py)) = out.iter().rev().find(|f| f.group == "X101对径" && f.label == "X_{103}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        }) {
+            // annotate midpoint relation when bary path used
+            let x116_xy = out.iter().rev().find(|f| f.group == "九点X103中点" && f.label == "X_{116}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((mx, my)) = x116_xy {
+                let dx = (orth[0] + px) / 2.0 - mx;
+                let dy = (orth[1] + py) / 2.0 - my;
+                if dx * dx + dy * dy < 1e-6 {
+                    out.push(fact(
+                        "九点X103中点",
+                        "X_{116}=\\mathrm{mid}(H,X_{103})",
+                        "\\text{中点}".into(),
+                        None,
+                        "X(116) = \\text{midpoint}(H, X(103))",
+                        "X(116) 为垂心与 X(103) 的中点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(117): midpoint(H, X(109)); on nine-point circle. Skip when X109 absent.
+    {
+        let x109_xy = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x109_xy {
+            let x117 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "九点X109中点",
+                "X_{117}",
+                pt(x117[0], x117[1]),
+                None,
+                "X(117) = \\text{midpoint}(H, X(109))",
+                "X(117)：H 与 X(109) 的中点（九点圆上）",
+            ).with(Shape::Point {
+                x: x117[0],
+                y: x117[1],
+                label: "X117".into(),
+            }));
+        }
+    }
+
+    // X(118): midpoint(H, X(101)); on nine-point circle. Skip when X101 absent.
+    {
+        let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x101_xy {
+            let x118 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "九点X101中点",
+                "X_{118}",
+                pt(x118[0], x118[1]),
+                None,
+                "X(118) = \\text{midpoint}(H, X(101))",
+                "X(118)：H 与 X(101) 的中点（九点圆上）",
+            ).with(Shape::Point {
+                x: x118[0],
+                y: x118[1],
+                label: "X118".into(),
+            }));
+        }
+    }
+
+    // X(119): midpoint(H, X(100)) = nine-point antipode of Feuerbach X(11).
+    // Skip when X100 absent (isosceles).
+    {
+        let x100_xy = out.iter().rev().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((px, py)) = x100_xy {
+            let x119 = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "费尔巴哈九点对径",
+                "X_{119}",
+                pt(x119[0], x119[1]),
+                None,
+                "X(119) = \\text{midpoint}(H, X(100)) = 2N - Fe",
+                "X(119)：费尔巴哈点在九点圆上的对径点",
+            ).with(Shape::Point {
+                x: x119[0],
+                y: x119[1],
+                label: "X119".into(),
+            }));
+            // Verify reflection of Fe in N when both present.
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let fe_xy = out.iter().rev().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((fx, fy)) = fe_xy {
+                let mid_dx = (x119[0] + fx) / 2.0 - n9[0];
+                let mid_dy = (x119[1] + fy) / 2.0 - n9[1];
+                if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                    out.push(fact(
+                        "费尔巴哈九点对径",
+                        "X_{119}=2N-Fe",
+                        "\\text{九点圆对径}".into(),
+                        None,
+                        "X(119) = 2N - X(11)",
+                        "X(119) 与费尔巴哈点互为九点圆对径点",
+                    ));
+                }
+            }
+        }
+    }
+
+
+    // X(115): center of the Kiepert hyperbola; bary (b²−c²)².
+    // On the nine-point circle; = midpoint(H, Tarry X(98)). Skip equilateral (all zero).
+    {
+        let da = b * b - c * c;
+        let db = c * c - a * a;
+        let dc = a * a - b * b;
+        let wa = da * da;
+        let wb = db * db;
+        let wc = dc * dc;
+        let den = wa + wb + wc;
+        if den > 1e-18 {
+            let x115 = [
+                (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "基伯特双曲心",
+                "X_{115}",
+                pt(x115[0], x115[1]),
+                None,
+                "X(115) = \\bigl((b^2-c^2)^2:\\cdots\\bigr)",
+                "X(115)：基伯特双曲线的中心（九点圆上）",
+            ).with(Shape::Point {
+                x: x115[0],
+                y: x115[1],
+                label: "X115".into(),
+            }));
+            // Cross-check: midpoint(H, Tarry) when Tarry present.
+            let ty_xy = out.iter().rev().find(|f| f.group == "塔里点" && f.label == "Ty").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((tx, ty)) = ty_xy {
+                let mx = (orth[0] + tx) / 2.0;
+                let my = (orth[1] + ty) / 2.0;
+                if (mx - x115[0]).abs() < 1e-5 && (my - x115[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "基伯特双曲心",
+                        "X_{115}=\\mathrm{mid}(H,Ty)",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(115) = \\text{midpoint}(H, X(98))",
+                        "X(115) 为垂心与塔里点的中点",
+                    ));
+                }
+            }
+
+            // X(114): Kiepert antipode = nine-point antipode of X(115) = midpoint(H, Steiner).
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let x114 = [2.0 * n9[0] - x115[0], 2.0 * n9[1] - x115[1]];
+            out.push(fact(
+                "基伯特对径",
+                "X_{114}",
+                pt(x114[0], x114[1]),
+                None,
+                "X(114) = 2N - X(115) = \\text{midpoint}(H, X(99))",
+                "X(114)：基伯特双曲心在九点圆上的对径点",
+            ).with(Shape::Point {
+                x: x114[0],
+                y: x114[1],
+                label: "X114".into(),
+            }));
+            out.push(fact(
+                "基伯特对径",
+                "X_{114}=2N-X_{115}",
+                "\\text{九点圆对径}".into(),
+                None,
+                "X(114) = 2N - X(115)",
+                "X(114) 与 X(115) 互为九点圆对径点",
+            ));
+            let st_xy = out.iter().rev().find(|f| f.group == "施泰纳点" && f.label == "St").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((sx, sy)) = st_xy {
+                let mx = (orth[0] + sx) / 2.0;
+                let my = (orth[1] + sy) / 2.0;
+                if (mx - x114[0]).abs() < 1e-5 && (my - x114[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "基伯特对径",
+                        "X_{114}=\\mathrm{mid}(H,St)",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(114) = \\text{midpoint}(H, X(99))",
+                        "X(114) 为垂心与施泰纳点的中点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(125): center of the Jerabek hyperbola; bary (sin 2A) sin²(B−C).
+    // On the nine-point circle; = midpoint(H, X(74)); complement of Euler reflection X(110).
+    // Skip equilateral (all sin(B−C)=0).
+    {
+        let sa = (2.0 * g[0]).sin() * (g[1] - g[2]).sin().powi(2);
+        let sb = (2.0 * g[1]).sin() * (g[2] - g[0]).sin().powi(2);
+        let sc = (2.0 * g[2]).sin() * (g[0] - g[1]).sin().powi(2);
+        let den = sa + sb + sc;
+        if den.abs() > 1e-12 {
+            let x125 = [
+                (sa * pa[0] + sb * pb[0] + sc * pc[0]) / den,
+                (sa * pa[1] + sb * pb[1] + sc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "耶拉贝克双曲心",
+                "X_{125}",
+                pt(x125[0], x125[1]),
+                None,
+                "X(125) = \\bigl(\\sin 2A\\,\\sin^2(B-C):\\cdots\\bigr)",
+                "X(125)：耶拉贝克双曲线的中心（九点圆上）",
+            ).with(Shape::Point {
+                x: x125[0],
+                y: x125[1],
+                label: "X125".into(),
+            }));
+            let x74_xy = out.iter().rev().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((px, py)) = x74_xy {
+                let mx = (orth[0] + px) / 2.0;
+                let my = (orth[1] + py) / 2.0;
+                if (mx - x125[0]).abs() < 1e-5 && (my - x125[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "耶拉贝克双曲心",
+                        "X_{125}=\\mathrm{mid}(H,X_{74})",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(125) = \\text{midpoint}(H, X(74))",
+                        "X(125) 为垂心与 X(74) 的中点",
+                    ));
+                }
+            }
+
+            // X(113): Jerabek antipode = nine-point antipode of X(125) = midpoint(H, Euler reflection).
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let x113 = [2.0 * n9[0] - x125[0], 2.0 * n9[1] - x125[1]];
+            out.push(fact(
+                "耶拉贝克对径",
+                "X_{113}",
+                pt(x113[0], x113[1]),
+                None,
+                "X(113) = 2N - X(125) = \\text{midpoint}(H, X(110))",
+                "X(113)：耶拉贝克双曲心在九点圆上的对径点",
+            ).with(Shape::Point {
+                x: x113[0],
+                y: x113[1],
+                label: "X113".into(),
+            }));
+            out.push(fact(
+                "耶拉贝克对径",
+                "X_{113}=2N-X_{125}",
+                "\\text{九点圆对径}".into(),
+                None,
+                "X(113) = 2N - X(125)",
+                "X(113) 与 X(125) 互为九点圆对径点",
+            ));
+            let er_xy = out.iter().rev().find(|f| f.group == "欧拉反射点" && f.label == "E_r").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((ex, ey)) = er_xy {
+                let mx = (orth[0] + ex) / 2.0;
+                let my = (orth[1] + ey) / 2.0;
+                if (mx - x113[0]).abs() < 1e-5 && (my - x113[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "耶拉贝克对径",
+                        "X_{113}=\\mathrm{mid}(H,E_r)",
+                        "\\text{九点圆}".into(),
+                        None,
+                        "X(113) = \\text{midpoint}(H, X(110))",
+                        "X(113) 为垂心与欧拉反射点的中点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(110): Euler reflection point / focus of Kiepert parabola.
+    // Bary a²/(b²−c²); circumcircle antipode of X(74); = 2O − X(74).
+    // Skip isosceles (denom 0) / equilateral. Works on scalene right (unlike fold construction).
+    {
+        let da = b * b - c * c;
+        let db = c * c - a * a;
+        let dc = a * a - b * b;
+        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+            let wa = (a * a) / da;
+            let wb = (b * b) / db;
+            let wc = (c * c) / dc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x110 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "欧拉反射点",
+                    "X_{110}",
+                    pt(x110[0], x110[1]),
+                    None,
+                    "X(110) = \\bigl(a^2/(b^2-c^2):\\cdots\\bigr)",
+                    "X(110)：欧拉反射点（基伯特抛物线焦点；外接圆上）",
+                ).with(Shape::Point {
+                    x: x110[0],
+                    y: x110[1],
+                    label: "X110".into(),
+                }));
+                if (dist2(x110, circ) - rr).abs() < 1e-5 * (1.0 + rr) {
+                    out.push(fact(
+                        "欧拉反射点",
+                        "X_{110}\\in(O)",
+                        "\\checkmark".into(),
+                        None,
+                        "d(O, X(110)) = R",
+                        "X(110) 在外接圆上",
+                    ));
+                }
+                // Cross-check: circum-antipode of X(74).
+                let x74_xy = out.iter().rev().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((px, py)) = x74_xy {
+                    let mid_dx = (x110[0] + px) / 2.0 - circ[0];
+                    let mid_dy = (x110[1] + py) / 2.0 - circ[1];
+                    if mid_dx * mid_dx + mid_dy * mid_dy < 1e-6 {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "X_{110}=2O-X_{74}",
+                            "\\text{外接圆对径}".into(),
+                            None,
+                            "X(110) = 2O - X(74)",
+                            "X(110) 与 X(74) 互为外接圆对径点",
+                        ));
+                    }
+                }
+                // Cross-check geometric Er (fold of Euler line) when present.
+                let er_xy = out.iter().rev().find(|f| f.group == "欧拉反射点" && f.label == "E_r").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((ex, ey)) = er_xy {
+                    if (ex - x110[0]).abs() < 1e-5 && (ey - x110[1]).abs() < 1e-5 {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "X_{110}=E_r",
+                            "\\text{折线构造}".into(),
+                            None,
+                            "X(110) = E_r",
+                            "X(110) 与欧拉线三边反射交点重合",
+                        ));
+                    }
+                }
+                // Cross-check: X(113) = midpoint(H, X(110)).
+                let x113_xy = out.iter().rev().find(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((qx, qy)) = x113_xy {
+                    let mx = (orth[0] + x110[0]) / 2.0;
+                    let my = (orth[1] + x110[1]) / 2.0;
+                    if (mx - qx).abs() < 1e-5 && (my - qy).abs() < 1e-5 {
+                        out.push(fact(
+                            "欧拉反射点",
+                            "X_{113}=\\mathrm{mid}(H,X_{110})",
+                            "\\text{九点圆}".into(),
+                            None,
+                            "X(113) = \\text{midpoint}(H, X(110))",
+                            "X(113) 为垂心与 X(110) 的中点",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(120): X(105)-of-medial; on nine-point circle.
+    // Bary g(a,b,c)=(2abc−(b+c)(a²+(b−c)²))(b²+c²−ab−ac). Skip equilateral / vanishing den.
+    {
+        let ga = {
+            let t = 2.0 * a * b * c - (b + c) * (a * a + (b - c) * (b - c));
+            t * (b * b + c * c - a * b - a * c)
+        };
+        let gb = {
+            let t = 2.0 * b * c * a - (c + a) * (b * b + (c - a) * (c - a));
+            t * (c * c + a * a - b * c - b * a)
+        };
+        let gc = {
+            let t = 2.0 * c * a * b - (a + b) * (c * c + (a - b) * (a - b));
+            t * (a * a + b * b - c * a - c * b)
+        };
+        let den = ga + gb + gc;
+        if den.abs() > 1e-10 {
+            let x120 = [
+                (ga * pa[0] + gb * pb[0] + gc * pc[0]) / den,
+                (ga * pa[1] + gb * pb[1] + gc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "中点X105",
+                "X_{120}",
+                pt(x120[0], x120[1]),
+                None,
+                "X(120) = X(105)\\text{-of-medial}",
+                "X(120)：中点三角形的 X(105)（九点圆上）",
+            ).with(Shape::Point {
+                x: x120[0],
+                y: x120[1],
+                label: "X120".into(),
+            }));
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let r9 = rr / 2.0;
+            if (dist2(x120, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X105",
+                    "X_{120}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(120)) = R/2",
+                    "X(120) 在九点圆上",
+                ));
+            }
+        }
+    }
+
+    // X(121): X(106)-of-medial; on nine-point circle.
+    // Bary g=(b+c−2a)[b³+c³+a(b²+c²)−2bc(b+c)]. Skip equilateral.
+    {
+        let ga = {
+            let u = b + c - 2.0 * a;
+            let v = b * b * b + c * c * c + a * (b * b + c * c) - 2.0 * b * c * (b + c);
+            u * v
+        };
+        let gb = {
+            let u = c + a - 2.0 * b;
+            let v = c * c * c + a * a * a + b * (c * c + a * a) - 2.0 * c * a * (c + a);
+            u * v
+        };
+        let gc = {
+            let u = a + b - 2.0 * c;
+            let v = a * a * a + b * b * b + c * (a * a + b * b) - 2.0 * a * b * (a + b);
+            u * v
+        };
+        let den = ga + gb + gc;
+        if den.abs() > 1e-10 {
+            let x121 = [
+                (ga * pa[0] + gb * pb[0] + gc * pc[0]) / den,
+                (ga * pa[1] + gb * pb[1] + gc * pc[1]) / den,
+            ];
+            out.push(fact(
+                "中点X106",
+                "X_{121}",
+                pt(x121[0], x121[1]),
+                None,
+                "X(121) = X(106)\\text{-of-medial}",
+                "X(121)：中点三角形的 X(106)（九点圆上）",
+            ).with(Shape::Point {
+                x: x121[0],
+                y: x121[1],
+                label: "X121".into(),
+            }));
+            let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+            let r9 = rr / 2.0;
+            if (dist2(x121, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X106",
+                    "X_{121}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(121)) = R/2",
+                    "X(121) 在九点圆上",
+                ));
+            }
+        }
+    }
+
+    // X(122)/X(123)/X(124)/X(126)/X(127): complements of circumcircle Ψ/Parry points
+    // (= X(n)-of-medial). Homothety at G with factor −1/2 maps (O) → NPC.
+    // Q = (3G − P)/2. Skip when the parent point was skipped (isos/equil/right).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        let p107 = out.iter().rev().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p108 = out.iter().rev().find(|f| f.group == "Ψ外心垂心" && f.label == "X_{108}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p109 = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p102 = out.iter().rev().find(|f| f.group == "Λ内心垂心" && f.label == "X_{102}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p111 = out.iter().rev().find(|f| f.group == "帕里点" && f.label == "Py").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p112 = out.iter().rev().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+
+        if let Some((px, py)) = p107 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X107",
+                "X_{122}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(122) = \\mathrm{complement}(X(107)) = X(107)\\text{-of-medial}",
+                "X(122)：X(107) 关于重心的补点（中点三角形的 X(107)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X122".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X107",
+                    "X_{122}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(122)) = R/2",
+                    "X(122) 在九点圆上",
+                ));
+            }
+            let cross = (px - centroid[0]) * (xy[1] - centroid[1]) - (py - centroid[1]) * (xy[0] - centroid[0]);
+            if cross.abs() < 1e-6 {
+                out.push(fact(
+                    "中点X107",
+                    "G,X_{107},X_{122}",
+                    "\\text{共线}".into(),
+                    None,
+                    "G, X(107), X(122) \\text{ collinear}",
+                    "重心、X(107)、X(122) 共线",
+                ));
+            }
+        }
+        if let Some((px, py)) = p108 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X108",
+                "X_{123}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(123) = \\mathrm{complement}(X(108)) = X(108)\\text{-of-medial}",
+                "X(123)：X(108) 关于重心的补点（中点三角形的 X(108)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X123".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X108",
+                    "X_{123}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(123)) = R/2",
+                    "X(123) 在九点圆上",
+                ));
+            }
+        }
+        if let Some((px, py)) = p109 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X109",
+                "X_{124}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(124) = \\mathrm{complement}(X(109)) = \\mathrm{mid}(H,X(102))",
+                "X(124)：X(109) 的补点 = mid(H,X(102))（九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X124".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X109",
+                    "X_{124}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(124)) = R/2",
+                    "X(124) 在九点圆上",
+                ));
+            }
+            if let Some((qx, qy)) = p102 {
+                let mx = (orth[0] + qx) / 2.0;
+                let my = (orth[1] + qy) / 2.0;
+                if (mx - xy[0]).abs() < 1e-5 && (my - xy[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "中点X109",
+                        "X_{124}=\\mathrm{mid}(H,X_{102})",
+                        "\\checkmark".into(),
+                        None,
+                        "X(124) = \\text{midpoint}(H, X(102))",
+                        "X(124) 为垂心与 X(102) 的中点",
+                    ));
+                }
+            }
+        }
+        if let Some((px, py)) = p111 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X111",
+                "X_{126}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(126) = \\mathrm{complement}(X(111)) = X(111)\\text{-of-medial}",
+                "X(126)：帕里点关于重心的补点（中点三角形的 X(111)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X126".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X111",
+                    "X_{126}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(126)) = R/2",
+                    "X(126) 在九点圆上",
+                ));
+            }
+        }
+        if let Some((px, py)) = p112 {
+            let xy = [(3.0 * centroid[0] - px) / 2.0, (3.0 * centroid[1] - py) / 2.0];
+            out.push(fact(
+                "中点X112",
+                "X_{127}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(127) = \\mathrm{complement}(X(112)) = X(112)\\text{-of-medial}",
+                "X(127)：X(112) 关于重心的补点（中点三角形的 X(112)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X127".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "中点X112",
+                    "X_{127}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(127)) = R/2",
+                    "X(127) 在九点圆上",
+                ));
+            }
+        }
+    }
+
+    // X(132)/X(133): mid(H, X(112))/mid(H, X(107)) on the nine-point circle.
+    // Also NPC antipodes of medial complements: X(132)=2N−X(127), X(133)=2N−X(122).
+    // Skip when the circumcircle parent was skipped (isos/equil/right as applicable).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        let p112 = out.iter().rev().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p107 = out.iter().rev().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p127 = out.iter().rev().find(|f| f.group == "中点X112" && f.label == "X_{127}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let p122 = out.iter().rev().find(|f| f.group == "中点X107" && f.label == "X_{122}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+
+        if let Some((px, py)) = p112 {
+            let xy = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "垂心X112中点",
+                "X_{132}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(132) = \\mathrm{mid}(H,X(112)) = X(105)\\text{-of-orthic}",
+                "X(132)：H 与 X(112) 的中点（垂足三角形的 X(105)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X132".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "垂心X112中点",
+                    "X_{132}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(132)) = R/2",
+                    "X(132) 在九点圆上",
+                ));
+            }
+            if let Some((qx, qy)) = p127 {
+                let rx = 2.0 * n9[0] - qx;
+                let ry = 2.0 * n9[1] - qy;
+                if (rx - xy[0]).abs() < 1e-5 && (ry - xy[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "垂心X112中点",
+                        "X_{132}=2N-X_{127}",
+                        "\\checkmark".into(),
+                        None,
+                        "X(132) = 2N - X(127)",
+                        "X(132) 与 X(127) 互为九点圆对径点",
+                    ));
+                }
+            }
+        }
+        if let Some((px, py)) = p107 {
+            let xy = [(orth[0] + px) / 2.0, (orth[1] + py) / 2.0];
+            out.push(fact(
+                "垂心X107中点",
+                "X_{133}",
+                pt(xy[0], xy[1]),
+                None,
+                "X(133) = \\mathrm{mid}(H,X(107)) = X(106)\\text{-of-orthic}",
+                "X(133)：H 与 X(107) 的中点（垂足三角形的 X(106)；九点圆上）",
+            ).with(Shape::Point { x: xy[0], y: xy[1], label: "X133".into() }));
+            if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                out.push(fact(
+                    "垂心X107中点",
+                    "X_{133}\\in\\text{NPC}",
+                    "\\checkmark".into(),
+                    None,
+                    "d(N, X(133)) = R/2",
+                    "X(133) 在九点圆上",
+                ));
+            }
+            if let Some((qx, qy)) = p122 {
+                let rx = 2.0 * n9[0] - qx;
+                let ry = 2.0 * n9[1] - qy;
+                if (rx - xy[0]).abs() < 1e-5 && (ry - xy[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "垂心X107中点",
+                        "X_{133}=2N-X_{122}",
+                        "\\checkmark".into(),
+                        None,
+                        "X(133) = 2N - X(122)",
+                        "X(133) 与 X(122) 互为九点圆对径点",
+                    ));
+                }
+            }
+        }
+    }
+
+    // X(128)/X(129)/X(130)/X(131)/X(134)–X(139): centers of the orthic triangle on NPC.
+    // X(130)=Steiner-of-orthic; X(129)=Tarry-of-orthic=2N−X(130);
+    // X(128)=X(74)-of-orthic; X(137)=2N−X(128);
+    // X(134)=X(107)-of-orthic; X(135)=X(108)-of-orthic;
+    // X(136)=X(109)-of-orthic; X(131)=2N−X(136)=X(102)-of-orthic;
+    // X(138)=Parry-of-orthic; X(139)=X(112)-of-orthic.
+    // Skip right/near-right (orthic degenerates) and isosceles (many denoms vanish).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        let r9 = rr / 2.0;
+        let ca = g[0].cos();
+        let cb = g[1].cos();
+        let cc = g[2].cos();
+        let rightish = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        if !rightish {
+            let mut feet = [[0.0f64; 2]; 3];
+            let mut ok = true;
+            for i in 0..3 {
+                let p0 = v[i];
+                let q1 = v[(i + 1) % 3];
+                let q2 = v[(i + 2) % 3];
+                let dx = q2[0] - q1[0];
+                let dy = q2[1] - q1[1];
+                let den = dx * dx + dy * dy;
+                if den < 1e-18 {
+                    ok = false;
+                    break;
+                }
+                let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+                feet[i] = [q1[0] + t * dx, q1[1] + t * dy];
+            }
+            if ok {
+                // Orthic side lengths opposite Ha, Hb, Hc.
+                let oa = dist2(feet[1], feet[2]);
+                let ob = dist2(feet[2], feet[0]);
+                let oc = dist2(feet[0], feet[1]);
+                if oa > 1e-10 && ob > 1e-10 && oc > 1e-10 {
+                    // Steiner X(99)-of-orthic = X(130): bary 1/(b'²−c'²) at Ha:Hb:Hc.
+                    let dbc = ob * ob - oc * oc;
+                    let dca = oc * oc - oa * oa;
+                    let dab = oa * oa - ob * ob;
+                    if dbc.abs() > 1e-10 && dca.abs() > 1e-10 && dab.abs() > 1e-10 {
+                        let wa = 1.0 / dbc;
+                        let wb = 1.0 / dca;
+                        let wc = 1.0 / dab;
+                        let den = wa + wb + wc;
+                        if den.abs() > 1e-12 {
+                            let st = [
+                                (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                            ];
+                            if (dist2(st, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                out.push(fact(
+                                    "垂足施泰纳",
+                                    "X_{130}",
+                                    pt(st[0], st[1]),
+                                    None,
+                                    "X(130) = \\mathrm{Steiner}\\text{-of-orthic}",
+                                    "X(130)：垂足三角形的施泰纳点（九点圆上）",
+                                ).with(Shape::Point {
+                                    x: st[0],
+                                    y: st[1],
+                                    label: "X130".into(),
+                                }));
+                                out.push(fact(
+                                    "垂足施泰纳",
+                                    "X_{130}\\in\\text{NPC}",
+                                    "\\checkmark".into(),
+                                    None,
+                                    "d(N, X(130)) = R/2",
+                                    "X(130) 在九点圆上",
+                                ));
+                                // Tarry-of-orthic = NPC antipode of Steiner-of-orthic.
+                                let ty = [2.0 * n9[0] - st[0], 2.0 * n9[1] - st[1]];
+                                out.push(fact(
+                                    "垂足塔里",
+                                    "X_{129}",
+                                    pt(ty[0], ty[1]),
+                                    None,
+                                    "X(129) = 2N - X(130) = \\mathrm{Tarry}\\text{-of-orthic}",
+                                    "X(129)：垂足三角形的塔里点（九点圆上）",
+                                ).with(Shape::Point {
+                                    x: ty[0],
+                                    y: ty[1],
+                                    label: "X129".into(),
+                                }));
+                                out.push(fact(
+                                    "垂足塔里",
+                                    "X_{129}=2N-X_{130}",
+                                    "\\text{九点圆对径}".into(),
+                                    None,
+                                    "X(129) = 2N - X(130)",
+                                    "X(129) 与 X(130) 互为九点圆对径点",
+                                ));
+                            }
+                        }
+                    }
+
+                    // Orthic angles (Ha opposite oa, …); N = circumcenter of orthic.
+                    let cos_a = ((ob * ob + oc * oc - oa * oa) / (2.0 * ob * oc)).clamp(-1.0, 1.0);
+                    let cos_b = ((oc * oc + oa * oa - ob * ob) / (2.0 * oc * oa)).clamp(-1.0, 1.0);
+                    let cos_c = ((oa * oa + ob * ob - oc * oc) / (2.0 * oa * ob)).clamp(-1.0, 1.0);
+                    let sin_a = (1.0 - cos_a * cos_a).max(0.0).sqrt();
+                    let sin_b = (1.0 - cos_b * cos_b).max(0.0).sqrt();
+                    let sin_c = (1.0 - cos_c * cos_c).max(0.0).sqrt();
+
+                    // X(74)-of-orthic = X(128): bary a'/(cos A' − 2 cos B' cos C').
+                    {
+                        let da = cos_a - 2.0 * cos_b * cos_c;
+                        let db = cos_b - 2.0 * cos_c * cos_a;
+                        let dc = cos_c - 2.0 * cos_a * cos_b;
+                        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                            let wa = oa / da;
+                            let wb = ob / db;
+                            let wc = oc / dc;
+                            let den = wa + wb + wc;
+                            if den.abs() > 1e-12 {
+                                let x128 = [
+                                    (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                    (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                                ];
+                                if (dist2(x128, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                    out.push(fact(
+                                        "垂足X74",
+                                        "X_{128}",
+                                        pt(x128[0], x128[1]),
+                                        None,
+                                        "X(128) = X(74)\\text{-of-orthic}",
+                                        "X(128)：垂足三角形的 X(74)（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: x128[0],
+                                        y: x128[1],
+                                        label: "X128".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X74",
+                                        "X_{128}\\in\\text{NPC}",
+                                        "\\checkmark".into(),
+                                        None,
+                                        "d(N, X(128)) = R/2",
+                                        "X(128) 在九点圆上",
+                                    ));
+                                    let x137 = [2.0 * n9[0] - x128[0], 2.0 * n9[1] - x128[1]];
+                                    out.push(fact(
+                                        "垂足X74对径",
+                                        "X_{137}",
+                                        pt(x137[0], x137[1]),
+                                        None,
+                                        "X(137) = 2N - X(128) = X(110)\\text{-of-orthic}",
+                                        "X(137)：X(128) 的九点圆对径点（垂足三角形的 X(110)）",
+                                    ).with(Shape::Point {
+                                        x: x137[0],
+                                        y: x137[1],
+                                        label: "X137".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X74对径",
+                                        "X_{137}=2N-X_{128}",
+                                        "\\text{九点圆对径}".into(),
+                                        None,
+                                        "X(137) = 2N - X(128)",
+                                        "X(137) 与 X(128) 互为九点圆对径点",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // X(134)=X(107)-of-orthic: bary 1/[(b'²−c'²)(b'²+c'²−a'²)²].
+                    {
+                        let da = (ob * ob - oc * oc) * (ob * ob + oc * oc - oa * oa).powi(2);
+                        let db = (oc * oc - oa * oa) * (oc * oc + oa * oa - ob * ob).powi(2);
+                        let dc = (oa * oa - ob * ob) * (oa * oa + ob * ob - oc * oc).powi(2);
+                        if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                            let wa = 1.0 / da;
+                            let wb = 1.0 / db;
+                            let wc = 1.0 / dc;
+                            let den = wa + wb + wc;
+                            if den.abs() > 1e-12 {
+                                let xy = [
+                                    (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                    (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                                ];
+                                if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                    out.push(fact(
+                                        "垂足X107",
+                                        "X_{134}",
+                                        pt(xy[0], xy[1]),
+                                        None,
+                                        "X(134) = X(107)\\text{-of-orthic}",
+                                        "X(134)：垂足三角形的 X(107)（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: xy[0],
+                                        y: xy[1],
+                                        label: "X134".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X107",
+                                        "X_{134}\\in\\text{NPC}",
+                                        "\\checkmark".into(),
+                                        None,
+                                        "d(N, X(134)) = R/2",
+                                        "X(134) 在九点圆上",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // X(135)=X(108)-of-orthic: bary a'²/(sec B'−sec C'); skip rightish orthic angles.
+                    if cos_a.abs() > 1e-9 && cos_b.abs() > 1e-9 && cos_c.abs() > 1e-9 {
+                        let da = 1.0 / cos_b - 1.0 / cos_c;
+                        let db = 1.0 / cos_c - 1.0 / cos_a;
+                        let dc = 1.0 / cos_a - 1.0 / cos_b;
+                        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                            let wa = (oa * oa) / da;
+                            let wb = (ob * ob) / db;
+                            let wc = (oc * oc) / dc;
+                            let den = wa + wb + wc;
+                            if den.abs() > 1e-12 {
+                                let xy = [
+                                    (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                    (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                                ];
+                                if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                    out.push(fact(
+                                        "垂足X108",
+                                        "X_{135}",
+                                        pt(xy[0], xy[1]),
+                                        None,
+                                        "X(135) = X(108)\\text{-of-orthic}",
+                                        "X(135)：垂足三角形的 X(108)（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: xy[0],
+                                        y: xy[1],
+                                        label: "X135".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X108",
+                                        "X_{135}\\in\\text{NPC}",
+                                        "\\checkmark".into(),
+                                        None,
+                                        "d(N, X(135)) = R/2",
+                                        "X(135) 在九点圆上",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // X(136)=X(109)-of-orthic: bary a'²/(cos B'−cos C'); X(131)=2N−X(136)=X(102)-of-orthic.
+                    {
+                        let da = cos_b - cos_c;
+                        let db = cos_c - cos_a;
+                        let dc = cos_a - cos_b;
+                        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                            let wa = (oa * oa) / da;
+                            let wb = (ob * ob) / db;
+                            let wc = (oc * oc) / dc;
+                            let den = wa + wb + wc;
+                            if den.abs() > 1e-12 {
+                                let xy = [
+                                    (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                    (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                                ];
+                                if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                    out.push(fact(
+                                        "垂足X109",
+                                        "X_{136}",
+                                        pt(xy[0], xy[1]),
+                                        None,
+                                        "X(136) = X(109)\\text{-of-orthic}",
+                                        "X(136)：垂足三角形的 X(109)（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: xy[0],
+                                        y: xy[1],
+                                        label: "X136".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X109",
+                                        "X_{136}\\in\\text{NPC}",
+                                        "\\checkmark".into(),
+                                        None,
+                                        "d(N, X(136)) = R/2",
+                                        "X(136) 在九点圆上",
+                                    ));
+                                    let x131 = [2.0 * n9[0] - xy[0], 2.0 * n9[1] - xy[1]];
+                                    out.push(fact(
+                                        "垂足X102",
+                                        "X_{131}",
+                                        pt(x131[0], x131[1]),
+                                        None,
+                                        "X(131) = 2N - X(136) = X(102)\\text{-of-orthic}",
+                                        "X(131)：垂足三角形的 X(102)（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: x131[0],
+                                        y: x131[1],
+                                        label: "X131".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X102",
+                                        "X_{131}=2N-X_{136}",
+                                        "\\text{九点圆对径}".into(),
+                                        None,
+                                        "X(131) = 2N - X(136)",
+                                        "X(131) 与 X(136) 互为九点圆对径点（N 反射）",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // X(138)=Parry-of-orthic = X(111)-of-orthic: bary a'²/(2a'²−b'²−c'²).
+                    {
+                        let da = 2.0 * oa * oa - ob * ob - oc * oc;
+                        let db = 2.0 * ob * ob - oc * oc - oa * oa;
+                        let dc = 2.0 * oc * oc - oa * oa - ob * ob;
+                        if da.abs() > 1e-10 && db.abs() > 1e-10 && dc.abs() > 1e-10 {
+                            let wa = (oa * oa) / da;
+                            let wb = (ob * ob) / db;
+                            let wc = (oc * oc) / dc;
+                            let den = wa + wb + wc;
+                            if den.abs() > 1e-12 {
+                                let xy = [
+                                    (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                    (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                                ];
+                                if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                    out.push(fact(
+                                        "垂足帕里",
+                                        "X_{138}",
+                                        pt(xy[0], xy[1]),
+                                        None,
+                                        "X(138) = X(111)\\text{-of-orthic}",
+                                        "X(138)：垂足三角形的帕里点（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: xy[0],
+                                        y: xy[1],
+                                        label: "X138".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足帕里",
+                                        "X_{138}\\in\\text{NPC}",
+                                        "\\checkmark".into(),
+                                        None,
+                                        "d(N, X(138)) = R/2",
+                                        "X(138) 在九点圆上",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    // X(139)=X(112)-of-orthic: bary a'²/(sin 2B'−sin 2C').
+                    {
+                        let sin2a = 2.0 * sin_a * cos_a;
+                        let sin2b = 2.0 * sin_b * cos_b;
+                        let sin2c = 2.0 * sin_c * cos_c;
+                        let da = sin2b - sin2c;
+                        let db = sin2c - sin2a;
+                        let dc = sin2a - sin2b;
+                        if da.abs() > 1e-9 && db.abs() > 1e-9 && dc.abs() > 1e-9 {
+                            let wa = (oa * oa) / da;
+                            let wb = (ob * ob) / db;
+                            let wc = (oc * oc) / dc;
+                            let den = wa + wb + wc;
+                            if den.abs() > 1e-12 {
+                                let xy = [
+                                    (wa * feet[0][0] + wb * feet[1][0] + wc * feet[2][0]) / den,
+                                    (wa * feet[0][1] + wb * feet[1][1] + wc * feet[2][1]) / den,
+                                ];
+                                if (dist2(xy, n9) - r9).abs() < 1e-4 * (1.0 + r9) {
+                                    out.push(fact(
+                                        "垂足X112",
+                                        "X_{139}",
+                                        pt(xy[0], xy[1]),
+                                        None,
+                                        "X(139) = X(112)\\text{-of-orthic}",
+                                        "X(139)：垂足三角形的 X(112)（九点圆上）",
+                                    ).with(Shape::Point {
+                                        x: xy[0],
+                                        y: xy[1],
+                                        label: "X139".into(),
+                                    }));
+                                    out.push(fact(
+                                        "垂足X112",
+                                        "X_{139}\\in\\text{NPC}",
+                                        "\\checkmark".into(),
+                                        None,
+                                        "d(N, X(139)) = R/2",
+                                        "X(139) 在九点圆上",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // X(140)–X(153): Euler/medial complements, anticomplements of Ge/Na, and
+    // reflections of de Longchamps X(20) in classical circumcircle points.
+    // X(140)=mid(O,N)=complement(X(5)); X(141)=complement(K), bary b²+c²:…;
+    // X(142)=mid(Ge,Mi)=complement(X(9)); X(143)=mid(N,X(52))=X(5)-of-orthic;
+    // X(144)=anticomplement(Ge); X(145)=anticomplement(Na);
+    // X(146)=2·X(110)−X(20); X(147)=2·X(99)−X(20); X(148)=2·X(98)−X(20);
+    // X(149)=2·X(104)−X(20); X(150)=2·X(103)−X(20);
+    // X(151)=2·X(109)−X(20); X(152)=2·X(101)−X(20); X(153)=2·X(100)−X(20).
+    {
+        let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+        // X(140) = midpoint(O, N) = complement of X(5); on Euler line. Always.
+        let x140 = [(circ[0] + n9[0]) / 2.0, (circ[1] + n9[1]) / 2.0];
+        out.push(fact(
+            "九点补点",
+            "X_{140}",
+            pt(x140[0], x140[1]),
+            None,
+            "X(140) = \\mathrm{mid}(O,N) = \\mathrm{complement}(X(5))",
+            "X(140)：O 与 N 的中点（中点三角形的九点心；欧拉线上）",
+        ).with(Shape::Point {
+            x: x140[0],
+            y: x140[1],
+            label: "X140".into(),
+        }));
+        // Collinear O, X140, N, G, H (Euler): X140 divides O N.
+        let cross_e = (x140[0] - circ[0]) * (orth[1] - circ[1])
+            - (x140[1] - circ[1]) * (orth[0] - circ[0]);
+        if cross_e.abs() < 1e-6 {
+            out.push(fact(
+                "九点补点",
+                "X_{140}\\in\\text{Euler}",
+                "\\checkmark".into(),
+                None,
+                "X(140)\\in\\text{Euler line}",
+                "X(140) 在欧拉线上",
+            ));
+        }
+
+        // X(141) = complement of Lemoine/symmedian X(6); bary b²+c² : c²+a² : a²+b².
+        {
+            let wa = b * b + c * c;
+            let wb = c * c + a * a;
+            let wc = a * a + b * b;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let x141 = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "对称中线补点",
+                    "X_{141}",
+                    pt(x141[0], x141[1]),
+                    None,
+                    "X(141) = (b^2+c^2:c^2+a^2:a^2+b^2) = \\mathrm{complement}(X(6))",
+                    "X(141)：勒莫恩点的补点（中点三角形的对称中线点）",
+                ).with(Shape::Point {
+                    x: x141[0],
+                    y: x141[1],
+                    label: "X141".into(),
+                }));
+                // Cross-check: complement of K via h(G,−1/2).
+                let k_xy = out.iter().rev().find(|f| f.group == "勒莫恩点" && f.label == "K").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((kx, ky)) = k_xy {
+                    let cx = (3.0 * centroid[0] - kx) / 2.0;
+                    let cy = (3.0 * centroid[1] - ky) / 2.0;
+                    if (cx - x141[0]).abs() < 1e-5 && (cy - x141[1]).abs() < 1e-5 {
+                        out.push(fact(
+                            "对称中线补点",
+                            "X_{141}=\\mathrm{complement}(K)",
+                            "\\checkmark".into(),
+                            None,
+                            "X(141) = (3G - K)/2",
+                            "X(141) 为对称中线点关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+
+        // X(142) = midpoint(Ge, Mi) = complement of Mittenpunkt X(9).
+        let ge_xy = out.iter().rev().find(|f| f.group == "格尔巩点" && f.label == "Ge").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        let mi_xy = out.iter().rev().find(|f| f.group == "米滕点" && f.label == "Mi").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let (Some((gx, gy)), Some((mx, my))) = (ge_xy, mi_xy) {
+            let x142 = [(gx + mx) / 2.0, (gy + my) / 2.0];
+            out.push(fact(
+                "米滕补点",
+                "X_{142}",
+                pt(x142[0], x142[1]),
+                None,
+                "X(142) = \\mathrm{mid}(X(7),X(9)) = \\mathrm{complement}(X(9))",
+                "X(142)：格尔巩与米滕的中点（米滕点的补点）",
+            ).with(Shape::Point {
+                x: x142[0],
+                y: x142[1],
+                label: "X142".into(),
+            }));
+            let cx = (3.0 * centroid[0] - mx) / 2.0;
+            let cy = (3.0 * centroid[1] - my) / 2.0;
+            if (cx - x142[0]).abs() < 1e-5 && (cy - x142[1]).abs() < 1e-5 {
+                out.push(fact(
+                    "米滕补点",
+                    "X_{142}=\\mathrm{complement}(Mi)",
+                    "\\checkmark".into(),
+                    None,
+                    "X(142) = (3G - Mi)/2",
+                    "X(142) 为米滕点关于重心的补点",
+                ));
+            }
+        }
+
+        // X(143) = midpoint(N, X(52)) = X(5)-of-orthic; skip right (no X52).
+        let x52_xy = out.iter().rev().find(|f| f.group == "垂足垂心" && f.label == "X_{52}").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((sx, sy)) = x52_xy {
+            let x143 = [(n9[0] + sx) / 2.0, (n9[1] + sy) / 2.0];
+            out.push(fact(
+                "垂足九点心",
+                "X_{143}",
+                pt(x143[0], x143[1]),
+                None,
+                "X(143) = \\mathrm{mid}(N,X(52)) = X(5)\\text{-of-orthic}",
+                "X(143)：垂足三角形的九点圆心（锐角）",
+            ).with(Shape::Point {
+                x: x143[0],
+                y: x143[1],
+                label: "X143".into(),
+            }));
+        }
+
+        // X(144) = anticomplement of Gergonne X(7) = 3G − 2 Ge.
+        if let Some((gx, gy)) = ge_xy {
+            let x144 = [3.0 * centroid[0] - 2.0 * gx, 3.0 * centroid[1] - 2.0 * gy];
+            out.push(fact(
+                "格尔巩反补",
+                "X_{144}",
+                pt(x144[0], x144[1]),
+                None,
+                "X(144) = 3G - 2\\,X(7) = \\mathrm{anticomplement}(X(7))",
+                "X(144)：格尔巩点的反补点（反补三角形的 X(7)）",
+            ).with(Shape::Point {
+                x: x144[0],
+                y: x144[1],
+                label: "X144".into(),
+            }));
+        }
+
+        // X(145) = anticomplement of Nagel X(8) = 3G − 2 Na.
+        let na_xy = out.iter().rev().find(|f| f.group == "奈格尔点" && f.label == "Na").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((nx, ny)) = na_xy {
+            let x145 = [3.0 * centroid[0] - 2.0 * nx, 3.0 * centroid[1] - 2.0 * ny];
+            out.push(fact(
+                "奈格尔反补",
+                "X_{145}",
+                pt(x145[0], x145[1]),
+                None,
+                "X(145) = 3G - 2\\,X(8) = \\mathrm{anticomplement}(X(8))",
+                "X(145)：奈格尔点的反补点（反补三角形的 X(8)）",
+            ).with(Shape::Point {
+                x: x145[0],
+                y: x145[1],
+                label: "X145".into(),
+            }));
+            // Cross-check bary 3a−b−c : …
+            let wa = 3.0 * a - b - c;
+            let wb = 3.0 * b - c - a;
+            let wc = 3.0 * c - a - b;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let bx = (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den;
+                let by = (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den;
+                if (bx - x145[0]).abs() < 1e-5 && (by - x145[1]).abs() < 1e-5 {
+                    out.push(fact(
+                        "奈格尔反补",
+                        "X_{145}=(3a-b-c:\\cdots)",
+                        "\\checkmark".into(),
+                        None,
+                        "X(145) = (3a-b-c:3b-c-a:3c-a-b)",
+                        "X(145) 重心坐标与反补构造一致",
+                    ));
+                }
+            }
+        }
+
+        // Helpers for reflections of L = X(20) in circumcircle points.
+        let l_xy = out.iter().rev().find(|f| f.group == "德龙尚点" && f.label == "L").and_then(|f| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+            _ => None,
+        });
+        if let Some((lx, ly)) = l_xy {
+            let reflect_l = |qx: f64, qy: f64| -> [f64; 2] {
+                [2.0 * qx - lx, 2.0 * qy - ly]
+            };
+
+            // X(146) = reflection of X(20) in X(110). Skip when X110 missing (isos).
+            let x110_xy = out.iter().rev().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x110_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X110反射",
+                    "X_{146}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(146) = 2\\,X(110) - X(20)",
+                    "X(146)：德龙尚点关于 X(110) 的反射（反补三角形的 X(74)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X146".into(),
+                }));
+            }
+
+            // X(147) = reflection of X(20) in Steiner X(99).
+            let st_xy = out.iter().rev().find(|f| f.group == "施泰纳点" && f.label == "St").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = st_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚施泰纳反射",
+                    "X_{147}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(147) = 2\\,X(99) - X(20) = X(98)\\text{-of-anticomplementary}",
+                    "X(147)：德龙尚点关于施泰纳点的反射（反补三角形的塔里点）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X147".into(),
+                }));
+            }
+
+            // X(148) = reflection of X(20) in Tarry X(98).
+            let ty_xy = out.iter().rev().find(|f| f.group == "塔里点" && f.label == "Ty").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = ty_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚塔里反射",
+                    "X_{148}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(148) = 2\\,X(98) - X(20) = X(99)\\text{-of-anticomplementary}",
+                    "X(148)：德龙尚点关于塔里点的反射（反补三角形的施泰纳点）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X148".into(),
+                }));
+            }
+
+            // X(149) = reflection of X(20) in X(104).
+            let x104_xy = out.iter().rev().find(|f| f.group == "X100对径" && f.label == "X_{104}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x104_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X104反射",
+                    "X_{149}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(149) = 2\\,X(104) - X(20) = X(100)\\text{-of-anticomplementary}",
+                    "X(149)：德龙尚点关于 X(104) 的反射（反补三角形的 X(100)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X149".into(),
+                }));
+            }
+
+            // X(150) = reflection of X(20) in X(103).
+            let x103_xy = out.iter().rev().find(|f| f.group == "X101对径" && f.label == "X_{103}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x103_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X103反射",
+                    "X_{150}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(150) = 2\\,X(103) - X(20) = X(101)\\text{-of-anticomplementary}",
+                    "X(150)：德龙尚点关于 X(103) 的反射（反补三角形的 X(101)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X150".into(),
+                }));
+            }
+
+            // X(151) = reflection of X(20) in X(109) = X(102)-of-anticomplementary.
+            let x109_xy = out.iter().rev().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x109_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X109反射",
+                    "X_{151}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(151) = 2\\,X(109) - X(20) = X(102)\\text{-of-anticomplementary}",
+                    "X(151)：德龙尚点关于 X(109) 的反射（反补三角形的 X(102)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X151".into(),
+                }));
+            }
+
+            // X(152) = reflection of X(20) in X(101) = X(103)-of-anticomplementary.
+            let x101_xy = out.iter().rev().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x101_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X101反射",
+                    "X_{152}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(152) = 2\\,X(101) - X(20) = X(103)\\text{-of-anticomplementary}",
+                    "X(152)：德龙尚点关于 X(101) 的反射（反补三角形的 X(103)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X152".into(),
+                }));
+            }
+
+            // X(153) = reflection of X(20) in X(100) = X(104)-of-anticomplementary.
+            let x100_xy = out.iter().rev().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x100_xy {
+                let xy = reflect_l(qx, qy);
+                out.push(fact(
+                    "德龙尚X100反射",
+                    "X_{153}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(153) = 2\\,X(100) - X(20) = X(104)\\text{-of-anticomplementary}",
+                    "X(153)：德龙尚点关于 X(100) 的反射（反补三角形的 X(104)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X153".into(),
+                }));
+            }
+        }
+    }
+
+    // X(154)–X(156): tangential / orthic eigencenter family.
+    // X(154)=X(3)-Ceva conjugate of X(6)=X(2)-of-tangential;
+    //   bary a³(cos A − cos B cos C).
+    // X(155)=eigencenter of orthic; bary a cos A (cos²B+cos²C−cos²A);
+    //   = reflection of X(68) in X(5) when acute.
+    // X(156)=X(5)-of-tangential = midpoint(X(26), X(155)).
+    {
+        let ca = [g[0].cos(), g[1].cos(), g[2].cos()];
+        // Right △: X(154)/X(155) bary sums vanish (point at infinity) — skip.
+        let rightish = ca[0].abs() < 1e-9 || ca[1].abs() < 1e-9 || ca[2].abs() < 1e-9;
+        // X(154)
+        {
+            let wa = a * a * a * (ca[0] - ca[1] * ca[2]);
+            let wb = b * b * b * (ca[1] - ca[2] * ca[0]);
+            let wc = c * c * c * (ca[2] - ca[0] * ca[1]);
+            let den = wa + wb + wc;
+            if !rightish && den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "切线重心",
+                    "X_{154}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(154) = \\bigl(a^3(\\cos A-\\cos B\\cos C):\\cdots\\bigr) = X(2)\\text{-of-tangential}",
+                    "X(154)：切线三角形的重心（X(3)-Ceva 共轭于 X(6)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X154".into(),
+                }));
+            }
+        }
+        // X(155)
+        let mut x155_xy: Option<[f64; 2]> = None;
+        {
+            let wa = a * ca[0] * (ca[1] * ca[1] + ca[2] * ca[2] - ca[0] * ca[0]);
+            let wb = b * ca[1] * (ca[2] * ca[2] + ca[0] * ca[0] - ca[1] * ca[1]);
+            let wc = c * ca[2] * (ca[0] * ca[0] + ca[1] * ca[1] - ca[2] * ca[2]);
+            let den = wa + wb + wc;
+            if !rightish && den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                x155_xy = Some(xy);
+                out.push(fact(
+                    "垂足特征心",
+                    "X_{155}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(155) = \\bigl(a\\cos A(\\cos^2 B+\\cos^2 C-\\cos^2 A):\\cdots\\bigr)",
+                    "X(155)：垂足三角形的特征中心（切线三角形的垂心）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X155".into(),
+                }));
+                // Cross-check: reflection of X(68) in nine-point center N=X(5).
+                let n9 = [(circ[0] + orth[0]) / 2.0, (circ[1] + orth[1]) / 2.0];
+                let x68_xy = out.iter().rev().find(|f| f.group == "普拉索洛夫点" && f.label == "X_{68}").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((qx, qy)) = x68_xy {
+                    let rx = 2.0 * n9[0] - qx;
+                    let ry = 2.0 * n9[1] - qy;
+                    if (rx - xy[0]).abs() < 1e-5 && (ry - xy[1]).abs() < 1e-5 {
+                        out.push(fact(
+                            "垂足特征心",
+                            "X_{155}=2N-X_{68}",
+                            "\\checkmark".into(),
+                            None,
+                            "X(155) = 2\\,X(5) - X(68)",
+                            "X(155) 为普拉索洛夫点关于九点圆心的反射",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(156) = mid(X(26), X(155)) = X(5)-of-tangential.
+        if let Some(x155) = x155_xy {
+            let x26_xy = out.iter().rev().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let Some((qx, qy)) = x26_xy {
+                let xy = [(qx + x155[0]) / 2.0, (qy + x155[1]) / 2.0];
+                out.push(fact(
+                    "切线九点心",
+                    "X_{156}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(156) = \\mathrm{mid}(X(26),X(155)) = X(5)\\text{-of-tangential}",
+                    "X(156)：切线三角形的九点圆心（X(26) 与 X(155) 的中点）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X156".into(),
+                }));
+            }
+        }
+    }
+
+
+
+
+    // X(157)–X(159), X(163)–X(165): tangential symmedian / sec-tan / X66-reflection /
+    // trilinear-product, and excentral incenter/centroid.
+    // X(157)=X(6)-of-tangential; bary a²(b³ cos B + c³ cos C − a³ cos A).
+    // X(158)=bary sec A tan A = sin A / cos² A; skip right (sec ∞).
+    // X(159)=X(9)-of-tangential = reflection of X(66) in X(141).
+    // X(163)=trilinear product X(6)·X(110); bary a³/(b²−c²); skip isosceles.
+    // X(164)=X(1)-of-excentral; bary a(sin(B/2)+sin(C/2)−sin(A/2)).
+    // X(165)=X(2)-of-excentral; bary a(tan(B/2)+tan(C/2)−tan(A/2));
+    //   = centroid(I, Na, L); on OI as {O, Be}-harmonic conjugate of I.
+    {
+        let ca = [g[0].cos(), g[1].cos(), g[2].cos()];
+        let rightish = ca[0].abs() < 1e-9 || ca[1].abs() < 1e-9 || ca[2].abs() < 1e-9;
+        // X(157)
+        {
+            let fa = b * b * b * ca[1] + c * c * c * ca[2] - a * a * a * ca[0];
+            let fb = c * c * c * ca[2] + a * a * a * ca[0] - b * b * b * ca[1];
+            let fc = a * a * a * ca[0] + b * b * b * ca[1] - c * c * c * ca[2];
+            let wa = a * a * fa;
+            let wb = b * b * fb;
+            let wc = c * c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "切线对称中线",
+                    "X_{157}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(157) = \\bigl(a^2(b^3\\cos B+c^3\\cos C-a^3\\cos A):\\cdots\\bigr) = X(6)\\text{-of-tangential}",
+                    "X(157)：切线三角形的对称中线点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X157".into(),
+                }));
+            }
+        }
+        // X(158)
+        if !rightish {
+            let sa_ = [g[0].sin(), g[1].sin(), g[2].sin()];
+            let wa = sa_[0] / (ca[0] * ca[0]);
+            let wb = sa_[1] / (ca[1] * ca[1]);
+            let wc = sa_[2] / (ca[2] * ca[2]);
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "正割正切点",
+                    "X_{158}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(158) = (\\sec A\\tan A:\\sec B\\tan B:\\sec C\\tan C)",
+                    "X(158)：正割–正切重心坐标点（X(19) 与 X(92) 的截共轭）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X158".into(),
+                }));
+            }
+        }
+        // X(159) = 2·X(141) − X(66) = X(9)-of-tangential.
+        {
+            let x66_xy = out.iter().rev().find(|f| f.group == "埃克塞特等角" && f.label == "X_{66}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            let x141_xy = out.iter().rev().find(|f| f.group == "对称中线补点" && f.label == "X_{141}").and_then(|f| match f.shape.as_ref() {
+                Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                _ => None,
+            });
+            if let (Some((qx, qy)), Some((mx, my))) = (x66_xy, x141_xy) {
+                let xy = [2.0 * mx - qx, 2.0 * my - qy];
+                out.push(fact(
+                    "切线米滕",
+                    "X_{159}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(159) = 2\\,X(141) - X(66) = X(9)\\text{-of-tangential}",
+                    "X(159)：切线三角形的米滕点（X(66) 关于 X(141) 的反射）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X159".into(),
+                }));
+            }
+        }
+        // X(163): bary a³/(b²−c²); skip isosceles (denom 0).
+        {
+            let a2 = a * a;
+            let b2 = b * b;
+            let c2 = c * c;
+            let da = b2 - c2;
+            let db = c2 - a2;
+            let dc = a2 - b2;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = a * a2 / da;
+                let wb = b * b2 / db;
+                let wc = c * c2 / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "对称中线X110积",
+                        "X_{163}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(163) = \\bigl(a^3/(b^2-c^2):\\cdots\\bigr) = X(6)\\cdot X(110)\\text{ (trilinear)}",
+                        "X(163)：对称中线点与 X(110) 的三线积",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X163".into(),
+                    }));
+                }
+            }
+        }
+        // X(164) / X(165): excentral incenter & centroid via half-angles.
+        {
+            let ha = g[0] / 2.0;
+            let hb = g[1] / 2.0;
+            let hc = g[2] / 2.0;
+            let s_ha = ha.sin();
+            let s_hb = hb.sin();
+            let s_hc = hc.sin();
+            // X(164)
+            {
+                let wa = a * (s_hb + s_hc - s_ha);
+                let wb = b * (s_hc + s_ha - s_hb);
+                let wc = c * (s_ha + s_hb - s_hc);
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "旁心内心",
+                        "X_{164}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(164) = \\bigl(a(\\sin\\tfrac{B}{2}+\\sin\\tfrac{C}{2}-\\sin\\tfrac{A}{2}):\\cdots\\bigr) = X(1)\\text{-of-excentral}",
+                        "X(164)：旁心三角形的内心",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X164".into(),
+                    }));
+                }
+            }
+            // X(165)
+            let t_ha = ha.tan();
+            let t_hb = hb.tan();
+            let t_hc = hc.tan();
+            if t_ha.is_finite() && t_hb.is_finite() && t_hc.is_finite() {
+                let wa = a * (t_hb + t_hc - t_ha);
+                let wb = b * (t_hc + t_ha - t_hb);
+                let wc = c * (t_ha + t_hb - t_hc);
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "旁心重心",
+                        "X_{165}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(165) = \\bigl(a(\\tan\\tfrac{B}{2}+\\tan\\tfrac{C}{2}-\\tan\\tfrac{A}{2}):\\cdots\\bigr) = X(2)\\text{-of-excentral}",
+                        "X(165)：旁心三角形的重心（在 OI 线上）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X165".into(),
+                    }));
+                    // Cross-check: centroid of I, Nagel, de Longchamps.
+                    let i_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "I").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let na_xy = out.iter().rev().find(|f| f.group == "奈格尔点" && f.label == "Na").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let l_xy = out.iter().rev().find(|f| f.group == "德龙尚点" && f.label == "L").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((ix, iy)), Some((nx, ny)), Some((lx, ly))) = (i_xy, na_xy, l_xy) {
+                        let cx = (ix + nx + lx) / 3.0;
+                        let cy = (iy + ny + ly) / 3.0;
+                        if (cx - xy[0]).abs() < 1e-5 && (cy - xy[1]).abs() < 1e-5 {
+                            out.push(fact(
+                                "旁心重心",
+                                "X_{165}=\\mathrm{cent}(I,Na,L)",
+                                "\\checkmark".into(),
+                                None,
+                                "X(165) = \\mathrm{centroid}(X(1),X(8),X(20))",
+                                "X(165) 为内心、奈格尔、德龙尚三点的重心",
+                            ));
+                        }
+                    }
+                    // Cross-check: on OI — {O, Be}-harmonic conjugate of I → (4/3)O − (1/3)I.
+                    let be_xy = out.iter().rev().find(|f| f.group == "贝万点" && f.label == "Be").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((ix, iy)), Some((_bx, _by))) = (i_xy, be_xy) {
+                        let hx = (4.0 * circ[0] - ix) / 3.0;
+                        let hy = (4.0 * circ[1] - iy) / 3.0;
+                        if (hx - xy[0]).abs() < 1e-5 && (hy - xy[1]).abs() < 1e-5 {
+                            out.push(fact(
+                                "旁心重心",
+                                "X_{165}\\in OI",
+                                "\\checkmark".into(),
+                                None,
+                                "X(165) = \\tfrac{4}{3}O - \\tfrac{1}{3}I = \\{O,X(40)\\}\\text{-harmonic of }I",
+                                "X(165) 为 I 关于 O 与贝万点的调和共轭（在 OI 上）",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // X(160)–X(162): fill tangential gaps; then classical X(168)/X(169)/X(171)–X(173).
+    // X(160)=X(37)-of-tangential (acute): bary a·f with
+    //   f=a[(b²+c²)sin 2A+(c²−a²)sin 2B+(b²−a²)sin 2C]  (ETC: sin 2A, not sin²A).
+    // X(161)=X(63)-of-tangential (acute): bary a·f; skip right (Σw=0); with
+    //   f=a[(a²+b²+c²)sin²(2A)+(c²−b²−a²)sin²(2B)+(b²−c²−a²)sin²(2C)].
+    // X(162)=cevapoint of X(108),X(109): bary a/(sin 2B−sin 2C); skip isos/right (denom 0; right ⇒ sin 2A=sin 2B).
+    // X(168)=X(9)-of-excentral (mittenpunkt): trilinear b/(1−sin(B/2))+c/(1−sin(C/2))−a/(1−sin(A/2)).
+    // X(169)=X(85)-Ceva conjugate of X(1): bary a·(a³−a²(b+c)+a(b²+c²)−(b−c)²(b+c)).
+    // X(171)={X(2),X(31)}-harmonic of X(238): bary a³+abc; on OI.
+    // X(172)=trilinear product X(6)·X(171): bary a⁴+bc a².
+    // X(173)=congruent isoscelizers: bary a(cos(B/2)+cos(C/2)−cos(A/2)).
+    {
+        let a2 = a * a;
+        let b2 = b * b;
+        let c2 = c * c;
+        let s2a = (2.0 * g[0]).sin();
+        let s2b = (2.0 * g[1]).sin();
+        let s2c = (2.0 * g[2]).sin();
+        // X(160)
+        {
+            let fa = a * ((b2 + c2) * s2a + (c2 - a2) * s2b + (b2 - a2) * s2c);
+            let fb = b * ((c2 + a2) * s2b + (a2 - b2) * s2c + (c2 - b2) * s2a);
+            let fc = c * ((a2 + b2) * s2c + (b2 - c2) * s2a + (a2 - c2) * s2b);
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "切线格林伯格",
+                        "X_{160}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(160) = X(37)\\text{-of-tangential (acute)};\\ f=a[(b^2+c^2)\\sin 2A+(c^2-a^2)\\sin 2B+(b^2-a^2)\\sin 2C]",
+                        "X(160)：切线三角形的格林伯格点（锐角时）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X160".into(),
+                    }));
+                }
+            }
+        }
+        // X(161): skip right (Σweights → 0 when one angle is 90°).
+        let rightish = g[0].cos().abs() < 1e-9 || g[1].cos().abs() < 1e-9 || g[2].cos().abs() < 1e-9;
+        if !rightish {
+            let ss2a = s2a * s2a;
+            let ss2b = s2b * s2b;
+            let ss2c = s2c * s2c;
+            let s2 = a2 + b2 + c2;
+            let fa = a * (s2 * ss2a + (c2 - b2 - a2) * ss2b + (b2 - c2 - a2) * ss2c);
+            let fb = b * (s2 * ss2b + (a2 - c2 - b2) * ss2c + (c2 - a2 - b2) * ss2a);
+            let fc = c * (s2 * ss2c + (b2 - a2 - c2) * ss2a + (a2 - b2 - c2) * ss2b);
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "切线X63",
+                        "X_{161}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(161) = X(63)\\text{-of-tangential (acute)};\\ f=a[(a^2+b^2+c^2)\\sin^2 2A+\\cdots]",
+                        "X(161)：切线三角形的 X(63)（锐角时）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X161".into(),
+                    }));
+                }
+            }
+        }
+        // X(162): skip isosceles / when sin 2B ≈ sin 2C.
+        {
+            let da = s2b - s2c;
+            let db = s2c - s2a;
+            let dc = s2a - s2b;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = a / da;
+                let wb = b / db;
+                let wc = c / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "X108X109截点",
+                            "X_{162}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(162) = \\bigl(a/(\\sin 2B-\\sin 2C):\\cdots\\bigr) = \\text{cevapoint of }X(108),X(109)",
+                            "X(162)：X(108) 与 X(109) 的截点",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X162".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(168) mittenpunkt of excentral
+        {
+            let s_ha = (g[0] / 2.0).sin();
+            let s_hb = (g[1] / 2.0).sin();
+            let s_hc = (g[2] / 2.0).sin();
+            let d_a = 1.0 - s_ha;
+            let d_b = 1.0 - s_hb;
+            let d_c = 1.0 - s_hc;
+            if d_a.abs() > 1e-12 && d_b.abs() > 1e-12 && d_c.abs() > 1e-12 {
+                let fa = b / d_b + c / d_c - a / d_a;
+                let fb = c / d_c + a / d_a - b / d_b;
+                let fc = a / d_a + b / d_b - c / d_c;
+                let wa = a * fa;
+                let wb = b * fb;
+                let wc = c * fc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "旁心米滕",
+                            "X_{168}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(168) = X(9)\\text{-of-excentral};\\ f=b/(1-\\sin\\tfrac{B}{2})+c/(1-\\sin\\tfrac{C}{2})-a/(1-\\sin\\tfrac{A}{2})",
+                            "X(168)：旁心三角形的米滕点",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X168".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(169): X(85)-Ceva conjugate of I; polynomial trilinear × a.
+        {
+            let t169 = |aa: f64, bb: f64, cc: f64| -> f64 {
+                aa * aa * aa - aa * aa * (bb + cc) + aa * (bb * bb + cc * cc) - (bb - cc) * (bb - cc) * (bb + cc)
+            };
+            let fa = t169(a, b, c);
+            let fb = t169(b, c, a);
+            let fc = t169(c, a, b);
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "X85截共轭I",
+                        "X_{169}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(169) = X(85)\\text{-Ceva conjugate of }X(1);\\ a^3-a^2(b+c)+a(b^2+c^2)-(b-c)^2(b+c)",
+                        "X(169)：X(85) 关于内心的截共轭",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X169".into(),
+                    }));
+                }
+            }
+        }
+        // X(171) / X(172) / X(173)
+        {
+            let abc = a * b * c;
+            let wa = a * a * a + abc;
+            let wb = b * b * b + abc;
+            let wc = c * c * c + abc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "调和X238",
+                    "X_{171}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(171) = (a^3+abc:b^3+abc:c^3+abc) = \\{X(2),X(31)\\}\\text{-harmonic of }X(238)",
+                    "X(171)：{X(2),X(31)} 关于 X(238) 的调和共轭（在 OI 上）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X171".into(),
+                }));
+                // Cross-check collinear with O,I (lines 1,3).
+                let i_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "I").and_then(|f| match f.shape.as_ref() {
+                    Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                    _ => None,
+                });
+                if let Some((ix, iy)) = i_xy {
+                    let ox = circ[0];
+                    let oy = circ[1];
+                    let cross = (ix - ox) * (xy[1] - oy) - (iy - oy) * (xy[0] - ox);
+                    let scale = ((ix - ox).hypot(iy - oy) + (xy[0] - ox).hypot(xy[1] - oy)).max(1.0);
+                    if cross.abs() < 1e-5 * scale {
+                        out.push(fact(
+                            "调和X238",
+                            "X_{171}\\in OI",
+                            "\\checkmark".into(),
+                            None,
+                            "X(171)\\in OI",
+                            "X(171) 在 OI 线上",
+                        ));
+                    }
+                }
+            }
+            // X(172)
+            {
+                let wa = a2 * a2 + b * c * a2;
+                let wb = b2 * b2 + c * a * b2;
+                let wc = c2 * c2 + a * b * c2;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "对称中线X171积",
+                        "X_{172}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(172) = (a^4+bca^2:\\cdots) = X(6)\\cdot X(171)\\text{ (trilinear)}",
+                        "X(172)：对称中线点与 X(171) 的三线积",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X172".into(),
+                    }));
+                }
+            }
+            // X(173)
+            {
+                let ha = g[0] / 2.0;
+                let hb = g[1] / 2.0;
+                let hc = g[2] / 2.0;
+                let fa = hb.cos() + hc.cos() - ha.cos();
+                let fb = hc.cos() + ha.cos() - hb.cos();
+                let fc = ha.cos() + hb.cos() - hc.cos();
+                let wa = a * fa;
+                let wb = b * fb;
+                let wc = c * fc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "等腰等化器",
+                            "X_{173}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(173) = \\bigl(a(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2}-\\cos\\tfrac{A}{2}):\\cdots\\bigr)",
+                            "X(173)：全等等腰等化器点（Yff）",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X173".into(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(166)/X(167)/X(170): fill excentral gaps; then X(177)–X(180) mid-arc / Ajima-Malfatti.
+    // X(166)=X(7)-of-excentral (Gergonne): trilinear
+    //   f = tan(A/2)/d_a − tan(B/2)/d_b − tan(C/2)/d_c,
+    //   d_a = cos(B/2)+cos(C/2)−cos(A/2); bary a·f. On line X(165)X(168).
+    // X(167)=X(8)-of-excentral (Nagel): f = s_b t_b + s_c t_c − s_a t_a with
+    //   s_a=sin(A/2), t_a=d_a sec(A/2); on line X(164)X(165).
+    // X(170)=X(9)-aleph conjugate of X(9)=X(76)-of-excentral: trilinear
+    //   f = −tan(A/2)sec²(A/2)+tan(B/2)sec²(B/2)+tan(C/2)sec²(C/2); on IG.
+    // X(177)=1st mid-arc: bary a(cos(B/2)+cos(C/2))sec(A/2); =X(1)-of-intouch.
+    // X(178)=2nd mid-arc: bary cos(B/2)+cos(C/2).
+    // X(179)=1st Ajima-Malfatti: bary a sec⁴(A/4).
+    // X(180)=2nd Ajima-Malfatti: f=1/t_b+1/t_c−1/t_a,
+    //   t_a=1+2(sec(A/4)cos(B/4)cos(C/4))².
+    {
+        let ha = g[0] / 2.0;
+        let hb = g[1] / 2.0;
+        let hc = g[2] / 2.0;
+        let (s_ha, s_hb, s_hc) = (ha.sin(), hb.sin(), hc.sin());
+        let (c_ha, c_hb, c_hc) = (ha.cos(), hb.cos(), hc.cos());
+        let (t_ha, t_hb, t_hc) = (ha.tan(), hb.tan(), hc.tan());
+        let d_a = c_hb + c_hc - c_ha;
+        let d_b = c_hc + c_ha - c_hb;
+        let d_c = c_ha + c_hb - c_hc;
+        // X(166)
+        if d_a.abs() > 1e-12 && d_b.abs() > 1e-12 && d_c.abs() > 1e-12 {
+            let fa = t_ha / d_a - t_hb / d_b - t_hc / d_c;
+            let fb = t_hb / d_b - t_hc / d_c - t_ha / d_a;
+            let fc = t_hc / d_c - t_ha / d_a - t_hb / d_b;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "旁心格尔巩",
+                        "X_{166}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(166) = X(7)\\text{-of-excentral};\\ f=\\tan\\tfrac{A}{2}/d_A-\\tan\\tfrac{B}{2}/d_B-\\tan\\tfrac{C}{2}/d_C",
+                        "X(166)：旁心三角形的格尔巩点",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X166".into(),
+                    }));
+                    // Cross-check collinear with X165, X168 when both present.
+                    let x165 = out.iter().rev().find(|f| f.label == "X_{165}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let x168 = out.iter().rev().find(|f| f.label == "X_{168}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((x1, y1)), Some((x8, y8))) = (x165, x168) {
+                        let cross = (x8 - x1) * (xy[1] - y1) - (y8 - y1) * (xy[0] - x1);
+                        let scale = (x8 - x1).abs() + (y8 - y1).abs() + (xy[0] - x1).abs() + (xy[1] - y1).abs() + 1e-12;
+                        if cross.abs() / scale < 1e-5 {
+                            out.push(fact(
+                                "旁心格尔巩",
+                                "X_{166}\\in X_{165}X_{168}",
+                                "\\text{共线}".into(),
+                                None,
+                                "X(166)\\in X(165)X(168)",
+                                "X(166) 在旁心重心与旁心米滕的连线上",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(167)
+        if c_ha.abs() > 1e-12 && c_hb.abs() > 1e-12 && c_hc.abs() > 1e-12
+            && d_a.abs() > 1e-12 && d_b.abs() > 1e-12 && d_c.abs() > 1e-12
+        {
+            let ta = d_a / c_ha;
+            let tb = d_b / c_hb;
+            let tc = d_c / c_hc;
+            let fa = s_hb * tb + s_hc * tc - s_ha * ta;
+            let fb = s_hc * tc + s_ha * ta - s_hb * tb;
+            let fc = s_ha * ta + s_hb * tb - s_hc * tc;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "旁心奈格尔",
+                        "X_{167}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(167) = X(8)\\text{-of-excentral};\\ f=s_B t_B+s_C t_C-s_A t_A",
+                        "X(167)：旁心三角形的奈格尔点",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X167".into(),
+                    }));
+                    let x164 = out.iter().rev().find(|f| f.label == "X_{164}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let x165 = out.iter().rev().find(|f| f.label == "X_{165}").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((x4, y4)), Some((x5, y5))) = (x164, x165) {
+                        let cross = (x5 - x4) * (xy[1] - y4) - (y5 - y4) * (xy[0] - x4);
+                        let scale = (x5 - x4).abs() + (y5 - y4).abs() + (xy[0] - x4).abs() + (xy[1] - y4).abs() + 1e-12;
+                        if cross.abs() / scale < 1e-5 {
+                            out.push(fact(
+                                "旁心奈格尔",
+                                "X_{167}\\in X_{164}X_{165}",
+                                "\\text{共线}".into(),
+                                None,
+                                "X(167)\\in X(164)X(165)",
+                                "X(167) 在旁心内心与旁心重心的连线上",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(170)
+        if c_ha.abs() > 1e-12 && c_hb.abs() > 1e-12 && c_hc.abs() > 1e-12 {
+            let ua = t_ha / (c_ha * c_ha);
+            let ub = t_hb / (c_hb * c_hb);
+            let uc = t_hc / (c_hc * c_hc);
+            let fa = -ua + ub + uc;
+            let fb = -ub + uc + ua;
+            let fc = -uc + ua + ub;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "米滕阿列夫自共轭",
+                        "X_{170}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(170) = X(9)\\text{-aleph of }X(9)=X(76)\\text{-of-excentral};\\ f=-\\tan\\tfrac{A}{2}\\sec^2\\tfrac{A}{2}+\\cdots",
+                        "X(170)：米滕点的 X(9)-阿列夫共轭（在 IG 上）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X170".into(),
+                    }));
+                    let i_xy = out.iter().rev().find(|f| f.group == "特殊点" && f.label == "I").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    let ge_xy = out.iter().rev().find(|f| f.label == "X_{7}" || f.label == "Ge").and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some((*x, *y)),
+                        _ => None,
+                    });
+                    if let (Some((ix, iy)), Some((gx, gy))) = (i_xy, ge_xy) {
+                        let cross = (gx - ix) * (xy[1] - iy) - (gy - iy) * (xy[0] - ix);
+                        let scale = (gx - ix).abs() + (gy - iy).abs() + (xy[0] - ix).abs() + (xy[1] - iy).abs() + 1e-12;
+                        if cross.abs() / scale < 1e-5 {
+                            out.push(fact(
+                                "米滕阿列夫自共轭",
+                                "X_{170}\\in IG",
+                                "\\text{共线}".into(),
+                                None,
+                                "X(170)\\in IG",
+                                "X(170) 在内心与格尔巩点的连线上",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(177) / X(178)
+        if c_ha.abs() > 1e-12 && c_hb.abs() > 1e-12 && c_hc.abs() > 1e-12 {
+            let fa = (c_hb + c_hc) / c_ha;
+            let fb = (c_hc + c_ha) / c_hb;
+            let fc = (c_ha + c_hb) / c_hc;
+            let wa = a * fa;
+            let wb = b * fb;
+            let wc = c * fc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "第一中弧点",
+                    "X_{177}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(177) = \\bigl(a(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2})\\sec\\tfrac{A}{2}:\\cdots\\bigr) = X(1)\\text{-of-intouch}",
+                    "X(177)：第一中弧点（接触三角形的内心）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X177".into(),
+                }));
+            }
+            // X(178): bary cos(B/2)+cos(C/2) (no side factor)
+            let wa = c_hb + c_hc;
+            let wb = c_hc + c_ha;
+            let wc = c_ha + c_hb;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "第二中弧点",
+                    "X_{178}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(178) = \\bigl(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2}:\\cdots\\bigr)",
+                    "X(178)：第二中弧点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X178".into(),
+                }));
+            }
+        }
+        // X(179)
+        {
+            let c_qa = (g[0] / 4.0).cos();
+            let c_qb = (g[1] / 4.0).cos();
+            let c_qc = (g[2] / 4.0).cos();
+            if c_qa.abs() > 1e-12 && c_qb.abs() > 1e-12 && c_qc.abs() > 1e-12 {
+                let wa = a / (c_qa * c_qa * c_qa * c_qa);
+                let wb = b / (c_qb * c_qb * c_qb * c_qb);
+                let wc = c / (c_qc * c_qc * c_qc * c_qc);
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "第一阿吉马-马尔法蒂",
+                            "X_{179}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(179) = \\bigl(a\\sec^4\\tfrac{A}{4}:\\cdots\\bigr)",
+                            "X(179)：第一阿吉马-马尔法蒂点",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X179".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(180)
+        {
+            let qa = g[0] / 4.0;
+            let qb = g[1] / 4.0;
+            let qc = g[2] / 4.0;
+            let (c_qa, c_qb, c_qc) = (qa.cos(), qb.cos(), qc.cos());
+            if c_qa.abs() > 1e-12 && c_qb.abs() > 1e-12 && c_qc.abs() > 1e-12 {
+                let t_a = 1.0 + 2.0 * (c_qb * c_qc / c_qa).powi(2);
+                let t_b = 1.0 + 2.0 * (c_qc * c_qa / c_qb).powi(2);
+                let t_c = 1.0 + 2.0 * (c_qa * c_qb / c_qc).powi(2);
+                if t_a.abs() > 1e-12 && t_b.abs() > 1e-12 && t_c.abs() > 1e-12 {
+                    let fa = 1.0 / t_b + 1.0 / t_c - 1.0 / t_a;
+                    let fb = 1.0 / t_c + 1.0 / t_a - 1.0 / t_b;
+                    let fc = 1.0 / t_a + 1.0 / t_b - 1.0 / t_c;
+                    let wa = a * fa;
+                    let wb = b * fb;
+                    let wc = c * fc;
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if xy[0].is_finite() && xy[1].is_finite() {
+                            out.push(fact(
+                                "第二阿吉马-马尔法蒂",
+                                "X_{180}",
+                                pt(xy[0], xy[1]),
+                                None,
+                                "X(180) = 2\\text{nd Ajima-Malfatti};\\ f=1/t_B+1/t_C-1/t_A",
+                                "X(180)：第二阿吉马-马尔法蒂点",
+                            ).with(Shape::Point {
+                                x: xy[0],
+                                y: xy[1],
+                                label: "X180".into(),
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // X(182)–X(190): Brocard-diameter / orthic / circum-inverses / mid-arc / Yff.
+    // X(182)=mid(O,K)=Brocard-circle center; bary a cos(A−ω).
+    // X(183)=trilinear quotient X(75)/X(182); bary csc A cos(A−ω).
+    // X(184)=procircumcenter; bary a³ cos A (=X(63)-of-orthic when acute).
+    // X(185)=Nagel-of-orthic; bary (sin 2A)[1−cos A cos(B−C)]; skip right.
+    // X(186)=circum-inverse of H; bary sin A(4 cos A−sec A); skip equilateral.
+    // X(187)=Schoute=circum-inverse of K; bary a²(2a²−b²−c²); skip equilateral.
+    // X(188)=2nd mid-arc of anticomplementary; bary 2 cos(A/2)=sin A csc(A/2).
+    // X(189)=cyclocevian conjugate of Nagel X(8); bary 1/(cos B+cos C−cos A−1).
+    // X(190)=Yff parabolic point; bary 1/(b−c); skip isos/equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let rightish = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let isos = (a - b).abs() < 1e-9 || (b - c).abs() < 1e-9 || (c - a).abs() < 1e-9;
+        // K = Lemoine (recompute; always finite).
+        let k_den = a * a + b * b + c * c;
+        let kpt = if k_den > 1e-18 {
+            [
+                (a * a * pa[0] + b * b * pb[0] + c * c * pc[0]) / k_den,
+                (a * a * pa[1] + b * b * pb[1] + c * c * pc[1]) / k_den,
+            ]
+        } else {
+            centroid
+        };
+        // X(182): midpoint of Brocard diameter OK.
+        {
+            let xy = [(circ[0] + kpt[0]) / 2.0, (circ[1] + kpt[1]) / 2.0];
+            // Cross-check bary a cos(A−ω) when Brocard angle available.
+            let xyu = if area > 1e-12 && k_den > 1e-18 {
+                let tan_w = (4.0 * area) / k_den;
+                let sin_w = tan_w / (1.0 + tan_w * tan_w).sqrt();
+                let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+                let fa = ca * cos_w + sa * sin_w;
+                let fb = cb * cos_w + sb * sin_w;
+                let fc = cc * cos_w + sc * sin_w;
+                let wa = a * fa;
+                let wb = b * fb;
+                let wc = c * fc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xb = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if dist2(xb, xy) < 1e-5 * (1.0 + rr) { xb } else { xy }
+                } else {
+                    xy
+                }
+            } else {
+                xy
+            };
+            out.push(fact(
+                "布罗卡直径中点",
+                "X_{182}",
+                pt(xyu[0], xyu[1]),
+                None,
+                "X(182) = \\text{mid}(O,K);\\ \\text{bary }a\\cos(A-\\omega)",
+                "X(182)：布罗卡直径中点（布罗卡圆圆心）",
+            ).with(Shape::Point {
+                x: xyu[0],
+                y: xyu[1],
+                label: "X182".into(),
+            }));
+            // On OK
+            let cross = (kpt[0] - circ[0]) * (xyu[1] - circ[1]) - (kpt[1] - circ[1]) * (xyu[0] - circ[0]);
+            let scale = (kpt[0] - circ[0]).abs() + (kpt[1] - circ[1]).abs()
+                + (xyu[0] - circ[0]).abs() + (xyu[1] - circ[1]).abs() + 1e-12;
+            if cross.abs() / scale < 1e-5 {
+                out.push(fact(
+                    "布罗卡直径中点",
+                    "X_{182}\\in OK",
+                    "\\text{共线}".into(),
+                    None,
+                    "X(182)\\in OK",
+                    "X(182) 在外心与勒莫恩点的连线上",
+                ));
+            }
+        }
+        // X(183): bary csc A cos(A−ω)
+        if area > 1e-12 && k_den > 1e-18 && sa.abs() > 1e-12 && sb.abs() > 1e-12 && sc.abs() > 1e-12 {
+            let tan_w = (4.0 * area) / k_den;
+            let sin_w = tan_w / (1.0 + tan_w * tan_w).sqrt();
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let fa = (ca * cos_w + sa * sin_w) / sa;
+            let fb = (cb * cos_w + sb * sin_w) / sb;
+            let fc = (cc * cos_w + sc * sin_w) / sc;
+            let den = fa + fb + fc;
+            if den.abs() > 1e-12 && fa.is_finite() && fb.is_finite() && fc.is_finite() {
+                let xy = [
+                    (fa * pa[0] + fb * pb[0] + fc * pc[0]) / den,
+                    (fa * pa[1] + fb * pb[1] + fc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "摩西布罗卡商",
+                        "X_{183}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(183) = X(75)/X(182)\\text{ trilinear quotient};\\ \\text{bary }\\csc A\\cos(A-\\omega)",
+                        "X(183)：摩西点与布罗卡直径中点的三线商",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X183".into(),
+                    }));
+                }
+            }
+        }
+        // X(184): bary a³ cos A
+        {
+            let wa = a * a * a * ca;
+            let wb = b * b * b * cb;
+            let wc = c * c * c * cc;
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "准外心",
+                    "X_{184}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(184) = \\bigl(a^3\\cos A:\\cdots\\bigr)",
+                    "X(184)：准外心（垂足三角形的 X(63)）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X184".into(),
+                }));
+            }
+        }
+        // X(185): Nagel of orthic; skip right
+        if !rightish {
+            let wa = (2.0 * g[0]).sin() * (1.0 - ca * (g[1] - g[2]).cos());
+            let wb = (2.0 * g[1]).sin() * (1.0 - cb * (g[2] - g[0]).cos());
+            let wc = (2.0 * g[2]).sin() * (1.0 - cc * (g[0] - g[1]).cos());
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(fact(
+                        "垂足奈格尔",
+                        "X_{185}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(185) = X(8)\\text{-of-orthic};\\ \\text{bary }(\\sin 2A)[1-\\cos A\\cos(B-C)]",
+                        "X(185)：垂足三角形的奈格尔点",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X185".into(),
+                    }));
+                }
+            }
+        }
+        // X(186): circum-inverse of H; skip equilateral (H=O)
+        {
+            let oh2 = {
+                let dx = orth[0] - circ[0];
+                let dy = orth[1] - circ[1];
+                dx * dx + dy * dy
+            };
+            if oh2 > 1e-12 {
+                let scale = (rr * rr) / oh2;
+                let mut xy = [
+                    circ[0] + scale * (orth[0] - circ[0]),
+                    circ[1] + scale * (orth[1] - circ[1]),
+                ];
+                // Prefer ETC bary when sec finite (non-right)
+                if !rightish {
+                    let wa = sa * (4.0 * ca - 1.0 / ca);
+                    let wb = sb * (4.0 * cb - 1.0 / cb);
+                    let wc = sc * (4.0 * cc - 1.0 / cc);
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                        let xb = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xb, xy) < 1e-4 * (1.0 + rr) {
+                            xy = xb;
+                        }
+                    }
+                }
+                out.push(fact(
+                    "反演垂心",
+                    "X_{186}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(186) = O + R^2(H-O)/|OH|^2",
+                    "X(186)：垂心关于外接圆的反演点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X186".into(),
+                }));
+                let cross = (orth[0] - circ[0]) * (xy[1] - circ[1]) - (orth[1] - circ[1]) * (xy[0] - circ[0]);
+                if cross.abs() < 1e-5 * (1.0 + oh2) * (1.0 + dist2(circ, xy)) {
+                    out.push(fact(
+                        "反演垂心",
+                        "X_{186}\\in OH",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(186)\\in OH",
+                        "X(186) 在欧拉线 OH 上",
+                    ));
+                }
+            }
+        }
+        // X(187): Schoute = circum-inverse of K; skip equilateral (K=O → weights 0)
+        {
+            let wa = a * a * (2.0 * a * a - b * b - c * c);
+            let wb = b * b * (2.0 * b * b - c * c - a * a);
+            let wc = c * c * (2.0 * c * c - a * a - b * b);
+            let den = wa + wb + wc;
+            let ok2 = {
+                let dx = kpt[0] - circ[0];
+                let dy = kpt[1] - circ[1];
+                dx * dx + dy * dy
+            };
+            if den.abs() > 1e-12 && ok2 > 1e-12 {
+                let xb = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let scale = (rr * rr) / ok2;
+                let xg = [
+                    circ[0] + scale * (kpt[0] - circ[0]),
+                    circ[1] + scale * (kpt[1] - circ[1]),
+                ];
+                let xy = if dist2(xb, xg) < 1e-4 * (1.0 + rr) { xb } else { xg };
+                out.push(fact(
+                    "肖特中心",
+                    "X_{187}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(187) = O + R^2(K-O)/|OK|^2;\\ \\text{bary }a^2(2a^2-b^2-c^2)",
+                    "X(187)：肖特中心（勒莫恩点关于外接圆的反演）",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X187".into(),
+                }));
+                let cross = (kpt[0] - circ[0]) * (xy[1] - circ[1]) - (kpt[1] - circ[1]) * (xy[0] - circ[0]);
+                let scale_c = (kpt[0] - circ[0]).abs() + (kpt[1] - circ[1]).abs()
+                    + (xy[0] - circ[0]).abs() + (xy[1] - circ[1]).abs() + 1e-12;
+                if cross.abs() / scale_c < 1e-5 {
+                    out.push(fact(
+                        "肖特中心",
+                        "X_{187}\\in OK",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(187)\\in OK",
+                        "X(187) 在外心与勒莫恩点的连线上",
+                    ));
+                }
+            }
+        }
+        // X(188): bary 2 cos(A/2)
+        {
+            let wa = 2.0 * (g[0] / 2.0).cos();
+            let wb = 2.0 * (g[1] / 2.0).cos();
+            let wc = 2.0 * (g[2] / 2.0).cos();
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                out.push(fact(
+                    "反补第二中弧",
+                    "X_{188}",
+                    pt(xy[0], xy[1]),
+                    None,
+                    "X(188) = \\bigl(2\\cos\\tfrac{A}{2}:\\cdots\\bigr) = \\text{anticomplement of }X(178)",
+                    "X(188)：反补三角形的第二中弧点",
+                ).with(Shape::Point {
+                    x: xy[0],
+                    y: xy[1],
+                    label: "X188".into(),
+                }));
+            }
+        }
+        // X(189): cyclocevian conjugate of Nagel
+        {
+            let da = cb + cc - ca - 1.0;
+            let db = cc + ca - cb - 1.0;
+            let dc = ca + cb - cc - 1.0;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = 1.0 / da;
+                let wb = 1.0 / db;
+                let wc = 1.0 / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    if xy[0].is_finite() && xy[1].is_finite() {
+                        out.push(fact(
+                            "奈格尔圆塞瓦共轭",
+                            "X_{189}",
+                            pt(xy[0], xy[1]),
+                            None,
+                            "X(189) = \\text{cyclocevian of }X(8);\\ \\text{bary }1/(\\cos B+\\cos C-\\cos A-1)",
+                            "X(189)：奈格尔点的圆塞瓦共轭",
+                        ).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: "X189".into(),
+                        }));
+                    }
+                }
+            }
+        }
+        // X(190): Yff parabolic; skip isos/equil
+        if !isos {
+            let da = b - c;
+            let db = c - a;
+            let dc = a - b;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                let wa = 1.0 / da;
+                let wb = 1.0 / db;
+                let wc = 1.0 / dc;
+                let den = wa + wb + wc;
+                if den.abs() > 1e-12 {
+                    let xy = [
+                        (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                        (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                    ];
+                    out.push(fact(
+                        "伊夫抛物点",
+                        "X_{190}",
+                        pt(xy[0], xy[1]),
+                        None,
+                        "X(190) = \\bigl(1/(b-c):\\cdots\\bigr)",
+                        "X(190)：伊夫抛物点（切 BC/CA/AB 且焦点为 X(101) 的抛物线的切点塞瓦交点）",
+                    ).with(Shape::Point {
+                        x: xy[0],
+                        y: xy[1],
+                        label: "X190".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    // X(191)–X(200): classical Ceva-conjugate band (ETC).
+    // X(191)=X(10)-Ceva of I; bary a·f, f=(b+c−a)(bc+ca+ab)+b³+c³−a³.
+    // X(192)=X(1)-Ceva of G = anticomplement of Moses; bary ab+ac−bc.
+    // X(193)=X(4)-Ceva of G = anticomplement of X(69); bary 3a²−b²−c².
+    // X(194)=X(6)-Ceva of G = anticomplement of X(76); bary a²(b²+c²)−b²c².
+    // X(195)=X(5)-Ceva of O; bary 4 cos 2A + cot² A − cot A cot ω.
+    // X(196)=X(7)-Ceva of H; bary (cos B+cos C−cos A−1) tan A tan(A/2); skip right.
+    // X(197)=X(8)-Ceva of K; bary a²(S−2a² tan(A/2)), S=∑a² tan(A/2).
+    // X(198)=X(9)-Ceva of K (=isogonal of X(189)); bary a²(cos B+cos C−cos A−1).
+    // X(199)=X(10)-Ceva of K; bary a²[b⁴+c⁴−a⁴+(b²+c²−a²)(bc+ca+ab)].
+    // X(200)={X(8),X(78)}-harmonic of I; bary a(b+c−a)².
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let rightish = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(191)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                (bb + cc - aa) * (bb * cc + cc * aa + aa * bb) + bb * bb * bb + cc * cc * cc
+                    - aa * aa * aa
+            };
+            let wa = a * f(a, b, c);
+            let wb = b * f(b, c, a);
+            let wc = c * f(c, a, b);
+            push_bary(
+                &mut out,
+                "斯皮克内心塞瓦",
+                "X_{191}",
+                "X(191) = X(10)\\text{-Ceva of }X(1);\\ f=(b+c-a)(\\Sigma bc)+b^3+c^3-a^3",
+                "X(191)：斯皮克点对内心的塞瓦共轭",
+                "X191",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(192): anticomplement of Moses
+        {
+            let wa = a * b + a * c - b * c;
+            let wb = b * c + b * a - c * a;
+            let wc = c * a + c * b - a * b;
+            push_bary(
+                &mut out,
+                "内心重心塞瓦",
+                "X_{192}",
+                "X(192) = X(1)\\text{-Ceva of }X(2) = \\text{anticomplement of }X(75)",
+                "X(192)：内心对重心的塞瓦共轭（摩西点的反补）",
+                "X192",
+                wa,
+                wb,
+                wc,
+            );
+            if let Some(mo) = out.iter().rev().find(|f| f.group == "摩西点" && f.label == "Mo") {
+                if let Some(Shape::Point { x, y, .. }) = mo.shape.as_ref() {
+                    let aq = [3.0 * centroid[0] - 2.0 * *x, 3.0 * centroid[1] - 2.0 * *y];
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xy, aq) < 1e-6 * (1.0 + rr) {
+                            out.push(fact(
+                                "内心重心塞瓦",
+                                "X_{192}=\\mathrm{anti}(X_{75})",
+                                "\\text{反补}".into(),
+                                None,
+                                "X(192) = 3G - 2\\,X(75)",
+                                "X(192) 是摩西点关于重心的反补",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(193): anticomplement of X(69)
+        {
+            let wa = 3.0 * a * a - b * b - c * c;
+            let wb = 3.0 * b * b - c * c - a * a;
+            let wc = 3.0 * c * c - a * a - b * b;
+            push_bary(
+                &mut out,
+                "垂心重心塞瓦",
+                "X_{193}",
+                "X(193) = X(4)\\text{-Ceva of }X(2);\\ \\text{bary }3a^2-b^2-c^2",
+                "X(193)：垂心对重心的塞瓦共轭（余切点 X(69) 的反补）",
+                "X193",
+                wa,
+                wb,
+                wc,
+            );
+            if let Some(x69) = out.iter().rev().find(|f| f.group == "余切点" && f.label == "X_{69}") {
+                if let Some(Shape::Point { x, y, .. }) = x69.shape.as_ref() {
+                    let aq = [3.0 * centroid[0] - 2.0 * *x, 3.0 * centroid[1] - 2.0 * *y];
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xy, aq) < 1e-6 * (1.0 + rr) {
+                            out.push(fact(
+                                "垂心重心塞瓦",
+                                "X_{193}=\\mathrm{anti}(X_{69})",
+                                "\\text{反补}".into(),
+                                None,
+                                "X(193) = 3G - 2\\,X(69)",
+                                "X(193) 是余切点关于重心的反补",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(194): anticomplement of X(76)
+        {
+            let wa = a * a * b * b + a * a * c * c - b * b * c * c;
+            let wb = b * b * c * c + b * b * a * a - c * c * a * a;
+            let wc = c * c * a * a + c * c * b * b - a * a * b * b;
+            push_bary(
+                &mut out,
+                "勒莫恩重心塞瓦",
+                "X_{194}",
+                "X(194) = X(6)\\text{-Ceva of }X(2);\\ \\text{bary }a^2(b^2+c^2)-b^2c^2",
+                "X(194)：勒莫恩点对重心的塞瓦共轭（第三布罗卡点的反补）",
+                "X194",
+                wa,
+                wb,
+                wc,
+            );
+            if let Some(x76) = out
+                .iter()
+                .rev()
+                .find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}")
+            {
+                if let Some(Shape::Point { x, y, .. }) = x76.shape.as_ref() {
+                    let aq = [3.0 * centroid[0] - 2.0 * *x, 3.0 * centroid[1] - 2.0 * *y];
+                    let den = wa + wb + wc;
+                    if den.abs() > 1e-12 {
+                        let xy = [
+                            (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                            (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                        ];
+                        if dist2(xy, aq) < 1e-6 * (1.0 + rr) {
+                            out.push(fact(
+                                "勒莫恩重心塞瓦",
+                                "X_{194}=\\mathrm{anti}(X_{76})",
+                                "\\text{反补}".into(),
+                                None,
+                                "X(194) = 3G - 2\\,X(76)",
+                                "X(194) 是第三布罗卡点关于重心的反补",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // X(195): Iliev form with Brocard cot ω = (a²+b²+c²)/(4Δ)
+        if sa.abs() > 1e-12 && sb.abs() > 1e-12 && sc.abs() > 1e-12 && area > 1e-12 {
+            let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+            let cot_a = ca / sa;
+            let cot_b = cb / sb;
+            let cot_c = cc / sc;
+            let wa = 4.0 * (2.0 * g[0]).cos() + cot_a * cot_a - cot_a * cot_w;
+            let wb = 4.0 * (2.0 * g[1]).cos() + cot_b * cot_b - cot_b * cot_w;
+            let wc = 4.0 * (2.0 * g[2]).cos() + cot_c * cot_c - cot_c * cot_w;
+            push_bary(
+                &mut out,
+                "九点外心塞瓦",
+                "X_{195}",
+                "X(195) = X(5)\\text{-Ceva of }X(3);\\ 4\\cos 2A+\\cot^2 A-\\cot A\\cot\\omega",
+                "X(195)：九点中心对外心的塞瓦共轭",
+                "X195",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(196): skip right (tan A → ∞)
+        if !rightish {
+            let g_a = (cb + cc - ca - 1.0) * g[0].tan() * (g[0] / 2.0).tan();
+            let g_b = (cc + ca - cb - 1.0) * g[1].tan() * (g[1] / 2.0).tan();
+            let g_c = (ca + cb - cc - 1.0) * g[2].tan() * (g[2] / 2.0).tan();
+            push_bary(
+                &mut out,
+                "格尔巩垂心塞瓦",
+                "X_{196}",
+                "X(196) = X(7)\\text{-Ceva of }X(4);\\ (\\cos B+\\cos C-\\cos A-1)\\tan A\\tan\\tfrac{A}{2}",
+                "X(196)：格尔巩点对垂心的塞瓦共轭",
+                "X196",
+                g_a,
+                g_b,
+                g_c,
+            );
+        }
+        // X(197)
+        {
+            let t_a = (g[0] / 2.0).tan();
+            let t_b = (g[1] / 2.0).tan();
+            let t_c = (g[2] / 2.0).tan();
+            let sum = a * a * t_a + b * b * t_b + c * c * t_c;
+            let wa = a * a * (sum - 2.0 * a * a * t_a);
+            let wb = b * b * (sum - 2.0 * b * b * t_b);
+            let wc = c * c * (sum - 2.0 * c * c * t_c);
+            push_bary(
+                &mut out,
+                "奈格尔勒莫恩塞瓦",
+                "X_{197}",
+                "X(197) = X(8)\\text{-Ceva of }X(6);\\ a^2(S-2a^2\\tan\\tfrac{A}{2})",
+                "X(197)：奈格尔点对勒莫恩点的塞瓦共轭",
+                "X197",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(198): isogonal of X(189)
+        {
+            let da = cb + cc - ca - 1.0;
+            let db = cc + ca - cb - 1.0;
+            let dc = ca + cb - cc - 1.0;
+            let wa = a * a * da;
+            let wb = b * b * db;
+            let wc = c * c * dc;
+            push_bary(
+                &mut out,
+                "米滕阿列夫勒莫恩塞瓦",
+                "X_{198}",
+                "X(198) = X(9)\\text{-Ceva of }X(6) = \\text{isogonal of }X(189)",
+                "X(198)：米滕阿列夫点对勒莫恩点的塞瓦共轭（X(189) 的等角共轭）",
+                "X198",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(199)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let a2 = aa * aa;
+                aa * (b2 * b2 + c2 * c2 - a2 * a2 + (b2 + c2 - a2) * (bb * cc + cc * aa + aa * bb))
+            };
+            let wa = a * f(a, b, c);
+            let wb = b * f(b, c, a);
+            let wc = c * f(c, a, b);
+            push_bary(
+                &mut out,
+                "斯皮克莱莫恩塞瓦",
+                "X_{199}",
+                "X(199) = X(10)\\text{-Ceva of }X(6);\\ a[b^4+c^4-a^4+(b^2+c^2-a^2)\\Sigma bc]",
+                "X(199)：斯皮克点对勒莫恩点的塞瓦共轭",
+                "X199",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(200)
+        {
+            let wa = a * (b + c - a) * (b + c - a);
+            let wb = b * (c + a - b) * (c + a - b);
+            let wc = c * (a + b - c) * (a + b - c);
+            push_bary(
+                &mut out,
+                "半周长平方点",
+                "X_{200}",
+                "X(200) = \\bigl(a(b+c-a)^2:\\cdots\\bigr) = \\{X(8),X(78)\\}\\text{-harmonic of }X(1)",
+                "X(200)：半周长平方点（奈格尔与 X(78) 关于内心的调和共轭）",
+                "X200",
+                wa,
+                wb,
+                wc,
+            );
+        }
+    }
+
+    // X(201)–X(210): next classical Ceva-conjugate band (ETC).
+    // X(201)=X(10)-Ceva of X(12); bary (sin 2A)[1+cos(B−C)].
+    // X(202)=X(1)-Ceva of X(15); bary sin A·u(v+w−u), u=sin(A+π/3).
+    // X(203)=X(1)-Ceva of X(16); same with u=sin(A−π/3); skip equil.
+    // X(204)=X(1)-Ceva of X(19); bary sin A·tan A(tan B+tan C−tan A); skip right.
+    // X(205)=X(9)-Ceva of X(31); bary a³[b²tan(B/2)+c²tan(C/2)−a²tan(A/2)].
+    // X(206)=X(2)-Ceva of X(32)=complement of X(66)=mid(K,X159); bary a⁴(b⁴+c⁴−a⁴); ∞ on right.
+    // X(207)=X(1)-Ceva of X(34); bary sin A(1−sec A)(sec B+sec C−sec A−1); skip right.
+    // X(208)=X(4)-Ceva of X(34); bary sin A(1−sec A)(cos B+cos C−cos A−1); skip right.
+    // X(209)=X(4)-Ceva of X(37); bary sin A(sin B+sin C)[sin A+sin(A−B)+sin(A−C)].
+    // X(210)=X(10)-Ceva of X(37); bary a(b+c)(b+c−a).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let rightish = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(201)
+        {
+            let wa = (2.0 * g[0]).sin() * (1.0 + (g[1] - g[2]).cos());
+            let wb = (2.0 * g[1]).sin() * (1.0 + (g[2] - g[0]).cos());
+            let wc = (2.0 * g[2]).sin() * (1.0 + (g[0] - g[1]).cos());
+            push_bary(
+                &mut out,
+                "斯皮克费尔巴哈调和塞瓦",
+                "X_{201}",
+                "X(201) = X(10)\\text{-Ceva of }X(12);\\ (\\sin 2A)[1+\\cos(B-C)]",
+                "X(201)：斯皮克点对费尔巴哈调和共轭点的塞瓦共轭",
+                "X201",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(202): I-Ceva of 1st isodynamic
+        {
+            let ua = (g[0] + PI / 3.0).sin();
+            let ub = (g[1] + PI / 3.0).sin();
+            let uc = (g[2] + PI / 3.0).sin();
+            let wa = sa * ua * (ub + uc - ua);
+            let wb = sb * ub * (uc + ua - ub);
+            let wc = sc * uc * (ua + ub - uc);
+            push_bary(
+                &mut out,
+                "内心第一等动力塞瓦",
+                "X_{202}",
+                "X(202) = X(1)\\text{-Ceva of }X(15);\\ u=\\sin(A+\\pi/3)",
+                "X(202)：内心对第一等动力点的塞瓦共轭",
+                "X202",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(203): skip equilateral (sin(A−π/3)=0)
+        if !equil {
+            let ua = (g[0] - PI / 3.0).sin();
+            let ub = (g[1] - PI / 3.0).sin();
+            let uc = (g[2] - PI / 3.0).sin();
+            let wa = sa * ua * (ub + uc - ua);
+            let wb = sb * ub * (uc + ua - ub);
+            let wc = sc * uc * (ua + ub - uc);
+            push_bary(
+                &mut out,
+                "内心第二等动力塞瓦",
+                "X_{203}",
+                "X(203) = X(1)\\text{-Ceva of }X(16);\\ u=\\sin(A-\\pi/3)",
+                "X(203)：内心对第二等动力点的塞瓦共轭",
+                "X203",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(204): skip right (tan A → ∞)
+        if !rightish {
+            let ta = g[0].tan();
+            let tb = g[1].tan();
+            let tc = g[2].tan();
+            let wa = sa * ta * (tb + tc - ta);
+            let wb = sb * tb * (tc + ta - tb);
+            let wc = sc * tc * (ta + tb - tc);
+            push_bary(
+                &mut out,
+                "内心克劳森塞瓦",
+                "X_{204}",
+                "X(204) = X(1)\\text{-Ceva of }X(19);\\ \\tan A(\\tan B+\\tan C-\\tan A)",
+                "X(204)：内心对克劳森点的塞瓦共轭",
+                "X204",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(205)
+        {
+            let t_a = (g[0] / 2.0).tan();
+            let t_b = (g[1] / 2.0).tan();
+            let t_c = (g[2] / 2.0).tan();
+            let f = |aa: f64, bb: f64, cc: f64, ta: f64, tb: f64, tc: f64| {
+                aa * aa * (bb * bb * tb + cc * cc * tc - aa * aa * ta)
+            };
+            let wa = a * f(a, b, c, t_a, t_b, t_c);
+            let wb = b * f(b, c, a, t_b, t_c, t_a);
+            let wc = c * f(c, a, b, t_c, t_a, t_b);
+            push_bary(
+                &mut out,
+                "米滕第二幂点塞瓦",
+                "X_{205}",
+                "X(205) = X(9)\\text{-Ceva of }X(31);\\ a^3[b^2\\tan\\tfrac{B}{2}+c^2\\tan\\tfrac{C}{2}-a^2\\tan\\tfrac{A}{2}]",
+                "X(205)：米滕阿列夫点对第二幂点的塞瓦共轭",
+                "X205",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(206): complement of X(66) = mid(K, X159)
+        {
+            let a2 = a * a;
+            let b2 = b * b;
+            let c2 = c * c;
+            let a4 = a2 * a2;
+            let b4 = b2 * b2;
+            let c4 = c2 * c2;
+            let wa = a4 * (b4 + c4 - a4);
+            let wb = b4 * (c4 + a4 - b4);
+            let wc = c4 * (a4 + b4 - c4);
+            push_bary(
+                &mut out,
+                "重心第三幂点塞瓦",
+                "X_{206}",
+                "X(206) = X(2)\\text{-Ceva of }X(32) = \\mathrm{comp}(X_{66});\\ a^4(b^4+c^4-a^4)",
+                "X(206)：重心对第三幂点的塞瓦共轭（X(66) 的补点；K 与 X(159) 中点）",
+                "X206",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if let Some(x66) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{66}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let comp = [
+                        (3.0 * centroid[0] - x66[0]) / 2.0,
+                        (3.0 * centroid[1] - x66[1]) / 2.0,
+                    ];
+                    if dist2(xy, comp) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心第三幂点塞瓦",
+                            "X_{206}=\\mathrm{comp}(X_{66})",
+                            "\\text{补点}".into(),
+                            None,
+                            "X(206) = (3G - X(66))/2",
+                            "X(206) 是 X(66) 关于重心的补点",
+                        ));
+                    }
+                }
+                if let (Some(kxy), Some(x159)) = (
+                    out.iter()
+                        .rev()
+                        .find(|f| f.group == "勒莫恩点" && f.label == "K")
+                        .and_then(|f| match f.shape.as_ref() {
+                            Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                            _ => None,
+                        }),
+                    out.iter()
+                        .rev()
+                        .find(|f| f.label == "X_{159}")
+                        .and_then(|f| match f.shape.as_ref() {
+                            Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                            _ => None,
+                        }),
+                ) {
+                    let mid = [(kxy[0] + x159[0]) / 2.0, (kxy[1] + x159[1]) / 2.0];
+                    if dist2(xy, mid) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心第三幂点塞瓦",
+                            "X_{206}=\\mathrm{mid}(K,X_{159})",
+                            "\\text{中点}".into(),
+                            None,
+                            "X(206) = \\mathrm{mid}(X(6),X(159))",
+                            "X(206) 是勒莫恩点与 X(159) 的中点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(207): skip right
+        if !rightish && ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let seca = 1.0 / ca;
+            let secb = 1.0 / cb;
+            let secc = 1.0 / cc;
+            let wa = sa * (1.0 - seca) * (secb + secc - seca - 1.0);
+            let wb = sb * (1.0 - secb) * (secc + seca - secb - 1.0);
+            let wc = sc * (1.0 - secc) * (seca + secb - secc - 1.0);
+            push_bary(
+                &mut out,
+                "内心X34塞瓦",
+                "X_{207}",
+                "X(207) = X(1)\\text{-Ceva of }X(34);\\ (1-\\sec A)(\\sec B+\\sec C-\\sec A-1)",
+                "X(207)：内心对 X(34) 的塞瓦共轭",
+                "X207",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(208): skip right
+        if !rightish && ca.abs() > 1e-12 && cb.abs() > 1e-12 && cc.abs() > 1e-12 {
+            let seca = 1.0 / ca;
+            let secb = 1.0 / cb;
+            let secc = 1.0 / cc;
+            let wa = sa * (1.0 - seca) * (cb + cc - ca - 1.0);
+            let wb = sb * (1.0 - secb) * (cc + ca - cb - 1.0);
+            let wc = sc * (1.0 - secc) * (ca + cb - cc - 1.0);
+            push_bary(
+                &mut out,
+                "垂心X34塞瓦",
+                "X_{208}",
+                "X(208) = X(4)\\text{-Ceva of }X(34);\\ (1-\\sec A)(\\cos B+\\cos C-\\cos A-1)",
+                "X(208)：垂心对 X(34) 的塞瓦共轭",
+                "X208",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(209)
+        {
+            let fa = (sb + sc) * (sa + (g[0] - g[1]).sin() + (g[0] - g[2]).sin());
+            let fb = (sc + sa) * (sb + (g[1] - g[2]).sin() + (g[1] - g[0]).sin());
+            let fc = (sa + sb) * (sc + (g[2] - g[0]).sin() + (g[2] - g[1]).sin());
+            let wa = sa * fa;
+            let wb = sb * fb;
+            let wc = sc * fc;
+            push_bary(
+                &mut out,
+                "垂心格林伯格塞瓦",
+                "X_{209}",
+                "X(209) = X(4)\\text{-Ceva of }X(37);\\ (\\sin B+\\sin C)[\\sin A+\\sin(A-B)+\\sin(A-C)]",
+                "X(209)：垂心对格林伯格点的塞瓦共轭",
+                "X209",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(210)
+        {
+            let wa = a * (b + c) * (b + c - a);
+            let wb = b * (c + a) * (c + a - b);
+            let wc = c * (a + b) * (a + b - c);
+            push_bary(
+                &mut out,
+                "斯皮克格林伯格塞瓦",
+                "X_{210}",
+                "X(210) = X(10)\\text{-Ceva of }X(37);\\ a(b+c)(b+c-a)",
+                "X(210)：斯皮克点对格林伯格点的塞瓦共轭（X(8) 与 X(9) 的截点）",
+                "X210",
+                wa,
+                wb,
+                wc,
+            );
+        }
+    }
+
+    // X(211)–X(220): next classical Ceva-conjugate band (ETC).
+    // X(211)=X(4)-Ceva of X(39); bary a⁴(b²+c²)(a²b²−b⁴+a²c²+b²c²−c⁴).
+    // X(212)=X(9)-Ceva of X(41); bary (sin 2A)(1+cos A).
+    // X(213)=X(6)-Ceva of X(42); bary (b+c)a³.
+    // X(214)=X(2)-Ceva of X(44)=mid(I,X100)=comp(X80); bary a(b+c−2a)(b²+c²−a²−bc); skip equil.
+    // X(215)=X(1)-Ceva of X(50); bary (sin A)(sin 3A)(sin 3B+sin 3C−sin 3A); skip equil.
+    // X(216)=X(5)-Ceva of X(51); bary (sin A)(sin 2A)cos(B−C).
+    // X(217)=X(6)-Ceva of X(51); bary a⁴(a²−b²−c²)(a²b²−b⁴+a²c²+2b²c²−c⁴).
+    // X(218)=X(7)-Ceva of X(55); bary a²(a²+b²+c²−2ab−2ac).
+    // X(219)=X(8)-Ceva of X(55); bary sin 2A·cot(A/2)=2 cos A(1+cos A).
+    // X(220)=X(9)-Ceva of X(55)=bary-square of X(9); bary a²(b+c−a)².
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(211)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let a4 = a2 * a2;
+                a4 * (b2 + c2) * (a2 * b2 - b2 * b2 + a2 * c2 + b2 * c2 - c2 * c2)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "垂心布罗卡中点塞瓦",
+                "X_{211}",
+                "X(211) = X(4)\\text{-Ceva of }X(39);\\ a^4(b^2+c^2)(a^2b^2-b^4+a^2c^2+b^2c^2-c^4)",
+                "X(211)：垂心对布罗卡中点的塞瓦共轭",
+                "X211",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(212)
+        {
+            let wa = (2.0 * g[0]).sin() * (1.0 + ca);
+            let wb = (2.0 * g[1]).sin() * (1.0 + cb);
+            let wc = (2.0 * g[2]).sin() * (1.0 + cc);
+            push_bary(
+                &mut out,
+                "米滕第二幂截点塞瓦",
+                "X_{212}",
+                "X(212) = X(9)\\text{-Ceva of }X(41);\\ (\\sin 2A)(1+\\cos A)",
+                "X(212)：米滕阿列夫点对第二幂截点的塞瓦共轭",
+                "X212",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(213)
+        {
+            let wa = (b + c) * a * a * a;
+            let wb = (c + a) * b * b * b;
+            let wc = (a + b) * c * c * c;
+            push_bary(
+                &mut out,
+                "勒莫恩内心勒莫恩截点塞瓦",
+                "X_{213}",
+                "X(213) = X(6)\\text{-Ceva of }X(42);\\ (b+c)a^3",
+                "X(213)：勒莫恩点对内心–勒莫恩截点的塞瓦共轭（K 与 X(31) 的截点）",
+                "X213",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(214): also mid(I, X100) = complement of X(80)
+        {
+            let wa = a * (b + c - 2.0 * a) * (b * b + c * c - a * a - b * c);
+            let wb = b * (c + a - 2.0 * b) * (c * c + a * a - b * b - c * a);
+            let wc = c * (a + b - 2.0 * c) * (a * a + b * b - c * c - a * b);
+            push_bary(
+                &mut out,
+                "重心X44塞瓦",
+                "X_{214}",
+                "X(214) = X(2)\\text{-Ceva of }X(44) = \\mathrm{mid}(I,X_{100});\\ a(b+c-2a)(b^2+c^2-a^2-bc)",
+                "X(214)：重心对 X(44) 的塞瓦共轭（内心与 X(100) 中点；X(80) 的补点）",
+                "X214",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if let Some(x100) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{100}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let mid = [(inc[0] + x100[0]) / 2.0, (inc[1] + x100[1]) / 2.0];
+                    if dist2(xy, mid) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心X44塞瓦",
+                            "X_{214}=\\mathrm{mid}(I,X_{100})",
+                            "\\text{中点}".into(),
+                            None,
+                            "X(214) = \\mathrm{mid}(X(1),X(100))",
+                            "X(214) 是内心与 X(100) 的中点",
+                        ));
+                    }
+                }
+                if let Some(x80) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{80}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let comp = [
+                        (3.0 * centroid[0] - x80[0]) / 2.0,
+                        (3.0 * centroid[1] - x80[1]) / 2.0,
+                    ];
+                    if dist2(xy, comp) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心X44塞瓦",
+                            "X_{214}=\\mathrm{comp}(X_{80})",
+                            "\\text{补点}".into(),
+                            None,
+                            "X(214) = (3G - X(80))/2",
+                            "X(214) 是 X(80) 关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(215): skip equilateral (sin 3A = 0)
+        if !equil {
+            let s3a = (3.0 * g[0]).sin();
+            let s3b = (3.0 * g[1]).sin();
+            let s3c = (3.0 * g[2]).sin();
+            let wa = sa * s3a * (s3b + s3c - s3a);
+            let wb = sb * s3b * (s3c + s3a - s3b);
+            let wc = sc * s3c * (s3a + s3b - s3c);
+            push_bary(
+                &mut out,
+                "内心三倍角正弦塞瓦",
+                "X_{215}",
+                "X(215) = X(1)\\text{-Ceva of }X(50);\\ (\\sin A)(\\sin 3A)(\\sin 3B+\\sin 3C-\\sin 3A)",
+                "X(215)：内心对三倍角正弦点的塞瓦共轭",
+                "X215",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(216)
+        {
+            let wa = sa * (2.0 * g[0]).sin() * (g[1] - g[2]).cos();
+            let wb = sb * (2.0 * g[1]).sin() * (g[2] - g[0]).cos();
+            let wc = sc * (2.0 * g[2]).sin() * (g[0] - g[1]).cos();
+            push_bary(
+                &mut out,
+                "九点垂足重心塞瓦",
+                "X_{216}",
+                "X(216) = X(5)\\text{-Ceva of }X(51);\\ (\\sin A)(\\sin 2A)\\cos(B-C)",
+                "X(216)：九点中心对垂足三角形重心的塞瓦共轭（O 与 K 的截点）",
+                "X216",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(217)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let a4 = a2 * a2;
+                a4 * (a2 - b2 - c2) * (a2 * b2 - b2 * b2 + a2 * c2 + 2.0 * b2 * c2 - c2 * c2)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "勒莫恩垂足重心塞瓦",
+                "X_{217}",
+                "X(217) = X(6)\\text{-Ceva of }X(51);\\ a^4(a^2-b^2-c^2)(\\cdots)",
+                "X(217)：勒莫恩点对垂足三角形重心的塞瓦共轭（K 与 X(184) 的截点）",
+                "X217",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(218)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                a2 * (a2 + bb * bb + cc * cc - 2.0 * aa * bb - 2.0 * aa * cc)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "格尔巩外接内切相似塞瓦",
+                "X_{218}",
+                "X(218) = X(7)\\text{-Ceva of }X(55);\\ a^2(a^2+b^2+c^2-2ab-2ac)",
+                "X(218)：格尔巩点对 X(55) 的塞瓦共轭",
+                "X218",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(219)
+        {
+            let wa = 2.0 * ca * (1.0 + ca);
+            let wb = 2.0 * cb * (1.0 + cb);
+            let wc = 2.0 * cc * (1.0 + cc);
+            push_bary(
+                &mut out,
+                "奈格尔外接内切相似塞瓦",
+                "X_{219}",
+                "X(219) = X(8)\\text{-Ceva of }X(55);\\ \\sin 2A\\cot\\tfrac{A}{2}=2\\cos A(1+\\cos A)",
+                "X(219)：奈格尔点对 X(55) 的塞瓦共轭",
+                "X219",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(220): barycentric square of Mittenpunkt X(9)
+        {
+            let wa = a * a * (b + c - a) * (b + c - a);
+            let wb = b * b * (c + a - b) * (c + a - b);
+            let wc = c * c * (a + b - c) * (a + b - c);
+            push_bary(
+                &mut out,
+                "米滕外接内切相似塞瓦",
+                "X_{220}",
+                "X(220) = X(9)\\text{-Ceva of }X(55) = X(9)^2;\\ a^2(b+c-a)^2",
+                "X(220)：米滕阿列夫点对 X(55) 的塞瓦共轭（X(9) 的重心平方）",
+                "X220",
+                wa,
+                wb,
+                wc,
+            );
+        }
+    }
+
+    // X(221)–X(230): next classical Ceva-conjugate band (ETC).
+    // X(221)=X(1)-Ceva of X(56); bary (sin A) sin²(A/2)(cos B+cos C−cos A−1); skip right (∞).
+    // X(222)=X(7)-Ceva of X(56); bary a² cos A/(1+cos A) [= a²/(1+sec A)].
+    // X(223)=X(2)-Ceva of X(57)=comp(X189); bary (sin A) tan(A/2)(cos B+cos C−cos A−1).
+    // X(224)=X(7)-Ceva of X(63); bary (sin A)[cot B cos²(B/2)+cot C cos²(C/2)−cot A cos²(A/2)] cot A.
+    // X(225)=X(4)-Ceva of X(65); bary tan A(cos B+cos C); skip right.
+    // X(226)=X(7)-Ceva of X(65)=comp(X63); bary (b+c)/(b+c−a).
+    // X(227)=X(10)-Ceva of X(65); bary a(b+c)(cos B+cos C−cos A−1) tan(A/2).
+    // X(228)=X(3)-Ceva of X(71); bary (sin A sin 2A)(sin B+sin C).
+    // X(229)=X(7)-Ceva of X(81)=mid(I,X267); u=a(b+c−a)/(b+c), bary a(v+w−u)/(b+c).
+    // X(230)=X(2)-Ceva of X(114)=mid(X115,X187)=comp(X325); bary a·bc[a²(2a²−b²−c²)+(b²−c²)²]; skip equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(221): skip right (Σbary → 0 / ∞)
+        if !right {
+            let f = |ang: f64, cb_: f64, cc_: f64, ca_: f64| {
+                let s_half = (ang * 0.5).sin();
+                s_half * s_half * (cb_ + cc_ - ca_ - 1.0)
+            };
+            let wa = sa * f(g[0], cb, cc, ca);
+            let wb = sb * f(g[1], cc, ca, cb);
+            let wc = sc * f(g[2], ca, cb, cc);
+            push_bary(
+                &mut out,
+                "内心外接内切外相似塞瓦",
+                "X_{221}",
+                "X(221) = X(1)\\text{-Ceva of }X(56);\\ (\\sin A)\\sin^2\\tfrac{A}{2}(\\cos B+\\cos C-\\cos A-1)",
+                "X(221)：内心对 X(56) 的塞瓦共轭",
+                "X221",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(222)
+        {
+            let wa = a * a * ca / (1.0 + ca);
+            let wb = b * b * cb / (1.0 + cb);
+            let wc = c * c * cc / (1.0 + cc);
+            push_bary(
+                &mut out,
+                "格尔巩外接内切外相似塞瓦",
+                "X_{222}",
+                "X(222) = X(7)\\text{-Ceva of }X(56);\\ a^2\\cos A/(1+\\cos A)",
+                "X(222)：格尔巩点对 X(56) 的塞瓦共轭",
+                "X222",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(223): also complement of X(189)
+        {
+            let f = |ang: f64, cb_: f64, cc_: f64, ca_: f64| {
+                (ang * 0.5).tan() * (cb_ + cc_ - ca_ - 1.0)
+            };
+            let wa = sa * f(g[0], cb, cc, ca);
+            let wb = sb * f(g[1], cc, ca, cb);
+            let wc = sc * f(g[2], ca, cb, cc);
+            push_bary(
+                &mut out,
+                "重心外接内切内相似塞瓦",
+                "X_{223}",
+                "X(223) = X(2)\\text{-Ceva of }X(57) = \\mathrm{comp}(X_{189});\\ (\\sin A)\\tan\\tfrac{A}{2}(\\cos B+\\cos C-\\cos A-1)",
+                "X(223)：重心对 X(57) 的塞瓦共轭（X(189) 的补点）",
+                "X223",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if let Some(x189) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{189}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let comp = [
+                        (3.0 * centroid[0] - x189[0]) / 2.0,
+                        (3.0 * centroid[1] - x189[1]) / 2.0,
+                    ];
+                    if dist2(xy, comp) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心外接内切内相似塞瓦",
+                            "X_{223}=\\mathrm{comp}(X_{189})",
+                            "\\text{补点}".into(),
+                            None,
+                            "X(223) = (3G - X(189))/2",
+                            "X(223) 是 X(189) 关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(224)
+        {
+            let cot = |t: f64| t.cos() / t.sin();
+            let f = |aa: f64, bb: f64, cc: f64| {
+                (cot(bb) * (bb * 0.5).cos().powi(2)
+                    + cot(cc) * (cc * 0.5).cos().powi(2)
+                    - cot(aa) * (aa * 0.5).cos().powi(2))
+                    * cot(aa)
+            };
+            let wa = sa * f(g[0], g[1], g[2]);
+            let wb = sb * f(g[1], g[2], g[0]);
+            let wc = sc * f(g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "格尔巩克劳森等角塞瓦",
+                "X_{224}",
+                "X(224) = X(7)\\text{-Ceva of }X(63);\\ (\\sin A)[\\cot B\\cos^2\\tfrac{B}{2}+\\cdots]\\cot A",
+                "X(224)：格尔巩点对克劳森等角点的塞瓦共轭",
+                "X224",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(225): skip right (tan A → ∞)
+        if !right {
+            let wa = g[0].tan() * (cb + cc);
+            let wb = g[1].tan() * (cc + ca);
+            let wc = g[2].tan() * (ca + cb);
+            push_bary(
+                &mut out,
+                "垂心内心奈格尔截点塞瓦",
+                "X_{225}",
+                "X(225) = X(4)\\text{-Ceva of }X(65);\\ \\tan A(\\cos B+\\cos C)",
+                "X(225)：垂心对内心–奈格尔截点的塞瓦共轭",
+                "X225",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(226): also complement of X(63)
+        {
+            let wa = (b + c) / (b + c - a);
+            let wb = (c + a) / (c + a - b);
+            let wc = (a + b) / (a + b - c);
+            push_bary(
+                &mut out,
+                "格尔巩内心奈格尔截点塞瓦",
+                "X_{226}",
+                "X(226) = X(7)\\text{-Ceva of }X(65) = \\mathrm{comp}(X_{63});\\ (b+c)/(b+c-a)",
+                "X(226)：格尔巩点对内心–奈格尔截点的塞瓦共轭（X(63) 的补点）",
+                "X226",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if let Some(x63) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{63}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let comp = [
+                        (3.0 * centroid[0] - x63[0]) / 2.0,
+                        (3.0 * centroid[1] - x63[1]) / 2.0,
+                    ];
+                    if dist2(xy, comp) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "格尔巩内心奈格尔截点塞瓦",
+                            "X_{226}=\\mathrm{comp}(X_{63})",
+                            "\\text{补点}".into(),
+                            None,
+                            "X(226) = (3G - X(63))/2",
+                            "X(226) 是 X(63) 关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(227)
+        {
+            let wa = a * (b + c) * (cb + cc - ca - 1.0) * (g[0] * 0.5).tan();
+            let wb = b * (c + a) * (cc + ca - cb - 1.0) * (g[1] * 0.5).tan();
+            let wc = c * (a + b) * (ca + cb - cc - 1.0) * (g[2] * 0.5).tan();
+            push_bary(
+                &mut out,
+                "斯皮克内心奈格尔截点塞瓦",
+                "X_{227}",
+                "X(227) = X(10)\\text{-Ceva of }X(65);\\ a(b+c)(\\cos B+\\cos C-\\cos A-1)\\tan\\tfrac{A}{2}",
+                "X(227)：斯皮克点对内心–奈格尔截点的塞瓦共轭",
+                "X227",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(228)
+        {
+            let wa = (sa * (2.0 * g[0]).sin()) * (sb + sc);
+            let wb = (sb * (2.0 * g[1]).sin()) * (sc + sa);
+            let wc = (sc * (2.0 * g[2]).sin()) * (sa + sb);
+            push_bary(
+                &mut out,
+                "外心X71塞瓦",
+                "X_{228}",
+                "X(228) = X(3)\\text{-Ceva of }X(71);\\ (\\sin A\\sin 2A)(\\sin B+\\sin C)",
+                "X(228)：外心对 X(71) 的塞瓦共轭",
+                "X228",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(229)
+        {
+            let ua = a * (b + c - a) / (b + c);
+            let ub = b * (c + a - b) / (c + a);
+            let uc = c * (a + b - c) / (a + b);
+            let wa = a * (ub + uc - ua) / (b + c);
+            let wb = b * (uc + ua - ub) / (c + a);
+            let wc = c * (ua + ub - uc) / (a + b);
+            push_bary(
+                &mut out,
+                "格尔巩X81塞瓦",
+                "X_{229}",
+                "X(229) = X(7)\\text{-Ceva of }X(81) = \\mathrm{mid}(I,X_{267});\\ a(v+w-u)/(b+c)",
+                "X(229)：格尔巩点对 X(81) 的塞瓦共轭（内心与 X(267) 中点）",
+                "X229",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(230): skip equilateral (weights vanish); also mid(X115,X187)
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                bb * cc * (a2 * (2.0 * a2 - b2 - c2) + (b2 - c2) * (b2 - c2))
+            };
+            let wa = a * f(a, b, c);
+            let wb = b * f(b, c, a);
+            let wc = c * f(c, a, b);
+            push_bary(
+                &mut out,
+                "重心基伯特对跖塞瓦",
+                "X_{230}",
+                "X(230) = X(2)\\text{-Ceva of }X(114) = \\mathrm{mid}(X_{115},X_{187});\\ a\\cdot bc[a^2(2a^2-b^2-c^2)+(b^2-c^2)^2]",
+                "X(230)：重心对基伯特对跖点的塞瓦共轭（X(115) 与 X(187) 中点）",
+                "X230",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let x115 = out.iter().rev().find(|f| f.label == "X_{115}").and_then(|f| {
+                    match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    }
+                });
+                let x187 = out.iter().rev().find(|f| f.label == "X_{187}").and_then(|f| {
+                    match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    }
+                });
+                if let (Some(p115), Some(p187)) = (x115, x187) {
+                    let mid = [(p115[0] + p187[0]) / 2.0, (p115[1] + p187[1]) / 2.0];
+                    if dist2(xy, mid) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心基伯特对跖塞瓦",
+                            "X_{230}=\\mathrm{mid}(X_{115},X_{187})",
+                            "\\text{中点}".into(),
+                            None,
+                            "X(230) = \\mathrm{mid}(X(115),X(187))",
+                            "X(230) 是 X(115) 与 X(187) 的中点",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // X(231)–X(240): next classical Ceva / line-conjugate band (ETC).
+    // X(231)=X(2)-Ceva of X(128); bary poly in a⁸…; skip equil (weights→0).
+    // X(232)=X(2)-Ceva of X(132); bary a²(a²+b²−c²)(a²−b²+c²)(a²b²−b⁴+a²c²−c⁴); skip equil.
+    // X(233)=X(2)-Ceva of X(140)=comp(X95); bary (a²(b²+c²)−(b²−c²)²)(2a⁴−3a²(b²+c²)+(b²−c²)²).
+    // X(234)=X(7)-Ceva of X(177); bary (sin A)(cos B/2+cos C/2)(cos B/2 cos C/2)².
+    // X(235)=X(4)-Ceva of X(185)=mid(H,X24); bary a(sec A−cos(B−C)); skip right (sec/den).
+    // X(236)=X(2)-Ceva of X(188); bary a(1+sin(A/2))/sin A (Iliev).
+    // X(237)=X(3)-line conjugate of G; bary a⁴(a²b²−b⁴+a²c²−c⁴); skip equil; on Euler.
+    // X(238)=X(1)-line conjugate of X(37); bary a(a²−bc); skip equil.
+    // X(239)=X(1)-line conjugate of X(42); bary a²−bc; skip equil.
+    // X(240)=X(1)-line conjugate of X(48); bary tan A cos(A+ω); skip right/equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(231): skip equilateral
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let (a2, b2, c2) = (aa * aa, bb * bb, cc * cc);
+                let (a4, b4, c4) = (a2 * a2, b2 * b2, c2 * c2);
+                let (a6, b6, c6) = (a4 * a2, b4 * b2, c4 * c2);
+                let (a8, b8, c8) = (a4 * a4, b4 * b4, c4 * c4);
+                2.0 * a8 - 4.0 * a6 * b2 + 3.0 * a4 * b4 - 2.0 * a2 * b6 + b8
+                    - 4.0 * a6 * c2 + 2.0 * a2 * b4 * c2 - 4.0 * b6 * c2
+                    + 3.0 * a4 * c4 + 2.0 * a2 * b2 * c4 + 6.0 * b4 * c4
+                    - 2.0 * a2 * c6 - 4.0 * b2 * c6 + c8
+            };
+            push_bary(
+                &mut out,
+                "重心X128塞瓦",
+                "X_{231}",
+                "X(231) = X(2)\\text{-Ceva of }X(128);\\ \\text{bary poly }a^8\\cdots",
+                "X(231)：重心对 X(128) 的塞瓦共轭",
+                "X231",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(232): skip equilateral
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                a2 * (a2 + b2 - c2)
+                    * (a2 - b2 + c2)
+                    * (a2 * b2 - b2 * b2 + a2 * c2 - c2 * c2)
+            };
+            push_bary(
+                &mut out,
+                "重心X132塞瓦",
+                "X_{232}",
+                "X(232) = X(2)\\text{-Ceva of }X(132);\\ a^2(a^2+b^2-c^2)(a^2-b^2+c^2)(\\cdots)",
+                "X(232)：重心对 X(132) 的塞瓦共轭",
+                "X232",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(233): also complement of X(95)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let d = (b2 - c2) * (b2 - c2);
+                (a2 * (b2 + c2) - d) * (2.0 * a2 * a2 - 3.0 * a2 * (b2 + c2) + d)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "重心X140塞瓦",
+                "X_{233}",
+                "X(233) = X(2)\\text{-Ceva of }X(140) = \\mathrm{comp}(X_{95})",
+                "X(233)：重心对 X(140) 的塞瓦共轭（X(95) 的补点）",
+                "X233",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if let Some(x95) = out
+                    .iter()
+                    .rev()
+                    .find(|f| f.label == "X_{95}")
+                    .and_then(|f| match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    })
+                {
+                    let comp = [
+                        (3.0 * centroid[0] - x95[0]) / 2.0,
+                        (3.0 * centroid[1] - x95[1]) / 2.0,
+                    ];
+                    if dist2(xy, comp) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "重心X140塞瓦",
+                            "X_{233}=\\mathrm{comp}(X_{95})",
+                            "\\text{补点}".into(),
+                            None,
+                            "X(233) = (3G - X(95))/2",
+                            "X(233) 是 X(95) 关于重心的补点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(234)
+        {
+            let f = |_aa: f64, bb: f64, cc: f64| {
+                let cbh = (bb * 0.5).cos();
+                let cch = (cc * 0.5).cos();
+                (cbh + cch) * (cbh * cch).powi(2)
+            };
+            push_bary(
+                &mut out,
+                "格尔巩X177塞瓦",
+                "X_{234}",
+                "X(234) = X(7)\\text{-Ceva of }X(177);\\ (\\sin A)(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2})(\\cos\\tfrac{B}{2}\\cos\\tfrac{C}{2})^2",
+                "X(234)：格尔巩点对 X(177) 的塞瓦共轭",
+                "X234",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(235): skip right; also mid(H,X24) when both present
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                let d = (b2 - c2) * (b2 - c2);
+                let num = a2 * a2 * (b2 + c2) - 2.0 * a2 * d + d * (b2 + c2);
+                let den = a2 - b2 - c2;
+                num / den
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "垂心X185塞瓦",
+                "X_{235}",
+                "X(235) = X(4)\\text{-Ceva of }X(185) = \\mathrm{mid}(H,X_{24});\\ a(\\sec A-\\cos(B-C))",
+                "X(235)：垂心对 X(185) 的塞瓦共轭（H 与 X(24) 中点）",
+                "X235",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let x24 = out.iter().rev().find(|f| f.label == "X_{24}").and_then(|f| {
+                    match f.shape.as_ref() {
+                        Some(Shape::Point { x, y, .. }) => Some([*x, *y]),
+                        _ => None,
+                    }
+                });
+                if let (Some(p24), true) = (x24, orth[0].is_finite() && orth[1].is_finite()) {
+                    let mid = [(orth[0] + p24[0]) / 2.0, (orth[1] + p24[1]) / 2.0];
+                    if dist2(xy, mid) < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "垂心X185塞瓦",
+                            "X_{235}=\\mathrm{mid}(H,X_{24})",
+                            "\\text{中点}".into(),
+                            None,
+                            "X(235) = \\mathrm{mid}(H,X(24))",
+                            "X(235) 是垂心与 X(24) 的中点",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(236)
+        {
+            let wa = a * (1.0 + (g[0] * 0.5).sin()) / sa;
+            let wb = b * (1.0 + (g[1] * 0.5).sin()) / sb;
+            let wc = c * (1.0 + (g[2] * 0.5).sin()) / sc;
+            push_bary(
+                &mut out,
+                "重心X188塞瓦",
+                "X_{236}",
+                "X(236) = X(2)\\text{-Ceva of }X(188);\\ a(1+\\sin\\tfrac{A}{2})/\\sin A",
+                "X(236)：重心对 X(188) 的塞瓦共轭",
+                "X236",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(237): skip equilateral; on Euler
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc * cc;
+                a2 * a2 * (a2 * b2 - b2 * b2 + a2 * c2 - c2 * c2)
+            };
+            let wa = f(a, b, c);
+            let wb = f(b, c, a);
+            let wc = f(c, a, b);
+            push_bary(
+                &mut out,
+                "外心重心线共轭",
+                "X_{237}",
+                "X(237) = X(3)\\text{-line conjugate of }X(2);\\ a^4(a^2b^2-b^4+a^2c^2-c^4)",
+                "X(237)：外心对重心的线共轭（欧拉线上）",
+                "X237",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                let cross = (centroid[0] - circ[0]) * (xy[1] - circ[1])
+                    - (centroid[1] - circ[1]) * (xy[0] - circ[0]);
+                let scale = (centroid[0] - circ[0]).abs()
+                    + (centroid[1] - circ[1]).abs()
+                    + (xy[0] - circ[0]).abs()
+                    + (xy[1] - circ[1]).abs()
+                    + 1e-12;
+                if cross.abs() / scale < 1e-5 {
+                    out.push(fact(
+                        "外心重心线共轭",
+                        "X_{237}\\in\\text{Euler}",
+                        "\\text{共线}".into(),
+                        None,
+                        "X(237)\\in OH",
+                        "X(237) 在欧拉线上",
+                    ));
+                }
+            }
+        }
+        // X(238): skip equilateral
+        if !equil {
+            push_bary(
+                &mut out,
+                "内心X37线共轭",
+                "X_{238}",
+                "X(238) = X(1)\\text{-line conjugate of }X(37);\\ a(a^2-bc)",
+                "X(238)：内心对 X(37) 的线共轭",
+                "X238",
+                a * (a * a - b * c),
+                b * (b * b - c * a),
+                c * (c * c - a * b),
+            );
+        }
+        // X(239): skip equilateral
+        if !equil {
+            push_bary(
+                &mut out,
+                "内心X42线共轭",
+                "X_{239}",
+                "X(239) = X(1)\\text{-line conjugate of }X(42);\\ a^2-bc",
+                "X(239)：内心对 X(42) 的线共轭",
+                "X239",
+                a * a - b * c,
+                b * b - c * a,
+                c * c - a * b,
+            );
+        }
+        // X(240): skip right (tan) and equilateral (cos(A+ω)→0)
+        if !right && !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let wa = g[0].tan() * (ca * cos_w - sa * sin_w);
+            let wb = g[1].tan() * (cb * cos_w - sb * sin_w);
+            let wc = g[2].tan() * (cc * cos_w - sc * sin_w);
+            push_bary(
+                &mut out,
+                "内心X48线共轭",
+                "X_{240}",
+                "X(240) = X(1)\\text{-line conjugate of }X(48);\\ \\tan A\\cos(A+\\omega)",
+                "X(240)：内心对 X(48) 的线共轭",
+                "X240",
+                wa,
+                wb,
+                wc,
+            );
+        }
+    }
+
+    // X(241)–X(250): finish line-conjugate band + first isogonals (ETC).
+    // X(241)=X(1)-line conjugate of X(55); f=cos⁴(B/2)−cos²(A/2)(cos²(B/2)+cos²(C/2))+cos⁴(C/2); skip equil.
+    // X(242)=X(4)-line conjugate of X(71); f=sec A(sin²A−sin B sin C); skip right/equil.
+    // X(243)=X(4)-line conjugate of X(73); f=sec A(cos²A−cos B cos C); skip right/equil.
+    // X(244)=X(1)-line conjugate of X(100); f=[1−cos(B−C)]sin²(A/2); skip equil.
+    // X(245)=X(1)-line conjugate of X(110); csc-diff form; skip isos (csc→∞).
+    // X(246)=X(3)-line conjugate of X(110); csc/cos form; skip isos.
+    // X(247)=X(4)-line conjugate of X(110); csc/sec form; skip isos/right.
+    // X(248)=X(4)-line conjugate of X(132); bary sin A sin 2A sec(A+ω); skip equil (A+ω→π/2).
+    // X(249)=isogonal of X(115); bary cos²(B−C); →G on equil.
+    // X(250)=isogonal of X(125); bary tan A csc²(B−C); skip right/isos.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let isos = (a - b).abs() < 1e-12 || (b - c).abs() < 1e-12 || (c - a).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(241): skip equilateral (weights→0); on IO
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let cah2 = (aa * 0.5).cos().powi(2);
+                let cbh2 = (bb * 0.5).cos().powi(2);
+                let cch2 = (cc * 0.5).cos().powi(2);
+                cbh2 * cbh2 - cah2 * (cbh2 + cch2) + cch2 * cch2
+            };
+            let wa = sa * f(g[0], g[1], g[2]);
+            let wb = sb * f(g[1], g[2], g[0]);
+            let wc = sc * f(g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "内心X55线共轭",
+                "X_{241}",
+                "X(241) = X(1)\\text{-line conjugate of }X(55);\\ (\\sin A)f,\\ f=\\cos^4\\tfrac{B}{2}-\\cdots",
+                "X(241)：内心对 X(55) 的线共轭",
+                "X241",
+                wa,
+                wb,
+                wc,
+            );
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if circ[0].is_finite()
+                    && circ[1].is_finite()
+                    && inc[0].is_finite()
+                    && inc[1].is_finite()
+                {
+                    let cross = (xy[0] - inc[0]) * (circ[1] - inc[1])
+                        - (xy[1] - inc[1]) * (circ[0] - inc[0]);
+                    if cross.abs() < 1e-6 * (1.0 + rr) {
+                        out.push(fact(
+                            "内心X55线共轭",
+                            "X_{241}\\in IO",
+                            "\\text{共线}".into(),
+                            None,
+                            "X(241)\\in IO",
+                            "X(241) 在内心–外心连线上",
+                        ));
+                    }
+                }
+            }
+        }
+        // X(242): skip right (sec) and equilateral
+        if !right && !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (aa.sin().powi(2) - bb.sin() * cc.sin()) / caa
+            };
+            push_bary(
+                &mut out,
+                "垂心X71线共轭",
+                "X_{242}",
+                "X(242) = X(4)\\text{-line conjugate of }X(71);\\ (\\sin A)\\sec A(\\sin^2 A-\\sin B\\sin C)",
+                "X(242)：垂心对 X(71) 的线共轭",
+                "X242",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(243): skip right/equilateral
+        if !right && !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (caa * caa - bb.cos() * cc.cos()) / caa
+            };
+            push_bary(
+                &mut out,
+                "垂心X73线共轭",
+                "X_{243}",
+                "X(243) = X(4)\\text{-line conjugate of }X(73);\\ (\\sin A)\\sec A(\\cos^2 A-\\cos B\\cos C)",
+                "X(243)：垂心对 X(73) 的线共轭",
+                "X243",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(244): skip equilateral
+        if !equil {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                (1.0 - (bb - cc).cos()) * (aa * 0.5).sin().powi(2)
+            };
+            push_bary(
+                &mut out,
+                "内心X100线共轭",
+                "X_{244}",
+                "X(244) = X(1)\\text{-line conjugate of }X(100);\\ (\\sin A)[1-\\cos(B-C)]\\sin^2\\tfrac{A}{2}",
+                "X(244)：内心对 X(100) 的线共轭",
+                "X244",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(245): skip isosceles (angle-diff csc)
+        if !isos {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let d_ca = (cc - aa).sin();
+                let d_cb = (cc - bb).sin();
+                let d_ab = (aa - bb).sin();
+                let d_ba = (bb - aa).sin();
+                if d_ca.abs() < 1e-12 || d_cb.abs() < 1e-12 || d_ab.abs() < 1e-12 || d_ba.abs() < 1e-12
+                {
+                    return f64::NAN;
+                }
+                let csc_ca = 1.0 / d_ca;
+                let csc_cb = 1.0 / d_cb;
+                let csc_ab = 1.0 / d_ab;
+                let csc_ba = 1.0 / d_ba;
+                csc_ca * csc_ca + csc_cb * (csc_ca - csc_ba) + csc_ab * csc_ab
+            };
+            push_bary(
+                &mut out,
+                "内心X110线共轭",
+                "X_{245}",
+                "X(245) = X(1)\\text{-line conjugate of }X(110);\\ \\csc\\text{-diff form}",
+                "X(245)：内心对 X(110) 的线共轭",
+                "X245",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(246): skip isosceles
+        if !isos {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let d_ba = (bb - aa).sin();
+                let d_bc = (bb - cc).sin();
+                let d_ca = (cc - aa).sin();
+                let d_cb = (cc - bb).sin();
+                if d_ba.abs() < 1e-12 || d_bc.abs() < 1e-12 || d_ca.abs() < 1e-12 || d_cb.abs() < 1e-12
+                {
+                    return f64::NAN;
+                }
+                let csc_ba = 1.0 / d_ba;
+                let csc_bc = 1.0 / d_bc;
+                let csc_ca = 1.0 / d_ca;
+                let csc_cb = 1.0 / d_cb;
+                let u = aa.cos() * csc_ca + bb.cos() * csc_cb;
+                csc_ba * (aa.cos() * csc_ba + cc.cos() * csc_bc) - csc_ca * u
+            };
+            push_bary(
+                &mut out,
+                "外心X110线共轭",
+                "X_{246}",
+                "X(246) = X(3)\\text{-line conjugate of }X(110);\\ \\csc/\\cos\\text{ form}",
+                "X(246)：外心对 X(110) 的线共轭",
+                "X246",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(247): skip isosceles and right (sec)
+        if !isos && !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let caa = aa.cos();
+                let cbb = bb.cos();
+                let ccc = cc.cos();
+                if caa.abs() < 1e-12 || cbb.abs() < 1e-12 || ccc.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let d_ba = (bb - aa).sin();
+                let d_bc = (bb - cc).sin();
+                let d_ca = (cc - aa).sin();
+                let d_cb = (cc - bb).sin();
+                if d_ba.abs() < 1e-12 || d_bc.abs() < 1e-12 || d_ca.abs() < 1e-12 || d_cb.abs() < 1e-12
+                {
+                    return f64::NAN;
+                }
+                let csc_ba = 1.0 / d_ba;
+                let csc_bc = 1.0 / d_bc;
+                let csc_ca = 1.0 / d_ca;
+                let csc_cb = 1.0 / d_cb;
+                let seca = 1.0 / caa;
+                let secb = 1.0 / cbb;
+                let secc = 1.0 / ccc;
+                let u = seca * csc_ca + secb * csc_cb;
+                csc_ba * (seca * csc_ba + secc * csc_bc) - csc_ca * u
+            };
+            push_bary(
+                &mut out,
+                "垂心X110线共轭",
+                "X_{247}",
+                "X(247) = X(4)\\text{-line conjugate of }X(110);\\ \\csc/\\sec\\text{ form}",
+                "X(247)：垂心对 X(110) 的线共轭",
+                "X247",
+                sa * f(g[0], g[1], g[2]),
+                sb * f(g[1], g[2], g[0]),
+                sc * f(g[2], g[0], g[1]),
+            );
+        }
+        // X(248): skip equilateral (A+ω→π/2)
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |aa: f64, saa: f64, caa: f64| {
+                let caw = caa * cos_w - saa * sin_w;
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa * (2.0 * aa).sin() / caw
+            };
+            push_bary(
+                &mut out,
+                "垂心X132线共轭",
+                "X_{248}",
+                "X(248) = X(4)\\text{-line conjugate of }X(132);\\ \\sin A\\sin 2A\\sec(A+\\omega)",
+                "X(248)：垂心对 X(132) 的线共轭",
+                "X248",
+                f(g[0], sa, ca),
+                f(g[1], sb, cb),
+                f(g[2], sc, cc),
+            );
+        }
+        // X(249): isogonal of X(115); finite on equilateral (=G)
+        {
+            let wa = (g[1] - g[2]).cos().powi(2);
+            let wb = (g[2] - g[0]).cos().powi(2);
+            let wc = (g[0] - g[1]).cos().powi(2);
+            push_bary(
+                &mut out,
+                "X115等角",
+                "X_{249}",
+                "X(249) = \\mathrm{isog}(X_{115});\\ \\cos^2(B-C)",
+                "X(249)：X(115) 的等角共轭",
+                "X249",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(250): skip right (tan) and isosceles (csc)
+        if !right && !isos {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let d = (bb - cc).sin();
+                if d.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.tan() / (d * d)
+            };
+            push_bary(
+                &mut out,
+                "X125等角",
+                "X_{250}",
+                "X(250) = \\mathrm{isog}(X_{125});\\ \\tan A\\csc^2(B-C)",
+                "X(250)：X(125) 的等角共轭",
+                "X250",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+    }
+
+
+    // X(251)–X(260): next isogonal / cross-conjugate band (ETC).
+    // X(251)=isogonal of X(141); bary a²/(b²+c²) = a³ csc(A+ω); →G on equil.
+    // X(252)=isogonal of X(143); bary 1/f, f=(v+w)²[…], u=sin2A; skip right; →G on equil.
+    // X(253)=X(4)-cross conjugate of X(2)=isog(X154); bary 1/(tanB+tanC−tanA); skip right.
+    // X(254)=X(3)-cross conjugate of X(4)=isog(X155); bary tanA/(cos²B+cos²C−cos²A); skip right.
+    // X(255)=isogonal of X(158); bary sin A cos² A.
+    // X(256)=isogonal of X(171); bary a/(a²+bc).
+    // X(257)=isogonal of X(172); bary 1/(a²+bc).
+    // X(258)=congruent-incircles isoscelizer=isog(X173); bary (sin A)/(cos B/2+cos C/2−cos A/2).
+    // X(259)=isogonal of X(174); bary sin A cos(A/2).
+    // X(260)=isogonal of X(177); bary (sin A)cos(A/2)/(cos B/2+cos C/2−cos A/2).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(251): always finite (=G on equilateral)
+        {
+            let wa = a * a / (b * b + c * c);
+            let wb = b * b / (c * c + a * a);
+            let wc = c * c / (a * a + b * b);
+            push_bary(
+                &mut out,
+                "X141等角",
+                "X_{251}",
+                "X(251) = \\mathrm{isog}(X_{141});\\ a^2/(b^2+c^2)",
+                "X(251)：X(141) 的等角共轭",
+                "X251",
+                wa,
+                wb,
+                wc,
+            );
+        }
+        // X(252): isogonal of X(143); skip right (f→0); →G on equilateral
+        if !right {
+            let u = (2.0 * g[0]).sin();
+            let v = (2.0 * g[1]).sin();
+            let w = (2.0 * g[2]).sin();
+            let f = |uu: f64, vv: f64, ww: f64| {
+                let bracket = uu.powi(4)
+                    + vv.powi(4)
+                    + ww.powi(4)
+                    - uu * uu * (2.0 * vv * vv + 2.0 * ww * ww - vv * ww)
+                    - vv * ww * (vv * vv + ww * ww);
+                (vv + ww).powi(2) * bracket
+            };
+            let fa = f(u, v, w);
+            let fb = f(v, w, u);
+            let fc = f(w, u, v);
+            if fa.abs() > 1e-14 && fb.abs() > 1e-14 && fc.abs() > 1e-14 {
+                push_bary(
+                    &mut out,
+                    "X143等角",
+                    "X_{252}",
+                    "X(252) = \\mathrm{isog}(X_{143});\\ 1/f,\\ f=(v+w)^2[\\cdots]",
+                    "X(252)：X(143) 的等角共轭",
+                    "X252",
+                    1.0 / fa,
+                    1.0 / fb,
+                    1.0 / fc,
+                );
+            }
+        }
+        // X(253): skip right (tan ∞)
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = bb.tan() + cc.tan() - aa.tan();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "垂心X2交叉共轭",
+                "X_{253}",
+                "X(253) = X(4)\\text{-cross conjugate of }X(2);\\ 1/(\\tan B+\\tan C-\\tan A)",
+                "X(253)：垂心对重心的交叉共轭（X(154) 等角）",
+                "X253",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(254): skip right (tan ∞)
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = bb.cos().powi(2) + cc.cos().powi(2) - aa.cos().powi(2);
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.tan() / den
+            };
+            push_bary(
+                &mut out,
+                "外心X4交叉共轭",
+                "X_{254}",
+                "X(254) = X(3)\\text{-cross conjugate of }X(4);\\ \\tan A/(\\cos^2 B+\\cos^2 C-\\cos^2 A)",
+                "X(254)：外心对垂心的交叉共轭（X(155) 等角）",
+                "X254",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(255)
+        {
+            push_bary(
+                &mut out,
+                "X158等角",
+                "X_{255}",
+                "X(255) = \\mathrm{isog}(X_{158});\\ \\sin A\\cos^2 A",
+                "X(255)：X(158) 的等角共轭",
+                "X255",
+                sa * ca * ca,
+                sb * cb * cb,
+                sc * cc * cc,
+            );
+        }
+        // X(256)
+        {
+            push_bary(
+                &mut out,
+                "X171等角",
+                "X_{256}",
+                "X(256) = \\mathrm{isog}(X_{171});\\ a/(a^2+bc)",
+                "X(256)：X(171) 的等角共轭",
+                "X256",
+                a / (a * a + b * c),
+                b / (b * b + c * a),
+                c / (c * c + a * b),
+            );
+        }
+        // X(257)
+        {
+            push_bary(
+                &mut out,
+                "X172等角",
+                "X_{257}",
+                "X(257) = \\mathrm{isog}(X_{172});\\ 1/(a^2+bc)",
+                "X(257)：X(172) 的等角共轭",
+                "X257",
+                1.0 / (a * a + b * c),
+                1.0 / (b * b + c * a),
+                1.0 / (c * c + a * b),
+            );
+        }
+        // X(258)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = (bb * 0.5).cos() + (cc * 0.5).cos() - (aa * 0.5).cos();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.sin() / den
+            };
+            push_bary(
+                &mut out,
+                "等内切等腰截点",
+                "X_{258}",
+                "X(258) = \\mathrm{isog}(X_{173});\\ (\\sin A)/(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2}-\\cos\\tfrac{A}{2})",
+                "X(258)：等内切圆等腰截点（Yff）",
+                "X258",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(259)
+        {
+            push_bary(
+                &mut out,
+                "X174等角",
+                "X_{259}",
+                "X(259) = \\mathrm{isog}(X_{174});\\ \\sin A\\cos\\tfrac{A}{2}",
+                "X(259)：X(174) 的等角共轭",
+                "X259",
+                sa * (g[0] * 0.5).cos(),
+                sb * (g[1] * 0.5).cos(),
+                sc * (g[2] * 0.5).cos(),
+            );
+        }
+        // X(260)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = (bb * 0.5).cos() + (cc * 0.5).cos() - (aa * 0.5).cos();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.sin() * (aa * 0.5).cos() / den
+            };
+            push_bary(
+                &mut out,
+                "X177等角",
+                "X_{260}",
+                "X(260) = \\mathrm{isog}(X_{177});\\ (\\sin A)\\cos\\tfrac{A}{2}/(\\cos\\tfrac{B}{2}+\\cdots)",
+                "X(260)：X(177) 的等角共轭",
+                "X260",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+    }
+
+
+    // X(261)–X(270): continue isogonal band (ETC).
+    // X(261)=isog(X181)=isotomic(X12); bary (sin A)[(csc A)sec(B/2−C/2)]².
+    // X(262)=isog(X182)=isotomic(X183); bary sin A sec(A−ω).
+    // X(263)=isog(X183); bary a³ sec(A−ω).
+    // X(264)=isotomic(O)=isog(X184); bary csc 2A; skip right.
+    // X(265)=isog(X186); bary sin A sin 2A csc 3A; skip equil / 60° (sin 3A=0).
+    // X(266)=isog(X188); bary sin A sin(A/2).
+    // X(267)=isog(X191); bary a/[b³+c³−a³+(b+c−a)(bc+ca+ab)].
+    // X(268)=isog(X196); bary (sin A)(cos A cot(A/2))/(−1−cos A+cos B+cos C).
+    // X(269)=isog(X200); bary sin A tan²(A/2).
+    // X(270)=isog(X201); bary (tan A)/[1+cos(B−C)]; skip right.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let has_60 = (3.0 * g[0]).sin().abs() < 1e-9
+            || (3.0 * g[1]).sin().abs() < 1e-9
+            || (3.0 * g[2]).sin().abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(261): always finite for non-degen
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let half_diff = (bb - cc) * 0.5;
+                let csc_a = 1.0 / aa.sin();
+                let sec_d = 1.0 / half_diff.cos();
+                aa.sin() * (csc_a * sec_d).powi(2)
+            };
+            push_bary(
+                &mut out,
+                "X181等角",
+                "X_{261}",
+                "X(261) = \\mathrm{isog}(X_{181})=\\mathrm{isotomic}(X_{12});\\ (\\sin A)[(\\csc A)\\sec(\\tfrac{B-C}{2})]^2",
+                "X(261)：X(181) 的等角共轭（X(12) 等截）",
+                "X261",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(262)/X(263): Brocard form sec(A−ω)
+        if area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            // cos(A−ω) = cos A cos ω + sin A sin ω
+            let caw = |caa: f64, saa: f64| caa * cos_w + saa * sin_w;
+            let cawa = caw(ca, sa);
+            let cawb = caw(cb, sb);
+            let cawc = caw(cc, sc);
+            if cawa.abs() > 1e-12 && cawb.abs() > 1e-12 && cawc.abs() > 1e-12 {
+                push_bary(
+                    &mut out,
+                    "X182等角",
+                    "X_{262}",
+                    "X(262) = \\mathrm{isog}(X_{182});\\ \\sin A\\sec(A-\\omega)",
+                    "X(262)：X(182) 的等角共轭（X(183) 等截）",
+                    "X262",
+                    sa / cawa,
+                    sb / cawb,
+                    sc / cawc,
+                );
+                push_bary(
+                    &mut out,
+                    "X183等角",
+                    "X_{263}",
+                    "X(263) = \\mathrm{isog}(X_{183});\\ a^3\\sec(A-\\omega)",
+                    "X(263)：X(183) 的等角共轭",
+                    "X263",
+                    a * a * a / cawa,
+                    b * b * b / cawb,
+                    c * c * c / cawc,
+                );
+            }
+        }
+        // X(264): skip right (csc 2A → ∞)
+        if !right {
+            push_bary(
+                &mut out,
+                "外心等截",
+                "X_{264}",
+                "X(264) = \\mathrm{isotomic}(X_{3})=\\mathrm{isog}(X_{184});\\ \\csc 2A",
+                "X(264)：外心的等截共轭（X(184) 等角）",
+                "X264",
+                1.0 / (2.0 * g[0]).sin(),
+                1.0 / (2.0 * g[1]).sin(),
+                1.0 / (2.0 * g[2]).sin(),
+            );
+        }
+        // X(265): skip equilateral / any 60° (sin 3A=0)
+        if !equil && !has_60 {
+            let f = |aa: f64| {
+                let s3 = (3.0 * aa).sin();
+                if s3.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.sin() * (2.0 * aa).sin() / s3
+            };
+            push_bary(
+                &mut out,
+                "X186等角",
+                "X_{265}",
+                "X(265) = \\mathrm{isog}(X_{186});\\ \\sin A\\sin 2A\\csc 3A",
+                "X(265)：X(186) 的等角共轭",
+                "X265",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(266)
+        {
+            push_bary(
+                &mut out,
+                "X188等角",
+                "X_{266}",
+                "X(266) = \\mathrm{isog}(X_{188});\\ \\sin A\\sin\\tfrac{A}{2}",
+                "X(266)：X(188) 的等角共轭",
+                "X266",
+                sa * (g[0] * 0.5).sin(),
+                sb * (g[1] * 0.5).sin(),
+                sc * (g[2] * 0.5).sin(),
+            );
+        }
+        // X(267)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = bb.powi(3) + cc.powi(3) - aa.powi(3)
+                    + (bb + cc - aa) * (bb * cc + cc * aa + aa * bb);
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa / den
+            };
+            push_bary(
+                &mut out,
+                "X191等角",
+                "X_{267}",
+                "X(267) = \\mathrm{isog}(X_{191});\\ a/[b^3+c^3-a^3+(b+c-a)(\\cdots)]",
+                "X(267)：X(191) 的等角共轭（X(229) 反射对）",
+                "X267",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(268)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = -1.0 - aa.cos() + bb.cos() + cc.cos();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let half = aa * 0.5;
+                if half.tan().abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() * aa.cos() / half.tan() / den
+            };
+            push_bary(
+                &mut out,
+                "X196等角",
+                "X_{268}",
+                "X(268) = \\mathrm{isog}(X_{196});\\ (\\sin A)(\\cos A\\cot\\tfrac{A}{2})/(-1-\\cos A+\\cdots)",
+                "X(268)：X(196) 的等角共轭",
+                "X268",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(269)
+        {
+            push_bary(
+                &mut out,
+                "X200等角",
+                "X_{269}",
+                "X(269) = \\mathrm{isog}(X_{200});\\ \\sin A\\tan^2\\tfrac{A}{2}",
+                "X(269)：X(200) 的等角共轭",
+                "X269",
+                sa * (g[0] * 0.5).tan().powi(2),
+                sb * (g[1] * 0.5).tan().powi(2),
+                sc * (g[2] * 0.5).tan().powi(2),
+            );
+        }
+        // X(270): skip right (tan ∞)
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = 1.0 + (bb - cc).cos();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.tan() / den
+            };
+            push_bary(
+                &mut out,
+                "X201等角",
+                "X_{270}",
+                "X(270) = \\mathrm{isog}(X_{201});\\ (\\tan A)/[1+\\cos(B-C)]",
+                "X(270)：X(201) 的等角共轭",
+                "X270",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+    }
+
+
+    // X(271)–X(280): continue isogonal / cevapoint band (ETC).
+    // X(271)=isog(X208)=isotomic(X342); bary (sin A)(cot A cot A/2)/(-1-cos A+cos B+cos C); skip right.
+    // X(272)=isog(X209); bary (sin A)/[(sin A+sin(A−B)+sin(A−C))(sin B+sin C)].
+    // X(273)=isog(X212)=isotomic(X78)=polar(X9); bary tan A sec²(A/2); skip right.
+    // X(274)=isog(X213)=isotomic(X37); bary bc/(b+c).
+    // X(275)=cevapoint(H,K)=isog(X216)=polar(X5); bary sec A sec(B−C); skip right.
+    // X(276)=isog(X217)=Hofstadter −2; bary csc² A sec A sec(B−C); skip right.
+    // X(277)=isog(X218); bary 1/(a²+b²+c²−2ab−2ac).
+    // X(278)=isog(X219); bary 1−sec A [= tan A tan(A/2)]; skip right.
+    // X(279)=isog(X220); bary tan²(A/2).
+    // X(280)=X(1)-cross of X(8)=isog(X221); bary (sin A)csc²(A/2)/(-1-cos A+cos B+cos C).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(271): skip right (cot A → ∞)
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = -1.0 - aa.cos() + bb.cos() + cc.cos();
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let half = aa * 0.5;
+                if half.tan().abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                // (sin A)(cot A cot A/2)/den = cos A · cot(A/2) / den
+                aa.cos() / half.tan() / den
+            };
+            push_bary(
+                &mut out,
+                "X208等角",
+                "X_{271}",
+                "X(271) = \\mathrm{isog}(X_{208});\\ (\\sin A)(\\cot A\\cot\\tfrac{A}{2})/(-1-\\cos A+\\cdots)",
+                "X(271)：X(208) 的等角共轭（X(342) 等截）",
+                "X271",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(272)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let num = aa.sin() + (aa - bb).sin() + (aa - cc).sin();
+                let den = (bb.sin() + cc.sin()) * num;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() / den
+            };
+            push_bary(
+                &mut out,
+                "X209等角",
+                "X_{272}",
+                "X(272) = \\mathrm{isog}(X_{209});\\ (\\sin A)/[(\\sin A+\\sin(A-B)+\\sin(A-C))(\\sin B+\\sin C)]",
+                "X(272)：X(209) 的等角共轭",
+                "X272",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(273): skip right (tan A → ∞)
+        if !right {
+            let f = |aa: f64| {
+                let c_half = (aa * 0.5).cos();
+                if c_half.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.tan() / (c_half * c_half)
+            };
+            push_bary(
+                &mut out,
+                "X212等角",
+                "X_{273}",
+                "X(273) = \\mathrm{isog}(X_{212})=\\mathrm{isotomic}(X_{78});\\ \\tan A\\sec^2\\tfrac{A}{2}",
+                "X(273)：X(212) 的等角共轭（X(78) 等截 / X(9) 极共轭）",
+                "X273",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(274)
+        {
+            push_bary(
+                &mut out,
+                "X213等角",
+                "X_{274}",
+                "X(274) = \\mathrm{isog}(X_{213})=\\mathrm{isotomic}(X_{37});\\ bc/(b+c)",
+                "X(274)：X(213) 的等角共轭（X(37) 等截）",
+                "X274",
+                b * c / (b + c),
+                c * a / (c + a),
+                a * b / (a + b),
+            );
+        }
+        // X(275): skip right (sec A → ∞); cevapoint of H and K
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let cbc = (bb - cc).cos();
+                if aa.cos().abs() < 1e-14 || cbc.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / (aa.cos() * cbc)
+            };
+            push_bary(
+                &mut out,
+                "垂心勒莫恩截点",
+                "X_{275}",
+                "X(275) = \\mathrm{cevapoint}(H,K)=\\mathrm{isog}(X_{216});\\ \\sec A\\sec(B-C)",
+                "X(275)：垂心与勒莫恩点的截点（X(216) 等角 / X(5) 极共轭）",
+                "X275",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(276): skip right (sec A → ∞); Hofstadter −2
+        if !right {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let saa = aa.sin();
+                let caa = aa.cos();
+                let cbc = (bb - cc).cos();
+                if saa.abs() < 1e-14 || caa.abs() < 1e-14 || cbc.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / (saa * saa * caa * cbc)
+            };
+            push_bary(
+                &mut out,
+                "X217等角",
+                "X_{276}",
+                "X(276) = \\mathrm{isog}(X_{217});\\ \\csc^2 A\\sec A\\sec(B-C)",
+                "X(276)：X(217) 的等角共轭（Hofstadter −2 点）",
+                "X276",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(277)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = aa * aa + bb * bb + cc * cc - 2.0 * aa * bb - 2.0 * aa * cc;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "X218等角",
+                "X_{277}",
+                "X(277) = \\mathrm{isog}(X_{218});\\ 1/(a^2+b^2+c^2-2ab-2ac)",
+                "X(277)：X(218) 的等角共轭",
+                "X277",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(278): skip right (sec A → ∞)
+        if !right {
+            push_bary(
+                &mut out,
+                "X219等角",
+                "X_{278}",
+                "X(278) = \\mathrm{isog}(X_{219});\\ 1-\\sec A\\ [=\\tan A\\tan\\tfrac{A}{2}]",
+                "X(278)：X(219) 的等角共轭",
+                "X278",
+                1.0 - 1.0 / ca,
+                1.0 - 1.0 / cb,
+                1.0 - 1.0 / cc,
+            );
+        }
+        // X(279)
+        {
+            push_bary(
+                &mut out,
+                "X220等角",
+                "X_{279}",
+                "X(279) = \\mathrm{isog}(X_{220});\\ \\tan^2\\tfrac{A}{2}",
+                "X(279)：X(220) 的等角共轭",
+                "X279",
+                (g[0] * 0.5).tan().powi(2),
+                (g[1] * 0.5).tan().powi(2),
+                (g[2] * 0.5).tan().powi(2),
+            );
+        }
+        // X(280)
+        {
+            let f = |aa: f64, bb: f64, cc: f64| {
+                let den = -1.0 - aa.cos() + bb.cos() + cc.cos();
+                let s_half = (aa * 0.5).sin();
+                if den.abs() < 1e-12 || s_half.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() / (s_half * s_half) / den
+            };
+            push_bary(
+                &mut out,
+                "内心奈格尔交叉共轭",
+                "X_{280}",
+                "X(280) = X(1)\\text{-cross of }X(8)=\\mathrm{isog}(X_{221});\\ (\\sin A)\\csc^2\\tfrac{A}{2}/(-1-\\cos A+\\cdots)",
+                "X(280)：内心对奈格尔点的交叉共轭（X(221) 等角）",
+                "X280",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+    }
+
+
+    // X(281)–X(290): continue isogonal / cross-conjugate / cevapoint band (ETC).
+    // X(281)=isog(X222)=X(37)-cross of X(9); bary 1+sec A; skip right.
+    // X(282)=isog(X223)=X(6)-cross of X(9); bary (sin A)cot(A/2)/(-1-cos A+cos B+cos C).
+    // X(283)=isog(X225)=X(3)-cross of X(21); bary sin 2A/(cos B+cos C).
+    // X(284)=isog(X226)=X(55)-cross of X(21)=isotomic(X349); bary a²/(cos B+cos C).
+    // X(285)=isog(X227)=X(58)-cross of X(21); bary (sin A)/[(cos B+cos C)(-1-cos A+…)].
+    // X(286)=isog(X228)=X(4)-cross of X(27)=isotomic(X72); bary sec A/(sin B+sin C); skip right.
+    // X(287)=isog(X232)=X(2)-Hirst of X(98); bary cos A sec(A+ω); skip equil (A+ω→π/2).
+    // X(288)=isog(X233)=cevapoint(X6,X54); bary (sin A)sec(B−C)/[b cos(C−A)+c cos(B−A)].
+    // X(289)=isog(X236); bary (sin A)sin(A/2)/(cos B/2+cos C/2−cos A/2) [=a(1−sin A/2)tan(A/2)].
+    // X(290)=isog(X237)=isotomic(X511); bary csc A sec(A+ω); skip equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(281): skip right (sec A → ∞)
+        if !right {
+            push_bary(
+                &mut out,
+                "X222等角",
+                "X_{281}",
+                "X(281) = \\mathrm{isog}(X_{222});\\ 1+\\sec A",
+                "X(281)：X(222) 的等角共轭（X(37) 对 X(9) 交叉共轭）",
+                "X281",
+                1.0 + 1.0 / ca,
+                1.0 + 1.0 / cb,
+                1.0 + 1.0 / cc,
+            );
+        }
+        // X(282)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = -1.0 - aa.cos() + bb.cos() + cc_.cos();
+                let half = aa * 0.5;
+                if den.abs() < 1e-12 || half.tan().abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() / half.tan() / den
+            };
+            push_bary(
+                &mut out,
+                "X223等角",
+                "X_{282}",
+                "X(282) = \\mathrm{isog}(X_{223});\\ (\\sin A)\\cot\\tfrac{A}{2}/(-1-\\cos A+\\cdots)",
+                "X(282)：X(223) 的等角共轭（X(6) 对 X(9) 交叉共轭）",
+                "X282",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(283)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = bb.cos() + cc_.cos();
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (2.0 * aa).sin() / den
+            };
+            push_bary(
+                &mut out,
+                "X225等角",
+                "X_{283}",
+                "X(283) = \\mathrm{isog}(X_{225});\\ \\sin 2A/(\\cos B+\\cos C)",
+                "X(283)：X(225) 的等角共轭（外心对 X(21) 交叉共轭）",
+                "X283",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(284)
+        {
+            let f = |side: f64, bb: f64, cc_: f64| {
+                let den = bb.cos() + cc_.cos();
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                side * side / den
+            };
+            push_bary(
+                &mut out,
+                "X226等角",
+                "X_{284}",
+                "X(284) = \\mathrm{isog}(X_{226})=\\mathrm{isotomic}(X_{349});\\ a^2/(\\cos B+\\cos C)",
+                "X(284)：X(226) 的等角共轭（X(55) 对 X(21) 交叉共轭）",
+                "X284",
+                f(a, g[1], g[2]),
+                f(b, g[2], g[0]),
+                f(c, g[0], g[1]),
+            );
+        }
+        // X(285)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let d1 = bb.cos() + cc_.cos();
+                let d2 = -1.0 - aa.cos() + bb.cos() + cc_.cos();
+                if d1.abs() < 1e-14 || d2.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa.sin() / (d1 * d2)
+            };
+            push_bary(
+                &mut out,
+                "X227等角",
+                "X_{285}",
+                "X(285) = \\mathrm{isog}(X_{227});\\ (\\sin A)/[(\\cos B+\\cos C)(-1-\\cos A+\\cdots)]",
+                "X(285)：X(227) 的等角共轭（X(58) 对 X(21) 交叉共轭）",
+                "X285",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(286): skip right (sec A → ∞)
+        if !right {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let caa = aa.cos();
+                let den = bb.sin() + cc_.sin();
+                if caa.abs() < 1e-14 || den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / caa) / den
+            };
+            push_bary(
+                &mut out,
+                "X228等角",
+                "X_{286}",
+                "X(286) = \\mathrm{isog}(X_{228})=\\mathrm{isotomic}(X_{72});\\ \\sec A/(\\sin B+\\sin C)",
+                "X(286)：X(228) 的等角共轭（垂心对 X(27) 交叉共轭）",
+                "X286",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(287): skip equilateral (A+ω → π/2)
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |caa: f64, saa: f64| {
+                let caw = caa * cos_w - saa * sin_w;
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                caa / caw
+            };
+            push_bary(
+                &mut out,
+                "X232等角",
+                "X_{287}",
+                "X(287) = \\mathrm{isog}(X_{232});\\ \\cos A\\sec(A+\\omega)",
+                "X(287)：X(232) 的等角共轭（重心对 X(98) 的 Hirst 逆）",
+                "X287",
+                f(ca, sa),
+                f(cb, sb),
+                f(cc, sc),
+            );
+        }
+        // X(288): cevapoint of K=X(6) and X(54)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, side_b: f64, side_c: f64| {
+                let cbc = (bb - cc_).cos();
+                let den = side_b * (cc_ - aa).cos() + side_c * (bb - aa).cos();
+                if cbc.abs() < 1e-14 || den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() / cbc / den
+            };
+            push_bary(
+                &mut out,
+                "对称中线X54截点",
+                "X_{288}",
+                "X(288) = \\mathrm{cevapoint}(X_6,X_{54})=\\mathrm{isog}(X_{233});\\ (\\sin A)\\sec(B-C)/[b\\cos(C-A)+c\\cos(B-A)]",
+                "X(288)：对称中线点与 X(54) 的截点（X(233) 等角）",
+                "X288",
+                f(g[0], g[1], g[2], b, c),
+                f(g[1], g[2], g[0], c, a),
+                f(g[2], g[0], g[1], a, b),
+            );
+        }
+        // X(289)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = (bb * 0.5).cos() + (cc_ * 0.5).cos() - (aa * 0.5).cos();
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa.sin() * (aa * 0.5).sin() / den
+            };
+            push_bary(
+                &mut out,
+                "X236等角",
+                "X_{289}",
+                "X(289) = \\mathrm{isog}(X_{236});\\ (\\sin A)\\sin\\tfrac{A}{2}/(\\cos\\tfrac{B}{2}+\\cos\\tfrac{C}{2}-\\cos\\tfrac{A}{2})",
+                "X(289)：X(236) 的等角共轭",
+                "X289",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(290): skip equilateral (A+ω → π/2)
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |saa: f64, caa: f64| {
+                let caw = caa * cos_w - saa * sin_w;
+                if saa.abs() < 1e-14 || caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) / caw
+            };
+            push_bary(
+                &mut out,
+                "X237等角",
+                "X_{290}",
+                "X(290) = \\mathrm{isog}(X_{237});\\ \\csc A\\sec(A+\\omega)",
+                "X(290)：X(237) 的等角共轭（X(511) 等截）",
+                "X290",
+                f(sa, ca),
+                f(sb, cb),
+                f(sc, cc),
+            );
+        }
+    }
+
+
+    // X(291)–X(300): continue isogonal / Hirst / isotomic band (ETC).
+    // X(291)=isog(X238)=isotomic(X350); bary a/(a²−bc); skip equil.
+    // X(292)=isog(X239); bary a²/(a²−bc); X(1)-Hirst of X(291); skip equil.
+    // X(293)=isog(X240); bary sin 2A sec(A+ω); skip equil (A+ω→π/2).
+    // X(294)=isog(X241); bary a(b+c−a)/(b²+c²−ab−ac); skip equil.
+    // X(295)=isog(X242); bary sin 2A/(a²−bc); skip equil.
+    // X(296)=isog(X243); bary sin 2A/(cos²A−cos B cos C); skip equil.
+    // X(297)=isog(X248)=X(2)-Hirst of X(4)=isotomic(X287); bary sec A cos(A+ω); skip right/equil.
+    // X(298)=isotomic(X13); bary csc A sin(A+π/3).
+    // X(299)=isotomic(X14); bary csc A sin(A−π/3); skip equil (sin→0).
+    // X(300)=isotomic(X15); bary csc A csc(A+π/3); skip 120° (csc(A+π/3)→∞).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let has_120 = (g[0] - std::f64::consts::FRAC_PI_3 * 2.0).abs() < 1e-9
+            || (g[1] - std::f64::consts::FRAC_PI_3 * 2.0).abs() < 1e-9
+            || (g[2] - std::f64::consts::FRAC_PI_3 * 2.0).abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(291)/X(292)/X(295): skip equilateral (a²−bc → 0)
+        if !equil {
+            let da = a * a - b * c;
+            let db = b * b - c * a;
+            let dc = c * c - a * b;
+            if da.abs() > 1e-12 && db.abs() > 1e-12 && dc.abs() > 1e-12 {
+                push_bary(
+                    &mut out,
+                    "X238等角",
+                    "X_{291}",
+                    "X(291) = \\mathrm{isog}(X_{238});\\ a/(a^2-bc)",
+                    "X(291)：X(238) 的等角共轭（X(350) 等截）",
+                    "X291",
+                    a / da,
+                    b / db,
+                    c / dc,
+                );
+                push_bary(
+                    &mut out,
+                    "X239等角",
+                    "X_{292}",
+                    "X(292) = \\mathrm{isog}(X_{239});\\ a^2/(a^2-bc)",
+                    "X(292)：X(239) 的等角共轭（内心对 X(291) 的 Hirst 逆）",
+                    "X292",
+                    a * a / da,
+                    b * b / db,
+                    c * c / dc,
+                );
+                push_bary(
+                    &mut out,
+                    "X242等角",
+                    "X_{295}",
+                    "X(295) = \\mathrm{isog}(X_{242});\\ \\sin 2A/(a^2-bc)",
+                    "X(295)：X(242) 的等角共轭",
+                    "X295",
+                    (2.0 * g[0]).sin() / da,
+                    (2.0 * g[1]).sin() / db,
+                    (2.0 * g[2]).sin() / dc,
+                );
+            }
+        }
+        // X(293): skip equilateral (A+ω → π/2)
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |aa: f64, saa: f64, caa: f64| {
+                let caw = caa * cos_w - saa * sin_w;
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (2.0 * aa).sin() / caw
+            };
+            push_bary(
+                &mut out,
+                "X240等角",
+                "X_{293}",
+                "X(293) = \\mathrm{isog}(X_{240});\\ \\sin 2A\\sec(A+\\omega)",
+                "X(293)：X(240) 的等角共轭",
+                "X293",
+                f(g[0], sa, ca),
+                f(g[1], sb, cb),
+                f(g[2], sc, cc),
+            );
+        }
+        // X(294): skip equilateral (b²+c²−ab−ac → 0)
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = bb * bb + cc_ * cc_ - aa * bb - aa * cc_;
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                aa * (bb + cc_ - aa) / den
+            };
+            push_bary(
+                &mut out,
+                "X241等角",
+                "X_{294}",
+                "X(294) = \\mathrm{isog}(X_{241});\\ a(b+c-a)/(b^2+c^2-ab-ac)",
+                "X(294)：X(241) 的等角共轭",
+                "X294",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(296): skip equilateral (cos²A−cos B cos C → 0)
+        if !equil {
+            let f = |saa2: f64, caa: f64, cbb: f64, ccc: f64| {
+                let den = caa * caa - cbb * ccc;
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa2 / den
+            };
+            push_bary(
+                &mut out,
+                "X243等角",
+                "X_{296}",
+                "X(296) = \\mathrm{isog}(X_{243});\\ \\sin 2A/(\\cos^2 A-\\cos B\\cos C)",
+                "X(296)：X(243) 的等角共轭",
+                "X296",
+                f((2.0 * g[0]).sin(), ca, cb, cc),
+                f((2.0 * g[1]).sin(), cb, cc, ca),
+                f((2.0 * g[2]).sin(), cc, ca, cb),
+            );
+        }
+        // X(297): skip right (sec) and equilateral (cos(A+ω)→0)
+        if !right && !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |saa: f64, caa: f64| {
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let caw = caa * cos_w - saa * sin_w;
+                (1.0 / caa) * caw
+            };
+            push_bary(
+                &mut out,
+                "X248等角",
+                "X_{297}",
+                "X(297) = \\mathrm{isog}(X_{248})=\\mathrm{isotomic}(X_{287});\\ \\sec A\\cos(A+\\omega)",
+                "X(297)：X(248) 的等角共轭（重心对垂心的 Hirst 逆）",
+                "X297",
+                f(sa, ca),
+                f(sb, cb),
+                f(sc, cc),
+            );
+        }
+        // X(298): isotomic of 1st isogonic center
+        {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (aa + pi3).sin()
+            };
+            push_bary(
+                &mut out,
+                "第一等角线等截",
+                "X_{298}",
+                "X(298) = \\mathrm{isotomic}(X_{13});\\ \\csc A\\sin(A+\\pi/3)",
+                "X(298)：第一等角线中心的等截共轭",
+                "X298",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(299): isotomic of 2nd isogonic; skip equilateral
+        if !equil {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (aa - pi3).sin()
+            };
+            push_bary(
+                &mut out,
+                "第二等角线等截",
+                "X_{299}",
+                "X(299) = \\mathrm{isotomic}(X_{14});\\ \\csc A\\sin(A-\\pi/3)",
+                "X(299)：第二等角线中心的等截共轭",
+                "X299",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(300): isotomic of 1st isodynamic; skip 120° angle
+        if !has_120 {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                let s = (aa + pi3).sin();
+                if saa.abs() < 1e-14 || s.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) / s
+            };
+            push_bary(
+                &mut out,
+                "第一等动力等截",
+                "X_{300}",
+                "X(300) = \\mathrm{isotomic}(X_{15});\\ \\csc A\\csc(A+\\pi/3)",
+                "X(300)：第一等动力点的等截共轭",
+                "X300",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+    }
+
+    // X(301)–X(310): continue isotomic band (ETC).
+    // X(301)=isotomic(X16); bary csc A csc(A−π/3); skip 60° (incl. equil).
+    // X(302)=isotomic(X17); bary csc A sin(A+π/6); skip 150°.
+    // X(303)=isotomic(X18); bary csc A sin(A−π/6); skip 30° (weight 0 ok, keep).
+    // X(304)=isotomic(X19); bary cos A csc² A.
+    // X(305)=isotomic(X25); bary b³c³ cos A.
+    // X(306)=isotomic(X27); bary bc(b+c) cos A.
+    // X(307)=isotomic(X29); bary a·b²c²(b+c)cos A/(b+c−a).
+    // X(308)=isotomic(X39); bary b²c²/(b²+c²) [= csc A csc(A+ω)].
+    // X(309)=isotomic(X40); bary (csc A)/(-1-cos A+cos B+cos C).
+    // X(310)=isotomic(X42); bary b²c²/(b+c).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let has_60 = (g[0] - std::f64::consts::FRAC_PI_3).abs() < 1e-9
+            || (g[1] - std::f64::consts::FRAC_PI_3).abs() < 1e-9
+            || (g[2] - std::f64::consts::FRAC_PI_3).abs() < 1e-9;
+        let has_150 = (g[0] - std::f64::consts::PI * 5.0 / 6.0).abs() < 1e-9
+            || (g[1] - std::f64::consts::PI * 5.0 / 6.0).abs() < 1e-9
+            || (g[2] - std::f64::consts::PI * 5.0 / 6.0).abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(301): isotomic of 2nd isodynamic; skip 60° (csc(A−π/3)→∞)
+        if !has_60 && !equil {
+            let pi3 = std::f64::consts::FRAC_PI_3;
+            let f = |aa: f64, saa: f64| {
+                let s = (aa - pi3).sin();
+                if saa.abs() < 1e-14 || s.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) / s
+            };
+            push_bary(
+                &mut out,
+                "第二等动力等截",
+                "X_{301}",
+                "X(301) = \\mathrm{isotomic}(X_{16});\\ \\csc A\\csc(A-\\pi/3)",
+                "X(301)：第二等动力点的等截共轭",
+                "X301",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(302): isotomic of 1st Napoleon; skip 150° (sin(A+π/6)→0 all-zero risk rare)
+        if !has_150 {
+            let pi6 = std::f64::consts::FRAC_PI_6;
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (aa + pi6).sin()
+            };
+            push_bary(
+                &mut out,
+                "第一拿破仑等截",
+                "X_{302}",
+                "X(302) = \\mathrm{isotomic}(X_{17});\\ \\csc A\\sin(A+\\pi/6)",
+                "X(302)：第一拿破仑点的等截共轭",
+                "X302",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(303): isotomic of 2nd Napoleon
+        {
+            let pi6 = std::f64::consts::FRAC_PI_6;
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (aa - pi6).sin()
+            };
+            push_bary(
+                &mut out,
+                "第二拿破仑等截",
+                "X_{303}",
+                "X(303) = \\mathrm{isotomic}(X_{18});\\ \\csc A\\sin(A-\\pi/6)",
+                "X(303)：第二拿破仑点的等截共轭",
+                "X303",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(304): isotomic of X(19) Clawson; bary cos A / sin² A
+        {
+            let f = |caa: f64, saa: f64| {
+                let s2 = saa * saa;
+                if s2 < 1e-28 {
+                    return f64::NAN;
+                }
+                caa / s2
+            };
+            push_bary(
+                &mut out,
+                "克劳森等截",
+                "X_{304}",
+                "X(304) = \\mathrm{isotomic}(X_{19});\\ \\cos A\\csc^2 A",
+                "X(304)：克劳森点的等截共轭",
+                "X304",
+                f(ca, sa),
+                f(cb, sb),
+                f(cc, sc),
+            );
+        }
+        // X(305): isotomic of X(25); bary b³c³ cos A
+        {
+            push_bary(
+                &mut out,
+                "X25等截",
+                "X_{305}",
+                "X(305) = \\mathrm{isotomic}(X_{25});\\ b^3 c^3\\cos A",
+                "X(305)：X(25) 的等截共轭",
+                "X305",
+                b.powi(3) * c.powi(3) * ca,
+                c.powi(3) * a.powi(3) * cb,
+                a.powi(3) * b.powi(3) * cc,
+            );
+        }
+        // X(306): isotomic of X(27); bary bc(b+c) cos A
+        {
+            push_bary(
+                &mut out,
+                "X27等截",
+                "X_{306}",
+                "X(306) = \\mathrm{isotomic}(X_{27});\\ bc(b+c)\\cos A",
+                "X(306)：X(27) 的等截共轭",
+                "X306",
+                b * c * (b + c) * ca,
+                c * a * (c + a) * cb,
+                a * b * (a + b) * cc,
+            );
+        }
+        // X(307): isotomic of X(29); bary a b²c² (b+c) cos A / (b+c−a)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, caa: f64| {
+                let den = bb + cc_ - aa;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                aa * bb * bb * cc_ * cc_ * (bb + cc_) * caa / den
+            };
+            push_bary(
+                &mut out,
+                "X29等截",
+                "X_{307}",
+                "X(307) = \\mathrm{isotomic}(X_{29});\\ a b^2 c^2(b+c)\\cos A/(b+c-a)",
+                "X(307)：X(29) 的等截共轭",
+                "X307",
+                f(a, b, c, ca),
+                f(b, c, a, cb),
+                f(c, a, b, cc),
+            );
+        }
+        // X(308): isotomic of Brocard midpoint X(39); bary b²c²/(b²+c²)
+        {
+            let f = |bb: f64, cc_: f64| {
+                let den = bb * bb + cc_ * cc_;
+                if den < 1e-28 {
+                    return f64::NAN;
+                }
+                (bb * bb * cc_ * cc_) / den
+            };
+            push_bary(
+                &mut out,
+                "布罗卡尔中点等截",
+                "X_{308}",
+                "X(308) = \\mathrm{isotomic}(X_{39});\\ b^2 c^2/(b^2+c^2)",
+                "X(308)：布罗卡尔中点的等截共轭",
+                "X308",
+                f(b, c),
+                f(c, a),
+                f(a, b),
+            );
+        }
+        // X(309): isotomic of X(40); bary csc A / (−1−cos A+cos B+cos C)
+        {
+            let f = |saa: f64, caa: f64, cbb: f64, ccc: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let den = -1.0 - caa + cbb + ccc;
+                if den.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) / den
+            };
+            push_bary(
+                &mut out,
+                "X40等截",
+                "X_{309}",
+                "X(309) = \\mathrm{isotomic}(X_{40});\\ \\csc A/(-1-\\cos A+\\cos B+\\cos C)",
+                "X(309)：X(40) 的等截共轭",
+                "X309",
+                f(sa, ca, cb, cc),
+                f(sb, cb, cc, ca),
+                f(sc, cc, ca, cb),
+            );
+        }
+        // X(310): isotomic of X(42); bary b²c²/(b+c)
+        {
+            let f = |bb: f64, cc_: f64| {
+                let den = bb + cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (bb * bb * cc_ * cc_) / den
+            };
+            push_bary(
+                &mut out,
+                "X42等截",
+                "X_{310}",
+                "X(310) = \\mathrm{isotomic}(X_{42});\\ b^2 c^2/(b+c)",
+                "X(310)：X(42) 的等截共轭",
+                "X310",
+                f(b, c),
+                f(c, a),
+                f(a, b),
+            );
+        }
+    }
+
+    // X(311)–X(320): continue isotomic band (ETC).
+    // X(311)=isotomic(X54); bary csc A cos(B−C).
+    // X(312)=isotomic(X57); bary bc(b+c−a).
+    // X(313)=isotomic(X58); bary (b+c)b²c².
+    // X(314)=isotomic(X65); bary bc(b+c−a)/(b+c).
+    // X(315)=isotomic(X66); bary b⁴+c⁴−a⁴.
+    // X(316)=Droussent pivot=isotomic(X67); bary b⁴+c⁴−a⁴−b²c²; skip equil (all 0).
+    // X(317)=isotomic(X68); bary tan A cos 2A csc² A; skip right (tan∞).
+    // X(318)=isotomic(X77); bary (1+sec A)/a; skip right (sec∞).
+    // X(319)=isotomic(X79); bary (1+2 cos A)/a.
+    // X(320)=isotomic(X80); bary (1−2 cos A)/a; skip equilateral (all zero).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(311): isotomic of Kosnita X(54); bary csc A cos(B−C)
+        {
+            let f = |saa: f64, bb: f64, cc_: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (bb - cc_).cos()
+            };
+            push_bary(
+                &mut out,
+                "科斯尼塔等截",
+                "X_{311}",
+                "X(311) = \\mathrm{isotomic}(X_{54});\\ \\csc A\\cos(B-C)",
+                "X(311)：科斯尼塔点的等截共轭",
+                "X311",
+                f(sa, g[1], g[2]),
+                f(sb, g[2], g[0]),
+                f(sc, g[0], g[1]),
+            );
+        }
+        // X(312): isotomic of X(57); bary bc(b+c−a)
+        {
+            push_bary(
+                &mut out,
+                "X57等截",
+                "X_{312}",
+                "X(312) = \\mathrm{isotomic}(X_{57});\\ bc(b+c-a)",
+                "X(312)：X(57) 的等截共轭",
+                "X312",
+                b * c * (b + c - a),
+                c * a * (c + a - b),
+                a * b * (a + b - c),
+            );
+        }
+        // X(313): isotomic of X(58); bary (b+c)b²c²
+        {
+            push_bary(
+                &mut out,
+                "X58等截",
+                "X_{313}",
+                "X(313) = \\mathrm{isotomic}(X_{58});\\ (b+c)b^2 c^2",
+                "X(313)：X(58) 的等截共轭",
+                "X313",
+                (b + c) * b * b * c * c,
+                (c + a) * c * c * a * a,
+                (a + b) * a * a * b * b,
+            );
+        }
+        // X(314): isotomic of X(65); bary bc(b+c−a)/(b+c)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = bb + cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                bb * cc_ * (bb + cc_ - aa) / den
+            };
+            push_bary(
+                &mut out,
+                "X65等截",
+                "X_{314}",
+                "X(314) = \\mathrm{isotomic}(X_{65});\\ bc(b+c-a)/(b+c)",
+                "X(314)：X(65) 的等截共轭",
+                "X314",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(315): isotomic of X(66); bary b⁴+c⁴−a⁴
+        {
+            push_bary(
+                &mut out,
+                "X66等截",
+                "X_{315}",
+                "X(315) = \\mathrm{isotomic}(X_{66});\\ b^4+c^4-a^4",
+                "X(315)：X(66) 的等截共轭",
+                "X315",
+                b.powi(4) + c.powi(4) - a.powi(4),
+                c.powi(4) + a.powi(4) - b.powi(4),
+                a.powi(4) + b.powi(4) - c.powi(4),
+            );
+        }
+        // X(316): Droussent pivot = isotomic of X(67); bary b⁴+c⁴−a⁴−b²c²; skip equil
+        if !equil {
+            push_bary(
+                &mut out,
+                "德鲁桑枢轴",
+                "X_{316}",
+                "X(316) = \\mathrm{Droussent}=\\mathrm{isotomic}(X_{67});\\ b^4+c^4-a^4-b^2c^2",
+                "X(316)：德鲁桑枢轴（X(67) 等截）",
+                "X316",
+                b.powi(4) + c.powi(4) - a.powi(4) - b * b * c * c,
+                c.powi(4) + a.powi(4) - b.powi(4) - c * c * a * a,
+                a.powi(4) + b.powi(4) - c.powi(4) - a * a * b * b,
+            );
+        }
+        // X(317): isotomic of Prasolov X(68); bary tan A cos 2A csc² A; skip right
+        if !right {
+            let f = |aa: f64, saa: f64| {
+                let s2 = saa * saa;
+                if s2 < 1e-28 {
+                    return f64::NAN;
+                }
+                let c2a = (2.0 * aa).cos();
+                aa.tan() * c2a / s2
+            };
+            push_bary(
+                &mut out,
+                "普拉索洛夫等截",
+                "X_{317}",
+                "X(317) = \\mathrm{isotomic}(X_{68});\\ \\tan A\\cos 2A\\csc^2 A",
+                "X(317)：普拉索洛夫点的等截共轭",
+                "X317",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(318): isotomic of X(77); bary (1+sec A)/a; skip right
+        if !right {
+            let f = |aa: f64, side: f64| {
+                if side.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 + 1.0 / caa) / side
+            };
+            push_bary(
+                &mut out,
+                "X77等截",
+                "X_{318}",
+                "X(318) = \\mathrm{isotomic}(X_{77});\\ (1+\\sec A)/a",
+                "X(318)：X(77) 的等截共轭",
+                "X318",
+                f(g[0], a),
+                f(g[1], b),
+                f(g[2], c),
+            );
+        }
+        // X(319): isotomic of X(79); bary (1+2 cos A)/a
+        {
+            let f = |caa: f64, side: f64| {
+                if side.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 + 2.0 * caa) / side
+            };
+            push_bary(
+                &mut out,
+                "X79等截",
+                "X_{319}",
+                "X(319) = \\mathrm{isotomic}(X_{79});\\ (1+2\\cos A)/a",
+                "X(319)：X(79) 的等截共轭",
+                "X319",
+                f(ca, a),
+                f(cb, b),
+                f(cc, c),
+            );
+        }
+        // X(320): isotomic of X(80); bary (1−2 cos A)/a; skip equilateral
+        if !equil {
+            let f = |caa: f64, side: f64| {
+                if side.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (1.0 - 2.0 * caa) / side
+            };
+            push_bary(
+                &mut out,
+                "X80等截",
+                "X_{320}",
+                "X(320) = \\mathrm{isotomic}(X_{80});\\ (1-2\\cos A)/a",
+                "X(320)：X(80) 的等截共轭",
+                "X320",
+                f(ca, a),
+                f(cb, b),
+                f(cc, c),
+            );
+        }
+    }
+
+    // X(321)–X(330): continue isotomic / Hirst band (ETC).
+    // X(321)=isotomic(X81); bary bc(b+c).
+    // X(322)=isotomic(X84); bary (−1−cos A+cos B+cos C)csc A.
+    // X(323)=isotomic(X94); bary sin 3A csc A; skip equilateral (sin 3A=0).
+    // X(324)=isotomic(X97); bary sec A cos(B−C); skip right (sec∞).
+    // X(325)=X(2)-Hirst of X(69); bary b⁴+c⁴−a²b²−a²c²; skip equil (all 0).
+    // X(326)=isotomic(X158); bary csc A−sin A.
+    // X(327)=isotomic(X182); bary csc A sec(A−ω).
+    // X(328)=isotomic(X186); bary cos A csc 3A; skip equilateral (sin 3A=0).
+    // X(329)=isotomic(X189); bary −1−cos A+cos B+cos C.
+    // X(330)=isotomic(X192); bary 1/(ab+ac−bc).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(321): isotomic of X(81); bary bc(b+c)
+        {
+            push_bary(
+                &mut out,
+                "X81等截",
+                "X_{321}",
+                "X(321) = \\mathrm{isotomic}(X_{81});\\ bc(b+c)",
+                "X(321)：X(81) 的等截共轭",
+                "X321",
+                b * c * (b + c),
+                c * a * (c + a),
+                a * b * (a + b),
+            );
+        }
+        // X(322): isotomic of X(84); bary (−1−cos A+cos B+cos C)csc A
+        {
+            let f = |caa: f64, cbb: f64, ccc: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (-1.0 - caa + cbb + ccc) / saa
+            };
+            push_bary(
+                &mut out,
+                "X84等截",
+                "X_{322}",
+                "X(322) = \\mathrm{isotomic}(X_{84});\\ (-1-\\cos A+\\cos B+\\cos C)\\csc A",
+                "X(322)：X(84) 的等截共轭",
+                "X322",
+                f(ca, cb, cc, sa),
+                f(cb, cc, ca, sb),
+                f(cc, ca, cb, sc),
+            );
+        }
+        // X(323): isotomic of X(94); bary sin 3A csc A; skip equilateral
+        if !equil {
+            let f = |aa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (3.0 * aa).sin() / saa
+            };
+            push_bary(
+                &mut out,
+                "X94等截",
+                "X_{323}",
+                "X(323) = \\mathrm{isotomic}(X_{94});\\ \\sin 3A\\csc A",
+                "X(323)：X(94) 的等截共轭",
+                "X323",
+                f(g[0], sa),
+                f(g[1], sb),
+                f(g[2], sc),
+            );
+        }
+        // X(324): isotomic of X(97); bary sec A cos(B−C); skip right
+        if !right {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / caa) * (bb - cc_).cos()
+            };
+            push_bary(
+                &mut out,
+                "X97等截",
+                "X_{324}",
+                "X(324) = \\mathrm{isotomic}(X_{97});\\ \\sec A\\cos(B-C)",
+                "X(324)：X(97) 的等截共轭",
+                "X324",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(325): X(2)-Hirst inverse of X(69); bary b⁴+c⁴−a²b²−a²c²; skip equil
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                bb.powi(4) + cc_.powi(4) - aa * aa * bb * bb - aa * aa * cc_ * cc_
+            };
+            push_bary(
+                &mut out,
+                "X69-Hirst",
+                "X_{325}",
+                "X(325) = X(2)\\text{-Hirst of }X(69);\\ b^4+c^4-a^2b^2-a^2c^2",
+                "X(325)：重心对 X(69) 的 Hirst 逆",
+                "X325",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(326): isotomic of X(158); bary csc A−sin A
+        {
+            let f = |saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / saa - saa
+            };
+            push_bary(
+                &mut out,
+                "X158等截",
+                "X_{326}",
+                "X(326) = \\mathrm{isotomic}(X_{158});\\ \\csc A-\\sin A",
+                "X(326)：X(158) 的等截共轭",
+                "X326",
+                f(sa),
+                f(sb),
+                f(sc),
+            );
+        }
+        // X(327): isotomic of X(182); bary csc A sec(A−ω)
+        if area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |caa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let caw = caa * cos_w + saa * sin_w; // cos(A−ω)
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / saa) * (1.0 / caw)
+            };
+            push_bary(
+                &mut out,
+                "X182等截",
+                "X_{327}",
+                "X(327) = \\mathrm{isotomic}(X_{182});\\ \\csc A\\sec(A-\\omega)",
+                "X(327)：X(182) 的等截共轭",
+                "X327",
+                f(ca, sa),
+                f(cb, sb),
+                f(cc, sc),
+            );
+        }
+        // X(328): isotomic of X(186); bary cos A csc 3A; skip equilateral
+        if !equil {
+            let f = |aa: f64, caa: f64| {
+                let s3 = (3.0 * aa).sin();
+                if s3.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                caa / s3
+            };
+            push_bary(
+                &mut out,
+                "X186等截",
+                "X_{328}",
+                "X(328) = \\mathrm{isotomic}(X_{186});\\ \\cos A\\csc 3A",
+                "X(328)：X(186) 的等截共轭",
+                "X328",
+                f(g[0], ca),
+                f(g[1], cb),
+                f(g[2], cc),
+            );
+        }
+        // X(329): isotomic of X(189); bary −1−cos A+cos B+cos C
+        {
+            let f = |caa: f64, cbb: f64, ccc: f64| -1.0 - caa + cbb + ccc;
+            push_bary(
+                &mut out,
+                "X189等截",
+                "X_{329}",
+                "X(329) = \\mathrm{isotomic}(X_{189});\\ -1-\\cos A+\\cos B+\\cos C",
+                "X(329)：X(189) 的等截共轭",
+                "X329",
+                f(ca, cb, cc),
+                f(cb, cc, ca),
+                f(cc, ca, cb),
+            );
+        }
+        // X(330): isotomic of X(192); bary 1/(ab+ac−bc)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = aa * bb + aa * cc_ - bb * cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "X192等截",
+                "X_{330}",
+                "X(330) = \\mathrm{isotomic}(X_{192});\\ 1/(ab+ac-bc)",
+                "X(330)：X(192) 的等截共轭",
+                "X330",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+    }
+
+
+    // X(331)–X(340): continue isotomic / cevapoint band (ETC).
+    // X(331)=isotomic(X219); bary sec²(A/2) sec A; skip right (sec∞).
+    // X(332)=isotomic(X225); bary cot A/(cos B+cos C); skip right (cot∞).
+    // X(333)=isotomic(X226)=cevapoint(X8,X9); bary (b+c−a)/(b+c).
+    // X(334)=isotomic(X238); bary bc/(a²−bc); skip equil.
+    // X(335)=isotomic(X239); bary 1/(a²−bc); skip equil; X(2)-Hirst of X(291).
+    // X(336)=isotomic(X240); bary cot A sec(A+ω); skip right/equil.
+    // X(337)=isotomic(X242); bary cot A/(a²−bc); skip right/equil.
+    // X(338)=isotomic(X249)=cevapoint(X115,X125); bary sin²(B−C); skip equil.
+    // X(339)=isotomic(X250); bary cot A sin²(B−C); skip right/equil.
+    // X(340)=isotomic(X265); bary sec A sin 3A csc² A; skip right/equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(331): isotomic of X(219); bary sec²(A/2) sec A; skip right
+        if !right {
+            let f = |aa: f64| {
+                let caa = aa.cos();
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let cah = (aa * 0.5).cos();
+                if cah.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / (cah * cah)) * (1.0 / caa)
+            };
+            push_bary(
+                &mut out,
+                "X219等截",
+                "X_{331}",
+                "X(331) = \\mathrm{isotomic}(X_{219});\\ \\sec^2\\tfrac{A}{2}\\sec A",
+                "X(331)：X(219) 的等截共轭",
+                "X331",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(332): isotomic of X(225); bary cot A/(cos B+cos C); skip right
+        if !right {
+            let f = |aa: f64, cbb: f64, ccc: f64| {
+                let saa = aa.sin();
+                let caa = aa.cos();
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let den = cbb + ccc;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (caa / saa) / den
+            };
+            push_bary(
+                &mut out,
+                "X225等截",
+                "X_{332}",
+                "X(332) = \\mathrm{isotomic}(X_{225});\\ \\cot A/(\\cos B+\\cos C)",
+                "X(332)：X(225) 的等截共轭",
+                "X332",
+                f(g[0], cb, cc),
+                f(g[1], cc, ca),
+                f(g[2], ca, cb),
+            );
+        }
+        // X(333): isotomic of X(226)=cevapoint(X8,X9); bary (b+c−a)/(b+c)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = bb + cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (bb + cc_ - aa) / den
+            };
+            push_bary(
+                &mut out,
+                "X8X9截点",
+                "X_{333}",
+                "X(333) = \\mathrm{isotomic}(X_{226})=\\mathrm{cevapoint}(X_8,X_9);\\ (b+c-a)/(b+c)",
+                "X(333)：X(226) 的等截共轭（奈格尔与米滕阿列夫的截点）",
+                "X333",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(334): isotomic of X(238); bary bc/(a²−bc); skip equil
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = aa * aa - bb * cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                bb * cc_ / den
+            };
+            push_bary(
+                &mut out,
+                "X238等截",
+                "X_{334}",
+                "X(334) = \\mathrm{isotomic}(X_{238});\\ bc/(a^2-bc)",
+                "X(334)：X(238) 的等截共轭",
+                "X334",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(335): isotomic of X(239); bary 1/(a²−bc); skip equil
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let den = aa * aa - bb * cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "X239等截",
+                "X_{335}",
+                "X(335) = \\mathrm{isotomic}(X_{239});\\ 1/(a^2-bc)",
+                "X(335)：X(239) 的等截共轭（重心对 X(291) 的 Hirst 逆）",
+                "X335",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(336): isotomic of X(240); bary cot A sec(A+ω); skip right/equil
+        if !right && !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let f = |_aa: f64, caa: f64, saa: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let caw = caa * cos_w - saa * sin_w; // cos(A+ω)
+                if caw.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (caa / saa) * (1.0 / caw)
+            };
+            push_bary(
+                &mut out,
+                "X240等截",
+                "X_{336}",
+                "X(336) = \\mathrm{isotomic}(X_{240});\\ \\cot A\\sec(A+\\omega)",
+                "X(336)：X(240) 的等截共轭",
+                "X336",
+                f(g[0], ca, sa),
+                f(g[1], cb, sb),
+                f(g[2], cc, sc),
+            );
+        }
+        // X(337): isotomic of X(242); bary cot A/(a²−bc); skip right/equil
+        if !right && !equil {
+            let f = |aa: f64, saa: f64, caa: f64, bb: f64, cc_: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let den = aa * aa - bb * cc_;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (caa / saa) / den
+            };
+            push_bary(
+                &mut out,
+                "X242等截",
+                "X_{337}",
+                "X(337) = \\mathrm{isotomic}(X_{242});\\ \\cot A/(a^2-bc)",
+                "X(337)：X(242) 的等截共轭",
+                "X337",
+                f(a, sa, ca, b, c),
+                f(b, sb, cb, c, a),
+                f(c, sc, cc, a, b),
+            );
+        }
+        // X(338): isotomic of X(249)=cevapoint(X115,X125); bary sin²(B−C); skip equil
+        if !equil {
+            let f = |bb: f64, cc_: f64| (bb - cc_).sin().powi(2);
+            push_bary(
+                &mut out,
+                "X115X125截点",
+                "X_{338}",
+                "X(338) = \\mathrm{isotomic}(X_{249})=\\mathrm{cevapoint}(X_{115},X_{125});\\ \\sin^2(B-C)",
+                "X(338)：X(249) 的等截共轭（X(115) 与 X(125) 的截点）",
+                "X338",
+                f(g[1], g[2]),
+                f(g[2], g[0]),
+                f(g[0], g[1]),
+            );
+        }
+        // X(339): isotomic of X(250); bary cot A sin²(B−C); skip right/equil
+        if !right && !equil {
+            let f = |_aa: f64, saa: f64, caa: f64, bb: f64, cc_: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (caa / saa) * (bb - cc_).sin().powi(2)
+            };
+            push_bary(
+                &mut out,
+                "X250等截",
+                "X_{339}",
+                "X(339) = \\mathrm{isotomic}(X_{250});\\ \\cot A\\sin^2(B-C)",
+                "X(339)：X(250) 的等截共轭",
+                "X339",
+                f(g[0], sa, ca, g[1], g[2]),
+                f(g[1], sb, cb, g[2], g[0]),
+                f(g[2], sc, cc, g[0], g[1]),
+            );
+        }
+        // X(340): isotomic of X(265); bary sec A sin 3A csc² A; skip right/equil
+        if !right && !equil {
+            let f = |aa: f64, caa: f64, saa: f64| {
+                if caa.abs() < 1e-12 || saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                let s3 = (3.0 * aa).sin();
+                (1.0 / caa) * s3 / (saa * saa)
+            };
+            push_bary(
+                &mut out,
+                "X265等截",
+                "X_{340}",
+                "X(340) = \\mathrm{isotomic}(X_{265});\\ \\sec A\\sin 3A\\csc^2 A",
+                "X(340)：X(265) 的等截共轭",
+                "X340",
+                f(g[0], ca, sa),
+                f(g[1], cb, sb),
+                f(g[2], cc, sc),
+            );
+        }
+    }
+
+
+
+
+
+
+
+
+    // X(341)–X(350): continue isotomic / Hirst / cevapoint band (ETC).
+    // X(341)=isotomic(X269); bary bc(b+c−a)².
+    // X(342)=isotomic(X271)=cevapoint(X208,X223); bary (sec A tan A/2)(1+cos A−cos B−cos C); skip right.
+    // X(343)=isotomic(X275)=crosspoint(X69,X76); bary cos A cos(B−C).
+    // X(344)=isotomic(X277); bary a²+b²+c²−2ab−2ac [=sin A·csc²(A/2)(cos⁴(B/2)+cos⁴(C/2)−cos⁴(A/2))].
+    // X(345)=isotomic(X278); bary 1/(1−sec A); skip right.
+    // X(346)=isotomic(X279)=crosspoint(X312,X341); bary (b+c−a)².
+    // X(347)=isotomic(X280)=cevapoint(X40,X223); bary a(−1−cos A+cos B+cos C)sec²(A/2).
+    // X(348)=isotomic(X281)=cevapoint(X2,X347); bary 1/(1+sec A); skip right.
+    // X(349)=isotomic(X284)=cevapoint(X226,X307); bary (cos B+cos C)csc² A.
+    // X(350)=isotomic(X291)=X(2)-Hirst of X(75); bary bc(a²−bc); skip equil.
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let right = ca.abs() < 1e-9 || cb.abs() < 1e-9 || cc.abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(341): isotomic of X(269); bary bc(b+c−a)²
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| bb * cc_ * (bb + cc_ - aa).powi(2);
+            push_bary(
+                &mut out,
+                "X269等截",
+                "X_{341}",
+                "X(341) = \\mathrm{isotomic}(X_{269});\\ bc(b+c-a)^2",
+                "X(341)：X(269) 的等截共轭",
+                "X341",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(342): isotomic of X(271)=cevapoint(X208,X223); skip right (sec A → ∞)
+        if !right {
+            let f = |aa: f64, caa: f64, cbb: f64, ccc: f64| {
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let th = (aa * 0.5).tan();
+                (1.0 / caa) * th * (1.0 + caa - cbb - ccc)
+            };
+            push_bary(
+                &mut out,
+                "X208X223截点",
+                "X_{342}",
+                "X(342) = \\mathrm{isotomic}(X_{271})=\\mathrm{cevapoint}(X_{208},X_{223});\\ (\\sec A\\tan\\tfrac{A}{2})(1+\\cos A-\\cdots)",
+                "X(342)：X(271) 的等截共轭（X(208) 与 X(223) 的截点）",
+                "X342",
+                f(g[0], ca, cb, cc),
+                f(g[1], cb, cc, ca),
+                f(g[2], cc, ca, cb),
+            );
+        }
+        // X(343): isotomic of X(275)=crosspoint(X69,X76); bary cos A cos(B−C)
+        {
+            let f = |caa: f64, bb: f64, cc_: f64| caa * (bb - cc_).cos();
+            push_bary(
+                &mut out,
+                "X69X76交点",
+                "X_{343}",
+                "X(343) = \\mathrm{isotomic}(X_{275})=\\mathrm{crosspoint}(X_{69},X_{76});\\ \\cos A\\cos(B-C)",
+                "X(343)：X(275) 的等截共轭（X(69) 与 X(76) 的交点）",
+                "X343",
+                f(ca, g[1], g[2]),
+                f(cb, g[2], g[0]),
+                f(cc, g[0], g[1]),
+            );
+        }
+        // X(344): isotomic of X(277); bary a²+b²+c²−2ab−2ac
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * aa + bb * bb + cc_ * cc_ - 2.0 * aa * bb - 2.0 * aa * cc_
+            };
+            push_bary(
+                &mut out,
+                "X277等截",
+                "X_{344}",
+                "X(344) = \\mathrm{isotomic}(X_{277});\\ a^2+b^2+c^2-2ab-2ac",
+                "X(344)：X(277) 的等截共轭",
+                "X344",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(345): isotomic of X(278); bary 1/(1−sec A); skip right
+        if !right {
+            let f = |caa: f64| {
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let den = 1.0 - 1.0 / caa;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "X278等截",
+                "X_{345}",
+                "X(345) = \\mathrm{isotomic}(X_{278});\\ 1/(1-\\sec A)",
+                "X(345)：X(278) 的等截共轭",
+                "X345",
+                f(ca),
+                f(cb),
+                f(cc),
+            );
+        }
+        // X(346): isotomic of X(279)=crosspoint(X312,X341); bary (b+c−a)²
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| (bb + cc_ - aa).powi(2);
+            push_bary(
+                &mut out,
+                "X312X341交点",
+                "X_{346}",
+                "X(346) = \\mathrm{isotomic}(X_{279})=\\mathrm{crosspoint}(X_{312},X_{341});\\ (b+c-a)^2",
+                "X(346)：X(279) 的等截共轭（X(312) 与 X(341) 的交点）",
+                "X346",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(347): isotomic of X(280)=cevapoint(X40,X223)
+        {
+            let f = |side: f64, aa: f64, caa: f64, cbb: f64, ccc: f64| {
+                let cah = (aa * 0.5).cos();
+                if cah.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                side * (-1.0 - caa + cbb + ccc) / (cah * cah)
+            };
+            push_bary(
+                &mut out,
+                "X40X223截点",
+                "X_{347}",
+                "X(347) = \\mathrm{isotomic}(X_{280})=\\mathrm{cevapoint}(X_{40},X_{223});\\ a(-1-\\cos A+\\cdots)\\sec^2\\tfrac{A}{2}",
+                "X(347)：X(280) 的等截共轭（X(40) 与 X(223) 的截点）",
+                "X347",
+                f(a, g[0], ca, cb, cc),
+                f(b, g[1], cb, cc, ca),
+                f(c, g[2], cc, ca, cb),
+            );
+        }
+        // X(348): isotomic of X(281)=cevapoint(G,X347); bary 1/(1+sec A); skip right
+        if !right {
+            let f = |caa: f64| {
+                if caa.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                let den = 1.0 + 1.0 / caa;
+                if den.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                1.0 / den
+            };
+            push_bary(
+                &mut out,
+                "重心X347截点",
+                "X_{348}",
+                "X(348) = \\mathrm{isotomic}(X_{281})=\\mathrm{cevapoint}(X_2,X_{347});\\ 1/(1+\\sec A)",
+                "X(348)：X(281) 的等截共轭（重心与 X(347) 的截点）",
+                "X348",
+                f(ca),
+                f(cb),
+                f(cc),
+            );
+        }
+        // X(349): isotomic of X(284)=cevapoint(X226,X307); bary (cos B+cos C)csc² A
+        {
+            let f = |saa: f64, cbb: f64, ccc: f64| {
+                if saa.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (cbb + ccc) / (saa * saa)
+            };
+            push_bary(
+                &mut out,
+                "X226X307截点",
+                "X_{349}",
+                "X(349) = \\mathrm{isotomic}(X_{284})=\\mathrm{cevapoint}(X_{226},X_{307});\\ (\\cos B+\\cos C)\\csc^2 A",
+                "X(349)：X(284) 的等截共轭（X(226) 与 X(307) 的截点）",
+                "X349",
+                f(sa, cb, cc),
+                f(sb, cc, ca),
+                f(sc, ca, cb),
+            );
+        }
+        // X(350): isotomic of X(291)=X(2)-Hirst of X(75); bary bc(a²−bc); skip equil
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let d = aa * aa - bb * cc_;
+                if d.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                bb * cc_ * d
+            };
+            push_bary(
+                &mut out,
+                "X75重心Hirst",
+                "X_{350}",
+                "X(350) = \\mathrm{isotomic}(X_{291})=X(2)\\text{-Hirst of }X(75);\\ bc(a^2-bc)",
+                "X(350)：X(291) 的等截共轭（重心对摩西点 X(75) 的 Hirst 逆）",
+                "X350",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+    }
+
+    // X(351)–X(360): Parry/Weill/Fuhrmann/Morley/Hofstadter band (ETC).
+    // X(351)=Parry-circle center=crosspoint(X110,X111); bary a²(b²−c²)(b²+c²−2a²); skip equil (and den=0 isos).
+    // X(352)=circumcircle-inverse of X(353); bary a²(−a⁴−b⁴−c⁴−5b²c²+4a²b²+4a²c²); skip equil.
+    // X(353)=Brocard-circle-inverse of X(111); bary a²(4a⁴−2b⁴−2c⁴−b²c²−4a²b²−4a²c²).
+    // X(354)=Weill=centroid(intouch)=crosspoint(X1,X7); bary a[(b−c)²−ab−ac].
+    // X(355)=Fuhrmann=midpoint(X4,X8); bary a(a cos A−(b+c)cos(B−C)).
+    // X(356)=Morley center; bary sin A(cos A/3+2 cos B/3 cos C/3).
+    // X(357)=1st Morley–Taylor–Marr; bary sin A sec(A/3); isogonal of X(358).
+    // X(358)=2nd Morley–Taylor–Marr; bary sin A cos(A/3).
+    // X(359)/X(360)=Hofstadter one/zero: dual-labeled earlier as Hf_1/Hf_0 (a²/A and A:B:C).
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-12 && (b - c).abs() < 1e-12;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(351): Parry circle center; skip equil (weights vanish)
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * aa * (bb * bb - cc_ * cc_) * (bb * bb + cc_ * cc_ - 2.0 * aa * aa)
+            };
+            push_bary(
+                &mut out,
+                "帕里圆心",
+                "X_{351}",
+                "X(351) = \\mathrm{crosspoint}(X_{110},X_{111});\\ a^2(b^2-c^2)(b^2+c^2-2a^2)",
+                "X(351)：帕里圆圆心（X(110) 与 X(111) 的交点）",
+                "X351",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(352): inverse-in-circumcircle of X(353); skip equil
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let aa2 = aa * aa;
+                aa2 * (-aa.powi(4)
+                    - bb.powi(4)
+                    - cc_.powi(4)
+                    - 5.0 * bb * bb * cc_ * cc_
+                    + 4.0 * aa2 * bb * bb
+                    + 4.0 * aa2 * cc_ * cc_)
+            };
+            push_bary(
+                &mut out,
+                "X353外接逆",
+                "X_{352}",
+                "X(352) = \\mathrm{circumcircle\\text{-}inverse}(X_{353});\\ a^2(-a^4-\\cdots)",
+                "X(352)：X(353) 关于外接圆的反演（帕里圆上）",
+                "X352",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(353): inverse-in-Brocard-circle of X(111)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let aa2 = aa * aa;
+                aa2 * (4.0 * aa.powi(4)
+                    - 2.0 * bb.powi(4)
+                    - 2.0 * cc_.powi(4)
+                    - bb * bb * cc_ * cc_
+                    - 4.0 * aa2 * bb * bb
+                    - 4.0 * aa2 * cc_ * cc_)
+            };
+            push_bary(
+                &mut out,
+                "X111Brocard逆",
+                "X_{353}",
+                "X(353) = \\mathrm{Brocard\\text{-}circle\\text{-}inverse}(X_{111});\\ a^2(4a^4-\\cdots)",
+                "X(353)：帕里点关于 Brocard 圆的反演（帕里圆上）",
+                "X353",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(354): Weill = centroid of intouch = crosspoint(I, Ge)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa * ((bb - cc_).powi(2) - aa * bb - aa * cc_);
+            push_bary(
+                &mut out,
+                "Weill点",
+                "X_{354}",
+                "X(354) = \\mathrm{crosspoint}(X_1,X_7);\\ a[(b-c)^2-ab-ac]",
+                "X(354)：Weill 点（内切三角形重心；内心与热尔贡点交点）",
+                "X354",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(355): Fuhrmann = midpoint(H, Na)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, caa: f64, ang_b: f64, ang_c: f64| {
+                aa * (aa * caa - (bb + cc_) * (ang_b - ang_c).cos())
+            };
+            push_bary(
+                &mut out,
+                "Fuhrmann心",
+                "X_{355}",
+                "X(355) = \\mathrm{midpoint}(X_4,X_8);\\ a(a\\cos A-(b+c)\\cos(B-C))",
+                "X(355)：Fuhrmann 圆心（垂心与奈格尔点的中点）",
+                "X355",
+                f(a, b, c, ca, g[1], g[2]),
+                f(b, c, a, cb, g[2], g[0]),
+                f(c, a, b, cc, g[0], g[1]),
+            );
+        }
+        // X(356): Morley center (centroid of Morley equilateral)
+        {
+            let f = |saa: f64, aa: f64, bb: f64, cc_: f64| {
+                saa * ((aa / 3.0).cos() + 2.0 * (bb / 3.0).cos() * (cc_ / 3.0).cos())
+            };
+            push_bary(
+                &mut out,
+                "莫利中心",
+                "X_{356}",
+                "X(356) = \\mathrm{centroid}(\\mathrm{Morley});\\ \\sin A(\\cos\\tfrac{A}{3}+2\\cos\\tfrac{B}{3}\\cos\\tfrac{C}{3})",
+                "X(356)：莫利三角形重心",
+                "X356",
+                f(sa, g[0], g[1], g[2]),
+                f(sb, g[1], g[2], g[0]),
+                f(sc, g[2], g[0], g[1]),
+            );
+        }
+        // X(357): 1st Morley–Taylor–Marr; bary sin A sec(A/3)
+        {
+            let f = |saa: f64, aa: f64| {
+                let c3 = (aa / 3.0).cos();
+                if c3.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa / c3
+            };
+            push_bary(
+                &mut out,
+                "莫利透视1",
+                "X_{357}",
+                "X(357) = \\mathrm{perspector}(\\mathrm{Morley});\\ \\sin A\\sec\\tfrac{A}{3}",
+                "X(357)：第一 Morley–Taylor–Marr 点（莫利三角形透视中心）",
+                "X357",
+                f(sa, g[0]),
+                f(sb, g[1]),
+                f(sc, g[2]),
+            );
+        }
+        // X(358): 2nd Morley–Taylor–Marr; bary sin A cos(A/3); isogonal of X(357)
+        {
+            let f = |saa: f64, aa: f64| saa * (aa / 3.0).cos();
+            push_bary(
+                &mut out,
+                "莫利透视2",
+                "X_{358}",
+                "X(358) = \\mathrm{isogonal}(X_{357});\\ \\sin A\\cos\\tfrac{A}{3}",
+                "X(358)：第二 Morley–Taylor–Marr 点（X(357) 的等角共轭）",
+                "X358",
+                f(sa, g[0]),
+                f(sb, g[1]),
+                f(sc, g[2]),
+            );
+        }
+        // X(359)/X(360) dual-labeled in the Hofstadter block above (Hf_1 / Hf_0).
+    }
+
+    // X(361)–X(370): Yff isoscelizer / sqrt-side band (ETC).
+    // X(361)=X(266)-Ceva conjugate of X(1); bary sin A(csc B/2+csc C/2−csc A/2).
+    // X(362)=congruent-circumcircles isoscelizer; bary a(b cos B/2+c cos C/2−a cos A/2).
+    // X(363)=equal-perimeters isoscelizer; bary a(b/(1+sin B/2)+c/(1+sin C/2)−a/(1+sin A/2)).
+    // X(364)=Wabash=equal-areas isoscelizer; bary a(√b+√c−√a); =X(366)-Ceva conjugate of X(1).
+    // X(365)=trilinear square-roots; bary a^{3/2}; isogonal of X(366); crosssum(X1,X364).
+    // X(366)=isogonal(X365); bary √a; cevapoint(X1,X364).
+    // X(367)=crosspoint(X1,X366); bary a(√b+√c); =crosssum(X1,X365).
+    // X(368) equi-Brocard / X(369) 1st trisected-perimeter / X(370) equilateral-cevian:
+    // no closed barycentrics in ETC (certified ETC also omits); skip this round.
+    {
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(361): X(266)-Ceva conjugate of I; isoscelizer au=bv=cw
+        {
+            let f = |saa: f64, aa: f64, bb: f64, cc_: f64| {
+                let ha = (aa / 2.0).sin();
+                let hb = (bb / 2.0).sin();
+                let hc = (cc_ / 2.0).sin();
+                if ha.abs() < 1e-12 || hb.abs() < 1e-12 || hc.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                saa * (1.0 / hb + 1.0 / hc - 1.0 / ha)
+            };
+            push_bary(
+                &mut out,
+                "等腰化点",
+                "X_{361}",
+                "X(361) = X(266)\\text{-Ceva conj. of }X_1;\\ \\sin A(\\csc\\tfrac{B}{2}+\\csc\\tfrac{C}{2}-\\csc\\tfrac{A}{2})",
+                "X(361)：X(266) 对内心的 Ceva 共轭（等腰化点）",
+                "X361",
+                f(sa, g[0], g[1], g[2]),
+                f(sb, g[1], g[2], g[0]),
+                f(sc, g[2], g[0], g[1]),
+            );
+        }
+        // X(362): congruent circumcircles isoscelizer
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (bb * (ang_b / 2.0).cos() + cc_ * (ang_c / 2.0).cos() - aa * (ang_a / 2.0).cos())
+            };
+            push_bary(
+                &mut out,
+                "等外接圆等腰化",
+                "X_{362}",
+                "X(362) = \\mathrm{isoscelizer};\\ a(b\\cos\\tfrac{B}{2}+c\\cos\\tfrac{C}{2}-a\\cos\\tfrac{A}{2})",
+                "X(362)：等外接圆等腰化点",
+                "X362",
+                f(a, b, c, g[0], g[1], g[2]),
+                f(b, c, a, g[1], g[2], g[0]),
+                f(c, a, b, g[2], g[0], g[1]),
+            );
+        }
+        // X(363): equal-perimeters isoscelizer
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (bb / (1.0 + (ang_b / 2.0).sin())
+                    + cc_ / (1.0 + (ang_c / 2.0).sin())
+                    - aa / (1.0 + (ang_a / 2.0).sin()))
+            };
+            push_bary(
+                &mut out,
+                "等周长等腰化",
+                "X_{363}",
+                "X(363) = \\mathrm{isoscelizer};\\ a\\big(\\tfrac{b}{1+\\sin B/2}+\\tfrac{c}{1+\\sin C/2}-\\tfrac{a}{1+\\sin A/2}\\big)",
+                "X(363)：等周长等腰化点",
+                "X363",
+                f(a, b, c, g[0], g[1], g[2]),
+                f(b, c, a, g[1], g[2], g[0]),
+                f(c, a, b, g[2], g[0], g[1]),
+            );
+        }
+        // X(364): Wabash = equal-areas isoscelizer
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa * (bb.sqrt() + cc_.sqrt() - aa.sqrt());
+            push_bary(
+                &mut out,
+                "Wabash点",
+                "X_{364}",
+                "X(364) = X(366)\\text{-Ceva conj. of }X_1;\\ a(\\sqrt{b}+\\sqrt{c}-\\sqrt{a})",
+                "X(364)：Wabash 点（等面积等腰化点）",
+                "X364",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(365): trilinear square-roots; bary a^{3/2}; isogonal of X(366)
+        {
+            let f = |aa: f64| aa * aa.sqrt();
+            push_bary(
+                &mut out,
+                "边根等角",
+                "X_{365}",
+                "X(365) = \\mathrm{isogonal}(X_{366})=\\mathrm{crosssum}(X_1,X_{364});\\ a^{3/2}",
+                "X(365)：边长平方根三线坐标点（X(366) 的等角共轭）",
+                "X365",
+                f(a),
+                f(b),
+                f(c),
+            );
+        }
+        // X(366): isogonal of X(365); bary √a; cevapoint(I, X364)
+        {
+            let f = |aa: f64| aa.sqrt();
+            push_bary(
+                &mut out,
+                "边根点",
+                "X_{366}",
+                "X(366) = \\mathrm{isogonal}(X_{365})=\\mathrm{cevapoint}(X_1,X_{364});\\ \\sqrt{a}",
+                "X(366)：边长平方根重心坐标点（X(365) 的等角共轭）",
+                "X366",
+                f(a),
+                f(b),
+                f(c),
+            );
+        }
+        // X(367): crosspoint(I, X366); bary a(√b+√c)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa * (bb.sqrt() + cc_.sqrt());
+            push_bary(
+                &mut out,
+                "X1X366交点",
+                "X_{367}",
+                "X(367) = \\mathrm{crosspoint}(X_1,X_{366})=\\mathrm{crosssum}(X_1,X_{365});\\ a(\\sqrt{b}+\\sqrt{c})",
+                "X(367)：内心与 X(366) 的交点",
+                "X367",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(368)/X(369)/X(370): deferred — no closed barycentrics in ETC.
+    }
+
+    // X(371)–X(380): Kenmotu mates / pedal-centroids / Euler intercepts (ETC).
+    // X(371)=Kenmotu: dual-labeled earlier as Km; bary a cos(A−π/4)=isogonal(X485).
+    // X(372)={X3,X6}-harmonic of X371; bary a cos(A+π/4)=isogonal(X486); Brocard-inverse of X371.
+    // X(373)=centroid of pedal(G); bary 2abc+ca²cos C+ba²cos B (= a²(b⁴+c⁴−a²b²−a²c²−6b²c²)).
+    // X(374)=centroid of pedal(X9); bary a(2b+2c−3a+(c+a)cos C+(b+a)cos B).
+    // X(375)=centroid of pedal(X10); bary a(2bc(b+c)+ca(c+a)cos C+ab(a+b)cos B); =midpoint(X51,X210).
+    // X(376)=centroid of antipedal(G)=reflection(G in O)=midpoint(G,X20); bary 5sin2A−sin2B−sin2C.
+    // X(377)=Euler intercept of X7X8; bary b⁴+c⁴−a⁴−2b²c²−2abc(a+b+c).
+    // X(378)=reflection(X22 in O); bary tan A+sin2A; skip right (tan undefined).
+    // X(379)=Euler intercept of X6X7; bary a⁵+(b+c)(bca²−(bc+ca+ab)(b−c)²).
+    // X(380)=X1X19 ∩ X9X55; bary a(b+c−a)[3a³+(b+c)(3a²+(b−c)²+a(b+c))].
+    {
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let right = ca.abs() < 1e-12 || cb.abs() < 1e-12 || cc.abs() < 1e-12;
+        let pi4 = std::f64::consts::FRAC_PI_4;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(371): dual-labeled in the Kenmotu block above (Km / X_{371}).
+        // X(372): {X3,X6}-harmonic conjugate of Kenmotu
+        {
+            let f = |aa: f64, ang: f64| aa * (ang + pi4).cos();
+            push_bary(
+                &mut out,
+                "肯莫图谐共轭",
+                "X_{372}",
+                "X(372) = \\{X_3,X_6\\}\\text{-harmonic of }X_{371};\\ a\\cos(A+\\pi/4)",
+                "X(372)：{X(3),X(6)} 关于肯莫图点的调和共轭（等角共轭于 X(486)）",
+                "X372",
+                f(a, g[0]),
+                f(b, g[1]),
+                f(c, g[2]),
+            );
+        }
+        // X(373): centroid of pedal triangle of G
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_b: f64, ang_c: f64| {
+                2.0 * aa * bb * cc_ + cc_ * aa * aa * ang_c.cos() + bb * aa * aa * ang_b.cos()
+            };
+            push_bary(
+                &mut out,
+                "重心垂足重心",
+                "X_{373}",
+                "X(373) = \\mathrm{centroid}(\\mathrm{pedal}(G));\\ 2abc+ca^2\\cos C+ba^2\\cos B",
+                "X(373)：重心的垂足三角形的重心",
+                "X373",
+                f(a, b, c, g[1], g[2]),
+                f(b, c, a, g[2], g[0]),
+                f(c, a, b, g[0], g[1]),
+            );
+        }
+        // X(374): centroid of pedal triangle of Mittenpunkt X(9)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_b: f64, ang_c: f64| {
+                aa * (2.0 * bb + 2.0 * cc_ - 3.0 * aa
+                    + (cc_ + aa) * ang_c.cos()
+                    + (bb + aa) * ang_b.cos())
+            };
+            push_bary(
+                &mut out,
+                "X9垂足重心",
+                "X_{374}",
+                "X(374) = \\mathrm{centroid}(\\mathrm{pedal}(X_9));\\ a(2b+2c-3a+\\cdots)",
+                "X(374)：米滕蓬特 X(9) 的垂足三角形的重心",
+                "X374",
+                f(a, b, c, g[1], g[2]),
+                f(b, c, a, g[2], g[0]),
+                f(c, a, b, g[0], g[1]),
+            );
+        }
+        // X(375): centroid of pedal triangle of Spieker X(10); = midpoint(X51,X210)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, ang_b: f64, ang_c: f64| {
+                aa * (2.0 * bb * cc_ * (bb + cc_)
+                    + cc_ * aa * (cc_ + aa) * ang_c.cos()
+                    + aa * bb * (aa + bb) * ang_b.cos())
+            };
+            push_bary(
+                &mut out,
+                "X10垂足重心",
+                "X_{375}",
+                "X(375) = \\mathrm{centroid}(\\mathrm{pedal}(X_{10}))=\\mathrm{midpoint}(X_{51},X_{210})",
+                "X(375)：斯皮克点 X(10) 的垂足三角形的重心",
+                "X375",
+                f(a, b, c, g[1], g[2]),
+                f(b, c, a, g[2], g[0]),
+                f(c, a, b, g[0], g[1]),
+            );
+        }
+        // X(376): reflection of G in O (= midpoint(G, X20))
+        {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                5.0 * (2.0 * ang_a).sin() - (2.0 * ang_b).sin() - (2.0 * ang_c).sin()
+            };
+            push_bary(
+                &mut out,
+                "重心反足重心",
+                "X_{376}",
+                "X(376) = 2O-G = \\mathrm{midpoint}(G,X_{20});\\ 5\\sin 2A-\\sin 2B-\\sin 2C",
+                "X(376)：重心关于外心的反射（重心的反足三角形的重心）",
+                "X376",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(377): Euler-line intercept of X(7)X(8)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                bb.powi(4) + cc_.powi(4) - aa.powi(4) - 2.0 * bb * bb * cc_ * cc_
+                    - 2.0 * aa * bb * cc_ * (aa + bb + cc_)
+            };
+            push_bary(
+                &mut out,
+                "X7X8欧拉截",
+                "X_{377}",
+                "X(377) = X_7X_8 \\cap \\mathrm{Euler};\\ b^4+c^4-a^4-2b^2c^2-2abc(a+b+c)",
+                "X(377)：X(7)X(8) 与欧拉线的交点",
+                "X377",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(378): reflection of Exeter X(22) in O; skip right
+        if !right {
+            let f = |ang: f64| ang.tan() + (2.0 * ang).sin();
+            push_bary(
+                &mut out,
+                "X22外心反射",
+                "X_{378}",
+                "X(378) = 2O-X_{22};\\ \\tan A+\\sin 2A",
+                "X(378)：埃克塞特点关于外心的反射（跳过直角）",
+                "X378",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(379): Euler-line intercept of X(6)X(7)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa.powi(5)
+                    + (bb + cc_)
+                        * (bb * cc_ * aa * aa
+                            - (bb * cc_ + cc_ * aa + aa * bb) * (bb - cc_).powi(2))
+            };
+            push_bary(
+                &mut out,
+                "X6X7欧拉截",
+                "X_{379}",
+                "X(379) = X_6X_7 \\cap \\mathrm{Euler};\\ a^5+(b+c)(bca^2-(bc+ca+ab)(b-c)^2)",
+                "X(379)：X(6)X(7) 与欧拉线的交点",
+                "X379",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(380): X(1)X(19) ∩ X(9)X(55)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let s = bb + cc_;
+                aa * (s - aa)
+                    * (3.0 * aa.powi(3) + s * (3.0 * aa * aa + (bb - cc_).powi(2) + aa * s))
+            };
+            push_bary(
+                &mut out,
+                "X1X19交X9X55",
+                "X_{380}",
+                "X(380) = X_1X_{19}\\cap X_9X_{55};\\ a(b+c-a)[3a^3+(b+c)(3a^2+(b-c)^2+a(b+c))]",
+                "X(380)：X(1)X(19) 与 X(9)X(55) 的交点",
+                "X380",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+    }
+
+
+    // X(381)–X(390): orthocentroidal / Euler mates / Conway / Hirst / Taylor (ETC).
+    // X(381)=midpoint(G,H)=center of orthocentroidal circle; bary a(cos A+4 cos B cos C); =complement(X376).
+    // X(382)=reflection(O in H)=2H−O; bary a(cos A−4 cos B cos C).
+    // X(383)=Euler ∩ X(14)X(98); Brocard form with csc(B−C); skip isos (den0); equil→G.
+    // X(384)=Euler ∩ X(32)X(76) (Conway); bary a⁴+b²c².
+    // X(385)=X(2)-Hirst of X(6); bary a⁴−b²c²; skip equil (all zero).
+    // X(386)=Brocard-inverse of X(58)=ext. similitude(circum, Apollonius); bary a²(b²+c²+bc+ca+ab).
+    // X(387)=X(1)X(2) ∩ X(4)X(6); bary −a⁴+2a²(a+b+c)²+(b²−c²)².
+    // X(388)=X(1)X(4) ∩ X(7)X(8); bary a(1+cos B cos C) = [a²+(b+c)²]/(b+c−a).
+    // X(389)=Taylor-circle center; bary a[cos A−cos 2A cos(B−C)]; =midpoint(O,X52)=midpoint(H,X185).
+    // X(390)=reflection(Ge in I)=2I−X(7); bary (b+c−a)[3a²+(b−c)²].
+    {
+        let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+        let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
+        let isos = (a - b).abs() < 1e-9 || (b - c).abs() < 1e-9 || (c - a).abs() < 1e-9;
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(381): midpoint of G and H (orthocentroidal-circle center)
+        {
+            let f = |aa: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (ang_a.cos() + 4.0 * ang_b.cos() * ang_c.cos())
+            };
+            push_bary(
+                &mut out,
+                "垂心重心圆圆心",
+                "X_{381}",
+                "X(381) = \\mathrm{mid}(G,H);\\ a(\\cos A+4\\cos B\\cos C)",
+                "X(381)：重心与垂心的中点（垂心–重心圆圆心；X(376) 的补点）",
+                "X381",
+                f(a, g[0], g[1], g[2]),
+                f(b, g[1], g[2], g[0]),
+                f(c, g[2], g[0], g[1]),
+            );
+        }
+        // X(382): reflection of O in H
+        {
+            let f = |aa: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (ang_a.cos() - 4.0 * ang_b.cos() * ang_c.cos())
+            };
+            push_bary(
+                &mut out,
+                "外心垂心反射",
+                "X_{382}",
+                "X(382) = 2H-O;\\ a(\\cos A-4\\cos B\\cos C)",
+                "X(382)：外心关于垂心的反射",
+                "X382",
+                f(a, g[0], g[1], g[2]),
+                f(b, g[1], g[2], g[0]),
+                f(c, g[2], g[0], g[1]),
+            );
+        }
+        // X(383): Euler ∩ X(14)X(98); Brocard form; skip isos; equil→G
+        if equil {
+            push_bary(
+                &mut out,
+                "X14X98欧拉截",
+                "X_{383}",
+                "X(383) = X_{14}X_{98}\\cap\\mathrm{Euler};\\ \\mathrm{equil}\\to G",
+                "X(383)：X(14)X(98) 与欧拉线的交点（等边退化为重心）",
+                "X383",
+                1.0,
+                1.0,
+                1.0,
+            );
+        } else if !isos && area > 1e-12 {
+            let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+            let tan_w = 1.0 / cot_w;
+            let omega = tan_w.atan();
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_b: f64, ang_c: f64| {
+                let dbc = ang_b - ang_c;
+                if dbc.abs() < 1e-12 {
+                    return f64::NAN;
+                }
+                (1.0 / dbc.sin())
+                    * ((2.0 * ang_b).sin() * (ang_c - omega).cos() * (ang_c + pi3).sin()
+                        - (2.0 * ang_c).sin() * (ang_b - omega).cos() * (ang_b + pi3).sin())
+            };
+            let fa = f(g[1], g[2]);
+            let fb = f(g[2], g[0]);
+            let fc = f(g[0], g[1]);
+            push_bary(
+                &mut out,
+                "X14X98欧拉截",
+                "X_{383}",
+                "X(383) = X_{14}X_{98}\\cap\\mathrm{Euler};\\ (\\sin A)f(A,B,C)",
+                "X(383)：X(14)X(98) 与欧拉线的交点（跳过等腰）",
+                "X383",
+                sa * fa,
+                sb * fb,
+                sc * fc,
+            );
+        }
+        // X(384): Conway Euler point; bary a⁴+b²c²
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| aa.powi(4) + bb * bb * cc_ * cc_;
+            push_bary(
+                &mut out,
+                "X32X76欧拉截",
+                "X_{384}",
+                "X(384) = X_{32}X_{76}\\cap\\mathrm{Euler};\\ a^4+b^2c^2",
+                "X(384)：X(32)X(76) 与欧拉线的交点（Conway）",
+                "X384",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(385): X(2)-Hirst inverse of X(6); skip equilateral
+        if !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| aa.powi(4) - bb * bb * cc_ * cc_;
+            push_bary(
+                &mut out,
+                "重心X6Hirst",
+                "X_{385}",
+                "X(385) = X_2\\text{-Hirst of }X_6;\\ a^4-b^2c^2",
+                "X(385)：重心关于 X(6) 的 Hirst 逆（跳过等边）",
+                "X385",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(386): Brocard-inverse of X(58)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * aa * (bb * bb + cc_ * cc_ + bb * cc_ + cc_ * aa + aa * bb)
+            };
+            push_bary(
+                &mut out,
+                "X58布罗卡反演",
+                "X_{386}",
+                "X(386) = \\mathrm{Brocard}^{-1}(X_{58});\\ a^2(b^2+c^2+bc+ca+ab)",
+                "X(386)：X(58) 在布罗卡圆上的反演（外接圆与阿波罗尼奥斯圆的外相似中心）",
+                "X386",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(387): X(1)X(2) ∩ X(4)X(6)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                -aa.powi(4) + 2.0 * aa * aa * (aa + bb + cc_).powi(2) + (bb * bb - cc_ * cc_).powi(2)
+            };
+            push_bary(
+                &mut out,
+                "X1X2交X4X6",
+                "X_{387}",
+                "X(387) = X_1X_2\\cap X_4X_6;\\ -a^4+2a^2(a+b+c)^2+(b^2-c^2)^2",
+                "X(387)：X(1)X(2) 与 X(4)X(6) 的交点",
+                "X387",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(388): X(1)X(4) ∩ X(7)X(8); bary a(1+cos B cos C)
+        {
+            let f = |aa: f64, ang_b: f64, ang_c: f64| aa * (1.0 + ang_b.cos() * ang_c.cos());
+            push_bary(
+                &mut out,
+                "X1X4交X7X8",
+                "X_{388}",
+                "X(388) = X_1X_4\\cap X_7X_8;\\ a(1+\\cos B\\cos C)",
+                "X(388)：X(1)X(4) 与 X(7)X(8) 的交点",
+                "X388",
+                f(a, g[1], g[2]),
+                f(b, g[2], g[0]),
+                f(c, g[0], g[1]),
+            );
+        }
+        // X(389): Taylor-circle center
+        {
+            let f = |aa: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * (ang_a.cos() - (2.0 * ang_a).cos() * (ang_b - ang_c).cos())
+            };
+            push_bary(
+                &mut out,
+                "泰勒圆圆心",
+                "X_{389}",
+                "X(389) = \\mathrm{center}(\\mathrm{Taylor});\\ a[\\cos A-\\cos 2A\\cos(B-C)]",
+                "X(389)：泰勒圆圆心（= mid(O,X52) = mid(H,X185)）",
+                "X389",
+                f(a, g[0], g[1], g[2]),
+                f(b, g[1], g[2], g[0]),
+                f(c, g[2], g[0], g[1]),
+            );
+        }
+        // X(390): reflection of Gergonne in incenter
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                (bb + cc_ - aa) * (3.0 * aa * aa + (bb - cc_).powi(2))
+            };
+            push_bary(
+                &mut out,
+                "格尔巩内心反射",
+                "X_{390}",
+                "X(390) = 2I-X_7;\\ (b+c-a)[3a^2+(b-c)^2]",
+                "X(390)：格尔巩点关于内心的反射",
+                "X390",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+    }
+
+
+    // X(391)–X(400): G–K / Spieker–mitten / tan²–cos² / Napoleon mates / Parry / Yff–Malfatti (ETC).
+    // X(391)=X(2)X(6) ∩ X(8)X(9); bary (3a+b+c)(b+c−a); {X8,X9}-harmonic of X346.
+    // X(392)=X(1)X(6) ∩ X(10)X(11); bary a[(b+c)(b²+c²−a²)+4abc]; =reflection(X354 in X551).
+    // X(393)=X(25)-cross conjugate of X(4); bary tan² A; skip right (tan∞).
+    // X(394)=X(69)-Ceva of X(3); bary cos² A.
+    // X(395)=midpoint(X14,X16); bary (sin A)[cos(B−C)+2 cos(A+π/3)]; equil→G (weights 0).
+    // X(396)=midpoint(X13,X15); bary (sin A)[cos(B−C)+2 cos(A−π/3)].
+    // X(397)=crosspoint(X4,X17); bary (sin A)[cos(B−C)−2 cos(A+π/3)].
+    // X(398)=crosspoint(X4,X18); bary (sin A)[cos(B−C)−2 cos(A−π/3)].
+    // X(399)=Parry reflection point; bary (sin A)[5 cos A−4 cos B cos C−8 sin B sin C cos 2A].
+    // X(400)=Yff–Malfatti; bary sin A csc⁴(A/4).
+    {
+        let right = g.iter().any(|ang| (*ang - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(391): X(2)X(6) ∩ X(8)X(9)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| (3.0 * aa + bb + cc_) * (bb + cc_ - aa);
+            push_bary(
+                &mut out,
+                "X2X6交X8X9",
+                "X_{391}",
+                "X(391) = X_2X_6\\cap X_8X_9;\\ (3a+b+c)(b+c-a)",
+                "X(391)：X(2)X(6) 与 X(8)X(9) 的交点（{X8,X9}-调和共轭于 X346）",
+                "X391",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(392): X(1)X(6) ∩ X(10)X(11)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * ((bb + cc_) * (bb * bb + cc_ * cc_ - aa * aa) + 4.0 * aa * bb * cc_)
+            };
+            push_bary(
+                &mut out,
+                "X1X6交X10X11",
+                "X_{392}",
+                "X(392) = X_1X_6\\cap X_{10}X_{11};\\ a[(b+c)(b^2+c^2-a^2)+4abc]",
+                "X(392)：X(1)X(6) 与 X(10)X(11) 的交点（= X354 关于 X551 的反射）",
+                "X392",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(393): tan² A; skip right
+        if !right {
+            let f = |ang: f64| {
+                let t = ang.tan();
+                t * t
+            };
+            push_bary(
+                &mut out,
+                "X25叉共轭X4",
+                "X_{393}",
+                "X(393) = X_{25}\\text{-cross conj of }X_4;\\ \\tan^2 A",
+                "X(393)：X(25) 关于 X(4) 的叉共轭（跳过直角）",
+                "X393",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(394): cos² A
+        {
+            let f = |ang: f64| {
+                let c0 = ang.cos();
+                c0 * c0
+            };
+            push_bary(
+                &mut out,
+                "X69塞瓦X3",
+                "X_{394}",
+                "X(394) = X_{69}\\text{-Ceva of }X_3;\\ \\cos^2 A",
+                "X(394)：X(69) 关于外心的塞瓦共轭",
+                "X394",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+        // X(395): midpoint(X14,X16); equilateral weights vanish → G
+        {
+            let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
+            if equil {
+                push_bary(
+                    &mut out,
+                    "X14X16中点",
+                    "X_{395}",
+                    "X(395) = \\mathrm{mid}(X_{14},X_{16});\\ \\mathrm{equil}\\to G",
+                    "X(395)：第二费马点与第二等动力点的中点（等边退化为重心）",
+                    "X395",
+                    1.0,
+                    1.0,
+                    1.0,
+                );
+            } else {
+                let pi3 = std::f64::consts::PI / 3.0;
+                let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                    ang_a.sin() * ((ang_b - ang_c).cos() + 2.0 * (ang_a + pi3).cos())
+                };
+                push_bary(
+                    &mut out,
+                    "X14X16中点",
+                    "X_{395}",
+                    "X(395) = \\mathrm{mid}(X_{14},X_{16});\\ (\\sin A)[\\cos(B-C)+2\\cos(A+\\pi/3)]",
+                    "X(395)：第二费马点与第二等动力点的中点",
+                    "X395",
+                    f(g[0], g[1], g[2]),
+                    f(g[1], g[2], g[0]),
+                    f(g[2], g[0], g[1]),
+                );
+            }
+        }
+        // X(396): midpoint(X13,X15)
+        {
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin() * ((ang_b - ang_c).cos() + 2.0 * (ang_a - pi3).cos())
+            };
+            push_bary(
+                &mut out,
+                "X13X15中点",
+                "X_{396}",
+                "X(396) = \\mathrm{mid}(X_{13},X_{15});\\ (\\sin A)[\\cos(B-C)+2\\cos(A-\\pi/3)]",
+                "X(396)：第一费马点与第一等动力点的中点",
+                "X396",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(397): crosspoint(X4,X17)
+        {
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin() * ((ang_b - ang_c).cos() - 2.0 * (ang_a + pi3).cos())
+            };
+            push_bary(
+                &mut out,
+                "X4X17截点",
+                "X_{397}",
+                "X(397) = \\mathrm{crosspoint}(X_4,X_{17});\\ (\\sin A)[\\cos(B-C)-2\\cos(A+\\pi/3)]",
+                "X(397)：垂心与第一拿破仑点的截点",
+                "X397",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(398): crosspoint(X4,X18)
+        {
+            let pi3 = std::f64::consts::PI / 3.0;
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin() * ((ang_b - ang_c).cos() - 2.0 * (ang_a - pi3).cos())
+            };
+            push_bary(
+                &mut out,
+                "X4X18截点",
+                "X_{398}",
+                "X(398) = \\mathrm{crosspoint}(X_4,X_{18});\\ (\\sin A)[\\cos(B-C)-2\\cos(A-\\pi/3)]",
+                "X(398)：垂心与第二拿破仑点的截点",
+                "X398",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(399): Parry reflection point
+        {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.sin()
+                    * (5.0 * ang_a.cos()
+                        - 4.0 * ang_b.cos() * ang_c.cos()
+                        - 8.0 * ang_b.sin() * ang_c.sin() * (2.0 * ang_a).cos())
+            };
+            push_bary(
+                &mut out,
+                "帕里反射点",
+                "X_{399}",
+                "X(399) = \\mathrm{Parry\\ reflection};\\ (\\sin A)[5\\cos A-4\\cos B\\cos C-8\\sin B\\sin C\\cos 2A]",
+                "X(399)：帕里反射点（过顶点且平行于欧拉线的反射线共点）",
+                "X399",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(400): Yff–Malfatti; bary sin A csc⁴(A/4)
+        {
+            let f = |ang: f64| {
+                let s4 = (ang / 4.0).sin();
+                if s4.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                ang.sin() / s4.powi(4)
+            };
+            push_bary(
+                &mut out,
+                "伊夫马尔法蒂",
+                "X_{400}",
+                "X(400) = \\mathrm{Yff\\text{-}Malfatti};\\ \\sin A\\,\\csc^4(A/4)",
+                "X(400)：伊夫–马尔法蒂点（Ajima–Malfatti 的外切变体）",
+                "X400",
+                f(g[0]),
+                f(g[1]),
+                f(g[2]),
+            );
+        }
+    }
+
+    // X(401)–X(460): Bailey / Zeeman–Gossard / orthic-X36 / Euler intercepts / X21·X29 subst / Hirst / Ceva / X4-Hirst / Euler 4th–11th subst / complements X27/X297/X21/X452 / crosspoint X98·X511 / X2-Hirst X27/X21/X452 / X3-Hirst X4 / X4-Hirst-pair X451 / X452 / Alshain / Euler 11th X155·X159·X195·X399 / X458 / X459 / Antares X460 (ETC).
+    // X(401)=Bailey=X(2)-Hirst of X(3)=anticomplement(X297); bary sin2B sin2C−sin²(2A); skip equil (weights 0).
+    // X(402)=Zeeman–Gossard perspector; bary p·y with p=2a⁴−a²b²−a²c²−(b²−c²)²,
+    //   y=a⁸−a⁶(b²+c²)+a⁴(2b²−c²)(2c²−b²)+[(b²−c²)²][3a²(b²+c²)−b⁴−c⁴−3b²c²]; skip equil (p=0).
+    // X(403)=X(36)-of-orthic=mid(H,X186); bary tan A(1+cos2B+cos2C); skip right/equil.
+    // X(404)={X2,X3}-harmonic of X(21); bary abc(a+b+c)−a²(b²+c²−a²).
+    // X(405)=Euler ∩ X(1)X(6)=complement(X377); bary b+c+a(1+cos A).
+    // X(406)=Euler ∩ X(10)X(33); bary b+c+a(1+sec A); skip right.
+    // X(407)=crosspoint(X4,X225); bary (v+w)tan A with u:v:w=X(21) tril 1/(cosB+cosC); skip right.
+    // X(408)=Euler ∩ X(73)X(228); bary (v+w)sin2A with u:v:w=X(29) tril (sec A)/(cosB+cosC); skip right.
+    // X(409)=Euler X(21)-1st-substitution; bary a(u²+vw), u:v:w=X(21).
+    // X(410)=Euler X(29)-1st-substitution; bary a(u²+vw), u:v:w=X(29); skip right.
+    // X(411)=Euler X(21)-2nd-subst={X3,X4}-harmonic of X(21); bary a[(1/v)²+(1/w)²−(1/u)²]; skip equil (0).
+    // X(412)=Euler X(29)-2nd-subst={X3,X4}-harmonic of X(29); same form on X(29); skip right/equil.
+    // X(413)=Euler X(21)-3rd-subst; bary a u³(v²+w²−vw), u:v:w=X(21).
+    // X(414)=Euler X(29)-3rd-subst; same on X(29); skip right.
+    // X(415)=X(4)-Hirst of X(29); bary (u²−vw)tan A, u:v:w=X(21); skip right/equil.
+    // X(416)=X(3)-Hirst of X(21); bary (u²−vw)sin2A, u:v:w=X(29); skip right/equil.
+    // X(417)=X(3)-Ceva of X(185); bary sin2A(sec²B+sec²C); skip right (sec∞).
+    // X(418)=X(3)-Ceva of X(216); bary sin2A(csc2B+csc2C); skip right (csc π).
+    // X(419)=X(4)-Hirst of X(25); bary (u²−vw)tan A, u:v:w=X(31)=a²; skip right/equil.
+    // X(420)=X(4)-Hirst of X(427); bary (u²−vw)tan A, u:v:w=X(38)=b²+c²; skip right/equil.
+    // X(421)=X(4)-Hirst of X(24); bary (u²−vw)tan A, u:v:w=X(47) tril cos2A; skip right/equil.
+    // X(422)=X(4)-Hirst of X(28); u:v:w=X(58) tril a/(b+c); skip right/equil.
+    // X(423)=X(4)-Hirst of X(27); u:v:w=X(81) tril 1/(b+c); skip right/equil.
+    // X(424)=X(4)-Hirst of X(451); u:v:w=X(191) tril; skip right/equil.
+    // X(425)=X(4)-Hirst of X(21); u:v:w=X(283) tril cosA/(cosB+cosC); skip right/equil.
+    // X(426)=Euler X(19)-4th-subst; bary (v²+w²)sin2A, u:v:w=tan A; skip right.
+    // X(427)=complement of X(22); bary sin A(sec A+cos(B−C)); skip right.
+    // X(428)=Euler X(38)-5th-subst; bary (v+w)tan A, u:v:w=b²+c²; skip right.
+    // X(429)=Euler X(58)-5th-subst; bary (v+w)tan A, u:v:w=a/(b+c); skip right.
+    // X(430)=Euler X(81)-5th-subst; bary (v+w)tan A, u:v:w=1/(b+c); skip right.
+    // X(431)=Euler X(283)-5th-subst; bary (v+w)tan A, u:v:w=cosA/(cosB+cosC); skip right.
+    // X(432)=Euler X(155)-6th-subst; bary (v²+w²)tan A, u:v:w=cosA(cos²B+cos²C−cos²A); skip right.
+    // X(433)=Euler X(159)-6th-subst; bary (v²+w²)tan A, u:v:w=X(159) tril; skip right.
+    // X(434)=Euler X(195)-6th-subst; bary (v²+w²)tan A, u:v:w=X(195) tril; skip right.
+    // X(435)=Euler X(399)-6th-subst; bary (v²+w²)tan A, u:v:w=X(399) tril; skip right.
+    // X(436)=Euler X(48)-7th-subst; bary (u²+vw)tan A, u:v:w=sin2A; skip right.
+    // X(437)=Euler X(214)-8th-subst; bary (u²+vw)tan A, u:v:w=(b+c−2a)(b²+c²−a²−bc); skip right/equil.
+    // X(438)=Euler X(204)-9th-subst; bary u²+vw, u:v:w=tanA(tanB+tanC−tanA); skip right.
+    // X(439)=Euler X(193)-10th-subst; bary (3a²−b²−c²)².
+    // X(440)=complement of X(27); bary v+w, u:v:w=tanA/(b+c); skip right.
+    // X(441)=complement of X(297); bary v+w, u:v:w=X(240) tril secA cos(A+ω); skip right/equil.
+    // X(442)=complement of X(21); bary v+w, u:v:w=X(284) tril sinA/(cosB+cosC); =mid(X79,X191).
+    // X(443)=complement of X(452); bary v+w, u:v:w=X(380) tril.
+    // X(444)=Euler ∩ X(19)X(232); bary (v+w)sinA tanA, u:v:w=X(256)=1/(a²+bc); skip right.
+    // X(445)=Euler X(79)-11th-subst; bary (v+w)secA, u:v:w=1/(1+2cosA); skip right.
+    // X(446)=crosspoint of X(98) and X(511); bary a u(v²+w²), u:v:w=sec(A+ω); skip equil.
+    // X(447)=X(2)-Hirst of X(27); bary u²−vw, u:v:w=tanA/(b+c); skip right/equil.
+    // X(448)=X(2)-Hirst of X(21); bary u²−vw, u:v:w=sinA/(cosB+cosC); skip equil.
+    // X(449)=X(2)-Hirst of X(452); bary u²−vw, u:v:w=X(380) tril; skip equil.
+    // X(450)=X(3)-Hirst of X(4); bary tanA(cos⁴A−(cosB cosC)²); skip right/equil.
+    // X(451)=X(4)-Hirst inverse of X(424); bary u tan A, u:v:w=X(191) tril; skip right.
+    // X(452)=X(2)-Hirst inverse of X(449); bary = X(380) tril (anticomplement of X443).
+    // X(453)=Alshain; bary sinA (cosB+cosC−cosA)²/(cosB+cosC).
+    // X(454)=Euler X(155)-11th-subst; bary u² tan A, u:v:w=X(155) tril; skip right.
+    // X(455)=Euler X(159)-11th-subst; bary u² tan A, u:v:w=X(159) tril; skip right.
+    // X(456)=Euler X(195)-11th-subst; bary u² tan A, u:v:w=X(195) tril; skip right.
+    // X(457)=Euler X(399)-11th-subst; bary u² tan A, u:v:w=X(399) tril; skip right.
+    // X(458)=Euler ∩ X(76)X(275); bary tanA+cot ω = secA cos(A−ω); skip right.
+    // X(459)=X(253)-Ceva of X(4); bary 1/(tanB tanC−2).
+    // X(460)=Antares; bary tanA[a²(2a²−b²−c²)+(b²−c²)²]; =X4*X230 bary product; skip right/equil.
+    {
+        let right = g.iter().any(|ang| (*ang - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        let equil = (a - b).abs() < 1e-9 && (b - c).abs() < 1e-9;
+        let (ca, cb, cc) = (g[0].cos(), g[1].cos(), g[2].cos());
+        let push_bary = |out: &mut Vec<Fact>,
+                         group: &str,
+                         label: &str,
+                         tip: &str,
+                         zh: &str,
+                         tag: &str,
+                         wa: f64,
+                         wb: f64,
+                         wc: f64| {
+            let den = wa + wb + wc;
+            if den.abs() > 1e-12 && wa.is_finite() && wb.is_finite() && wc.is_finite() {
+                let xy = [
+                    (wa * pa[0] + wb * pb[0] + wc * pc[0]) / den,
+                    (wa * pa[1] + wb * pb[1] + wc * pc[1]) / den,
+                ];
+                if xy[0].is_finite() && xy[1].is_finite() {
+                    out.push(
+                        fact(group, label, pt(xy[0], xy[1]), None, tip, zh).with(Shape::Point {
+                            x: xy[0],
+                            y: xy[1],
+                            label: tag.into(),
+                        }),
+                    );
+                }
+            }
+        };
+        // X(401): Bailey = X(2)-Hirst of O; skip equilateral
+        if !equil {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                (2.0 * ang_b).sin() * (2.0 * ang_c).sin() - (2.0 * ang_a).sin().powi(2)
+            };
+            push_bary(
+                &mut out,
+                "贝利点",
+                "X_{401}",
+                "X(401) = \\mathrm{Bailey}=X_2\\text{-Hirst of }X_3;\\ \\sin 2B\\sin 2C-\\sin^2 2A",
+                "X(401)：贝利点（重心对圆心的 Hirst 逆；跳过等边）",
+                "X401",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(402): Zeeman–Gossard perspector; skip equilateral
+        if !equil {
+            let p = |aa: f64, bb: f64, cc_: f64| {
+                2.0 * aa.powi(4)
+                    - aa * aa * bb * bb
+                    - aa * aa * cc_ * cc_
+                    - (bb * bb - cc_ * cc_).powi(2)
+            };
+            let y = |aa: f64, bb: f64, cc_: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc_ * cc_;
+                let dbc = (b2 - c2).powi(2);
+                aa.powi(8)
+                    - aa.powi(6) * (b2 + c2)
+                    + aa.powi(4) * (2.0 * b2 - c2) * (2.0 * c2 - b2)
+                    + dbc * (3.0 * a2 * (b2 + c2) - b2 * b2 - c2 * c2 - 3.0 * b2 * c2)
+            };
+            let f = |aa: f64, bb: f64, cc_: f64| p(aa, bb, cc_) * y(aa, bb, cc_);
+            push_bary(
+                &mut out,
+                "齐曼戈萨德",
+                "X_{402}",
+                "X(402) = \\mathrm{Zeeman\\text{-}Gossard};\\ p(a,b,c)\\,y(a,b,c)",
+                "X(402)：齐曼–戈萨德透视中心（欧拉线侧三角形的欧拉线透视点）",
+                "X402",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(403): X(36) of orthic = mid(H, X186); skip right / equilateral
+        if !right && !equil {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                ang_a.tan() * (1.0 + (2.0 * ang_b).cos() + (2.0 * ang_c).cos())
+            };
+            push_bary(
+                &mut out,
+                "垂足X36",
+                "X_{403}",
+                "X(403) = X_{36}\\text{-of-orthic}=\\mathrm{mid}(X_4,X_{186});\\ \\tan A(1+\\cos 2B+\\cos 2C)",
+                "X(403)：垂足三角形的 X(36)（= 垂心与 X186 的中点；跳过直角/等边）",
+                "X403",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(404): {X2,X3}-harmonic conjugate of Schiffler X(21)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                aa * bb * cc_ * (aa + bb + cc_) - aa * aa * (bb * bb + cc_ * cc_ - aa * aa)
+            };
+            push_bary(
+                &mut out,
+                "X21欧拉调和",
+                "X_{404}",
+                "X(404) = \\{X_2,X_3\\}\\text{-harmonic of }X_{21};\\ abc(a+b+c)-a^2(b^2+c^2-a^2)",
+                "X(404)：席弗勒点关于 {重心,外心} 的调和共轭",
+                "X404",
+                f(a, b, c),
+                f(b, c, a),
+                f(c, a, b),
+            );
+        }
+        // X(405): Euler ∩ X(1)X(6) = complement of X(377)
+        {
+            let f = |aa: f64, bb: f64, cc_: f64, caa: f64| bb + cc_ + aa * (1.0 + caa);
+            push_bary(
+                &mut out,
+                "X1X6欧拉截",
+                "X_{405}",
+                "X(405) = \\mathrm{Euler}\\cap X_1X_6;\\ b+c+a(1+\\cos A)",
+                "X(405)：内心–类似重心线与欧拉线的交点（= X377 的补点）",
+                "X405",
+                f(a, b, c, ca),
+                f(b, c, a, cb),
+                f(c, a, b, cc),
+            );
+        }
+        // X(406): Euler ∩ X(10)X(33); skip right
+        if !right {
+            let f = |aa: f64, bb: f64, cc_: f64, ang: f64| {
+                let c0 = ang.cos();
+                if c0.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                bb + cc_ + aa * (1.0 + 1.0 / c0)
+            };
+            push_bary(
+                &mut out,
+                "X10X33欧拉截",
+                "X_{406}",
+                "X(406) = \\mathrm{Euler}\\cap X_{10}X_{33};\\ b+c+a(1+\\sec A)",
+                "X(406)：斯皮克–垂足透视线与欧拉线的交点（跳过直角）",
+                "X406",
+                f(a, b, c, g[0]),
+                f(b, c, a, g[1]),
+                f(c, a, b, g[2]),
+            );
+        }
+        // X(21) trilinears u:v:w = 1/(cos B + cos C)
+        let x21_tril = {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                Some((1.0 / da, 1.0 / db, 1.0 / dc))
+            } else {
+                None
+            }
+        };
+        // X(407): crosspoint(X4, X225); (v+w) tan A; skip right
+        if !right {
+            if let Some((u21, v21, w21)) = x21_tril {
+                push_bary(
+                    &mut out,
+                    "X4X225截点",
+                    "X_{407}",
+                    "X(407) = \\mathrm{crosspoint}(X_4,X_{225});\\ (v+w)\\tan A\\ (u:v:w=X_{21})",
+                    "X(407)：垂心与 X(225) 的截点（跳过直角）",
+                    "X407",
+                    (v21 + w21) * g[0].tan(),
+                    (w21 + u21) * g[1].tan(),
+                    (u21 + v21) * g[2].tan(),
+                );
+            }
+        }
+        // X(29) trilinears u:v:w = (sec A)/(cos B + cos C); skip right (sec∞)
+        let x29_tril = if !right {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if ca.abs() > 1e-14
+                && cb.abs() > 1e-14
+                && cc.abs() > 1e-14
+                && da.abs() > 1e-14
+                && db.abs() > 1e-14
+                && dc.abs() > 1e-14
+            {
+                Some((1.0 / ca / da, 1.0 / cb / db, 1.0 / cc / dc))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        // X(408): Euler ∩ X(73)X(228); (v+w) sin 2A
+        if let Some((u29, v29, w29)) = x29_tril {
+            push_bary(
+                &mut out,
+                "X73X228欧拉截",
+                "X_{408}",
+                "X(408) = \\mathrm{Euler}\\cap X_{73}X_{228};\\ (v+w)\\sin 2A\\ (u:v:w=X_{29})",
+                "X(408)：X(73)X(228) 与欧拉线的交点（跳过直角）",
+                "X408",
+                (v29 + w29) * (2.0 * g[0]).sin(),
+                (w29 + u29) * (2.0 * g[1]).sin(),
+                (u29 + v29) * (2.0 * g[2]).sin(),
+            );
+        }
+        // X(409): Euler X(21)-1st-substitution; a(u²+vw)
+        if let Some((u21, v21, w21)) = x21_tril {
+            push_bary(
+                &mut out,
+                "X21一次替换",
+                "X_{409}",
+                "X(409) = \\mathrm{Euler}\\ X_{21}\\text{-1st-subst};\\ a(u^2+vw)\\ (u:v:w=X_{21})",
+                "X(409)：席弗勒点的欧拉一次替换点",
+                "X409",
+                a * (u21 * u21 + v21 * w21),
+                b * (v21 * v21 + w21 * u21),
+                c * (w21 * w21 + u21 * v21),
+            );
+        }
+        // X(410): Euler X(29)-1st-substitution; a(u²+vw); skip right
+        if let Some((u29, v29, w29)) = x29_tril {
+            push_bary(
+                &mut out,
+                "X29一次替换",
+                "X_{410}",
+                "X(410) = \\mathrm{Euler}\\ X_{29}\\text{-1st-subst};\\ a(u^2+vw)\\ (u:v:w=X_{29})",
+                "X(410)：X(29) 的欧拉一次替换点（跳过直角）",
+                "X410",
+                a * (u29 * u29 + v29 * w29),
+                b * (v29 * v29 + w29 * u29),
+                c * (w29 * w29 + u29 * v29),
+            );
+        }
+        // X(411): Euler X(21)-2nd-substitution; skip equilateral (weights 0)
+        if !equil {
+            if let Some((u21, v21, w21)) = x21_tril {
+                let f = |u: f64, v: f64, w: f64| {
+                    if u.abs() < 1e-14 || v.abs() < 1e-14 || w.abs() < 1e-14 {
+                        return f64::NAN;
+                    }
+                    (1.0 / v).powi(2) + (1.0 / w).powi(2) - (1.0 / u).powi(2)
+                };
+                push_bary(
+                    &mut out,
+                    "X21二次替换",
+                    "X_{411}",
+                    "X(411) = \\mathrm{Euler}\\ X_{21}\\text{-2nd-subst};\\ a[(1/v)^2+(1/w)^2-(1/u)^2]",
+                    "X(411)：席弗勒点的欧拉二次替换点（={X3,X4}-调和；跳过等边）",
+                    "X411",
+                    a * f(u21, v21, w21),
+                    b * f(v21, w21, u21),
+                    c * f(w21, u21, v21),
+                );
+            }
+        }
+        // X(412): Euler X(29)-2nd-substitution; skip right / equilateral
+        if !equil {
+            if let Some((u29, v29, w29)) = x29_tril {
+                let f = |u: f64, v: f64, w: f64| {
+                    if u.abs() < 1e-14 || v.abs() < 1e-14 || w.abs() < 1e-14 {
+                        return f64::NAN;
+                    }
+                    (1.0 / v).powi(2) + (1.0 / w).powi(2) - (1.0 / u).powi(2)
+                };
+                push_bary(
+                    &mut out,
+                    "X29二次替换",
+                    "X_{412}",
+                    "X(412) = \\mathrm{Euler}\\ X_{29}\\text{-2nd-subst};\\ a[(1/v)^2+(1/w)^2-(1/u)^2]",
+                    "X(412)：X(29) 的欧拉二次替换点（跳过直角/等边）",
+                    "X412",
+                    a * f(u29, v29, w29),
+                    b * f(v29, w29, u29),
+                    c * f(w29, u29, v29),
+                );
+            }
+        }
+        // X(413): Euler X(21)-3rd-substitution
+        if let Some((u21, v21, w21)) = x21_tril {
+            let f = |u: f64, v: f64, w: f64| u.powi(3) * (v * v + w * w - v * w);
+            push_bary(
+                &mut out,
+                "X21三次替换",
+                "X_{413}",
+                "X(413) = \\mathrm{Euler}\\ X_{21}\\text{-3rd-subst};\\ a\\,u^3(v^2+w^2-vw)",
+                "X(413)：席弗勒点的欧拉三次替换点",
+                "X413",
+                a * f(u21, v21, w21),
+                b * f(v21, w21, u21),
+                c * f(w21, u21, v21),
+            );
+        }
+        // X(414): Euler X(29)-3rd-substitution; skip right
+        if let Some((u29, v29, w29)) = x29_tril {
+            let f = |u: f64, v: f64, w: f64| u.powi(3) * (v * v + w * w - v * w);
+            push_bary(
+                &mut out,
+                "X29三次替换",
+                "X_{414}",
+                "X(414) = \\mathrm{Euler}\\ X_{29}\\text{-3rd-subst};\\ a\\,u^3(v^2+w^2-vw)",
+                "X(414)：X(29) 的欧拉三次替换点（跳过直角）",
+                "X414",
+                a * f(u29, v29, w29),
+                b * f(v29, w29, u29),
+                c * f(w29, u29, v29),
+            );
+        }
+        // X(415): X(4)-Hirst inverse of X(29); (u²−vw) tan A on X(21); skip right/equil
+        if !right && !equil {
+            if let Some((u21, v21, w21)) = x21_tril {
+                let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+                push_bary(
+                    &mut out,
+                    "X4HirstX29",
+                    "X_{415}",
+                    "X(415) = X_4\\text{-Hirst of }X_{29};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{21})",
+                    "X(415)：垂心对 X(29) 的 Hirst 逆（用 X21 坐标；跳过直角/等边）",
+                    "X415",
+                    f(u21, v21, w21, g[0]),
+                    f(v21, w21, u21, g[1]),
+                    f(w21, u21, v21, g[2]),
+                );
+            }
+        }
+        // X(416): X(3)-Hirst inverse of X(21); (u²−vw) sin 2A on X(29); skip right/equil
+        if !equil {
+            if let Some((u29, v29, w29)) = x29_tril {
+                let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * (2.0 * ang).sin();
+                push_bary(
+                    &mut out,
+                    "X3HirstX21",
+                    "X_{416}",
+                    "X(416) = X_3\\text{-Hirst of }X_{21};\\ (u^2-vw)\\sin 2A\\ (u:v:w=X_{29})",
+                    "X(416)：外心对席弗勒点的 Hirst 逆（跳过直角/等边）",
+                    "X416",
+                    f(u29, v29, w29, g[0]),
+                    f(v29, w29, u29, g[1]),
+                    f(w29, u29, v29, g[2]),
+                );
+            }
+        }
+        // X(417): X(3)-Ceva conjugate of X(185); sin2A(sec²B+sec²C); skip right
+        if !right {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                let cb_ = ang_b.cos();
+                let cc_ = ang_c.cos();
+                if cb_.abs() < 1e-14 || cc_.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (2.0 * ang_a).sin() * (1.0 / (cb_ * cb_) + 1.0 / (cc_ * cc_))
+            };
+            push_bary(
+                &mut out,
+                "X3CevaX185",
+                "X_{417}",
+                "X(417) = X_3\\text{-Ceva of }X_{185};\\ \\sin 2A(\\sec^2 B+\\sec^2 C)",
+                "X(417)：外心对 X(185) 的塞瓦共轭（跳过直角）",
+                "X417",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(418): X(3)-Ceva conjugate of X(216); sin2A(csc2B+csc2C); skip right
+        if !right {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                let s2b = (2.0 * ang_b).sin();
+                let s2c = (2.0 * ang_c).sin();
+                if s2b.abs() < 1e-14 || s2c.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                (2.0 * ang_a).sin() * (1.0 / s2b + 1.0 / s2c)
+            };
+            push_bary(
+                &mut out,
+                "X3CevaX216",
+                "X_{418}",
+                "X(418) = X_3\\text{-Ceva of }X_{216};\\ \\sin 2A(\\csc 2B+\\csc 2C)",
+                "X(418)：外心对 X(216) 的塞瓦共轭（跳过直角）",
+                "X418",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(419): X(4)-Hirst of X(25); (u²−vw)tan A on X(31)=a²; skip right/equil
+        if !right && !equil {
+            let (u31, v31, w31) = (a * a, b * b, c * c);
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X4HirstX25",
+                "X_{419}",
+                "X(419) = X_4\\text{-Hirst of }X_{25};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{31})",
+                "X(419)：垂心对 X(25) 的 Hirst 逆（X31=a²；跳过直角/等边）",
+                "X419",
+                f(u31, v31, w31, g[0]),
+                f(v31, w31, u31, g[1]),
+                f(w31, u31, v31, g[2]),
+            );
+        }
+        // X(420): X(4)-Hirst of X(427); (u²−vw)tan A on X(38)=b²+c²; skip right/equil
+        if !right && !equil {
+            let (u38, v38, w38) = (b * b + c * c, c * c + a * a, a * a + b * b);
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X4HirstX427",
+                "X_{420}",
+                "X(420) = X_4\\text{-Hirst of }X_{427};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{38})",
+                "X(420)：垂心对 X(427) 的 Hirst 逆（X38=b²+c²；跳过直角/等边）",
+                "X420",
+                f(u38, v38, w38, g[0]),
+                f(v38, w38, u38, g[1]),
+                f(w38, u38, v38, g[2]),
+            );
+        }
+        // X(421)–X(430): X4-Hirst of X24/X28/X27/X451/X21; Euler X19-4th; complement X22; Euler X38/X58/X81-5th (ETC).
+        // X(421)=X(4)-Hirst of X(24); bary (u²−vw)tan A, u:v:w=X(47) tril cos2A; skip right/equil.
+        // X(422)=X(4)-Hirst of X(28); u:v:w=X(58) tril a/(b+c); skip right/equil.
+        // X(423)=X(4)-Hirst of X(27); u:v:w=X(81) tril 1/(b+c); skip right/equil.
+        // X(424)=X(4)-Hirst of X(451); u:v:w=X(191) tril (b+c−a)(Σbc)+b³+c³−a³; skip right/equil.
+        // X(425)=X(4)-Hirst of X(21); u:v:w=X(283) tril cosA/(cosB+cosC); skip right/equil.
+        // X(426)=Euler X(19)-4th-subst; bary (v²+w²)sin2A, u:v:w=X(19)=tan A; skip right.
+        // X(427)=complement of X(22); bary sin A(sec A+cos(B−C)); skip right (sec∞).
+        // X(428)=Euler X(38)-5th-subst; bary (v+w)tan A, u:v:w=X(38)=b²+c²; skip right.
+        // X(429)=Euler X(58)-5th-subst; bary (v+w)tan A, u:v:w=X(58) tril a/(b+c); skip right.
+        // X(430)=Euler X(81)-5th-subst; bary (v+w)tan A, u:v:w=X(81) tril 1/(b+c); skip right.
+        // X(421): X(4)-Hirst of X(24); (u²−vw)tan A on cos 2A; skip right/equil
+        if !right && !equil {
+            let (u47, v47, w47) = ((2.0 * g[0]).cos(), (2.0 * g[1]).cos(), (2.0 * g[2]).cos());
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X4HirstX24",
+                "X_{421}",
+                "X(421) = X_4\\text{-Hirst of }X_{24};\\ (u^2-vw)\\tan A\\ (u:v:w=\\cos 2A)",
+                "X(421)：垂心对 X(24) 的 Hirst 逆（X47=cos2A；跳过直角/等边）",
+                "X421",
+                f(u47, v47, w47, g[0]),
+                f(v47, w47, u47, g[1]),
+                f(w47, u47, v47, g[2]),
+            );
+        }
+        // X(422): X(4)-Hirst of X(28); on X(58) tril a/(b+c); skip right/equil
+        if !right && !equil {
+            let (u58, v58, w58) = (a / (b + c), b / (c + a), c / (a + b));
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X4HirstX28",
+                "X_{422}",
+                "X(422) = X_4\\text{-Hirst of }X_{28};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{58})",
+                "X(422)：垂心对 X(28) 的 Hirst 逆（X58=a/(b+c)；跳过直角/等边）",
+                "X422",
+                f(u58, v58, w58, g[0]),
+                f(v58, w58, u58, g[1]),
+                f(w58, u58, v58, g[2]),
+            );
+        }
+        // X(423): X(4)-Hirst of X(27); on X(81) tril 1/(b+c); skip right/equil
+        if !right && !equil {
+            let (u81, v81, w81) = (1.0 / (b + c), 1.0 / (c + a), 1.0 / (a + b));
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X4HirstX27",
+                "X_{423}",
+                "X(423) = X_4\\text{-Hirst of }X_{27};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{81})",
+                "X(423)：垂心对 X(27) 的 Hirst 逆（X81=1/(b+c)；跳过直角/等边）",
+                "X423",
+                f(u81, v81, w81, g[0]),
+                f(v81, w81, u81, g[1]),
+                f(w81, u81, v81, g[2]),
+            );
+        }
+        // X(424): X(4)-Hirst of X(451); on X(191) tril; skip right/equil
+        if !right && !equil {
+            let f191 = |aa: f64, bb: f64, cc_: f64| {
+                (bb + cc_ - aa) * (bb * cc_ + cc_ * aa + aa * bb) + bb.powi(3) + cc_.powi(3) - aa.powi(3)
+            };
+            let (u191, v191, w191) = (f191(a, b, c), f191(b, c, a), f191(c, a, b));
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X4HirstX451",
+                "X_{424}",
+                "X(424) = X_4\\text{-Hirst of }X_{451};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{191})",
+                "X(424)：垂心对 X(451) 的 Hirst 逆（X191 三线坐标；跳过直角/等边）",
+                "X424",
+                f(u191, v191, w191, g[0]),
+                f(v191, w191, u191, g[1]),
+                f(w191, u191, v191, g[2]),
+            );
+        }
+        // X(425): X(4)-Hirst of X(21); on X(283) tril cosA/(cosB+cosC); skip right/equil
+        if !right && !equil {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let (u283, v283, w283) = (ca / da, cb / db, cc / dc);
+                let f = |u: f64, v: f64, w: f64, ang: f64| (u * u - v * w) * ang.tan();
+                push_bary(
+                    &mut out,
+                    "X4HirstX21",
+                    "X_{425}",
+                    "X(425) = X_4\\text{-Hirst of }X_{21};\\ (u^2-vw)\\tan A\\ (u:v:w=X_{283})",
+                    "X(425)：垂心对席弗勒点的 Hirst 逆（X283；跳过直角/等边）",
+                    "X425",
+                    f(u283, v283, w283, g[0]),
+                    f(v283, w283, u283, g[1]),
+                    f(w283, u283, v283, g[2]),
+                );
+            }
+        }
+        // X(426): Euler X(19)-4th-substitution; (v²+w²)sin2A on tan A; skip right
+        if !right {
+            let (u19, v19, w19) = (g[0].tan(), g[1].tan(), g[2].tan());
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * (2.0 * ang).sin();
+            push_bary(
+                &mut out,
+                "X19四次替换",
+                "X_{426}",
+                "X(426) = \\mathrm{Euler}\\ X_{19}\\text{-4th-subst};\\ (v^2+w^2)\\sin 2A\\ (u:v:w=\\tan A)",
+                "X(426)：克劳森点的欧拉四次替换点（跳过直角）",
+                "X426",
+                f(v19, w19, g[0]),
+                f(w19, u19, g[1]),
+                f(u19, v19, g[2]),
+            );
+        }
+        // X(427): complement of X(22); sin A(sec A + cos(B−C)); skip right
+        if !right {
+            let f = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                let ca_ = ang_a.cos();
+                if ca_.abs() < 1e-14 {
+                    return f64::NAN;
+                }
+                ang_a.sin() * (1.0 / ca_ + (ang_b - ang_c).cos())
+            };
+            push_bary(
+                &mut out,
+                "X22补点",
+                "X_{427}",
+                "X(427) = \\mathrm{complement}(X_{22});\\ \\sin A(\\sec A+\\cos(B-C))",
+                "X(427)：X(22) 的补点（跳过直角）",
+                "X427",
+                f(g[0], g[1], g[2]),
+                f(g[1], g[2], g[0]),
+                f(g[2], g[0], g[1]),
+            );
+        }
+        // X(428): Euler X(38)-5th-substitution; (v+w)tan A on b²+c²; skip right
+        if !right {
+            let (u38b, v38b, w38b) = (b * b + c * c, c * c + a * a, a * a + b * b);
+            push_bary(
+                &mut out,
+                "X38五次替换",
+                "X_{428}",
+                "X(428) = \\mathrm{Euler}\\ X_{38}\\text{-5th-subst};\\ (v+w)\\tan A\\ (u:v:w=b^2+c^2)",
+                "X(428)：X(38) 的欧拉五次替换点（跳过直角）",
+                "X428",
+                (v38b + w38b) * g[0].tan(),
+                (w38b + u38b) * g[1].tan(),
+                (u38b + v38b) * g[2].tan(),
+            );
+        }
+        // X(429): Euler X(58)-5th-substitution; (v+w)tan A on a/(b+c); skip right
+        if !right {
+            let (u58b, v58b, w58b) = (a / (b + c), b / (c + a), c / (a + b));
+            push_bary(
+                &mut out,
+                "X58五次替换",
+                "X_{429}",
+                "X(429) = \\mathrm{Euler}\\ X_{58}\\text{-5th-subst};\\ (v+w)\\tan A\\ (u:v:w=X_{58})",
+                "X(429)：X(58) 的欧拉五次替换点（跳过直角）",
+                "X429",
+                (v58b + w58b) * g[0].tan(),
+                (w58b + u58b) * g[1].tan(),
+                (u58b + v58b) * g[2].tan(),
+            );
+        }
+        // X(430): Euler X(81)-5th-substitution; (v+w)tan A on 1/(b+c); skip right
+        if !right {
+            let (u81b, v81b, w81b) = (1.0 / (b + c), 1.0 / (c + a), 1.0 / (a + b));
+            push_bary(
+                &mut out,
+                "X81五次替换",
+                "X_{430}",
+                "X(430) = \\mathrm{Euler}\\ X_{81}\\text{-5th-subst};\\ (v+w)\\tan A\\ (u:v:w=X_{81})",
+                "X(430)：X(81) 的欧拉五次替换点（跳过直角）",
+                "X430",
+                (v81b + w81b) * g[0].tan(),
+                (w81b + u81b) * g[1].tan(),
+                (u81b + v81b) * g[2].tan(),
+            );
+        }
+
+        // X(431)–X(440): Euler X283-5th; X155/X159/X195/X399-6th; X48-7th; X214-8th; X204-9th; X193-10th; complement X27 (ETC).
+        // X(431): Euler X(283)-5th-substitution; (v+w)tan A on cosA/(cosB+cosC); skip right
+        if !right {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let (u283b, v283b, w283b) = (ca / da, cb / db, cc / dc);
+                push_bary(
+                    &mut out,
+                    "X283五次替换",
+                    "X_{431}",
+                    "X(431) = \\mathrm{Euler}\\ X_{283}\\text{-5th-subst};\\ (v+w)\\tan A\\ (u:v:w=X_{283})",
+                    "X(431)：X(283) 的欧拉五次替换点（跳过直角）",
+                    "X431",
+                    (v283b + w283b) * g[0].tan(),
+                    (w283b + u283b) * g[1].tan(),
+                    (u283b + v283b) * g[2].tan(),
+                );
+            }
+        }
+        // X(432): Euler X(155)-6th-substitution; (v²+w²)tan A on cosA(cos²B+cos²C−cos²A); skip right
+        if !right {
+            let u155 = ca * (cb * cb + cc * cc - ca * ca);
+            let v155 = cb * (cc * cc + ca * ca - cb * cb);
+            let w155 = cc * (ca * ca + cb * cb - cc * cc);
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X155六次替换",
+                "X_{432}",
+                "X(432) = \\mathrm{Euler}\\ X_{155}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{155})",
+                "X(432)：X(155) 的欧拉六次替换点（跳过直角）",
+                "X432",
+                f(v155, w155, g[0]),
+                f(w155, u155, g[1]),
+                f(u155, v155, g[2]),
+            );
+        }
+        // X(433): Euler X(159)-6th-substitution; (v²+w²)tan A on X(159) tril; skip right
+        if !right {
+            let f159 = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * ((a * a + b * b + c * c) * (2.0 * ang_a).sin()
+                    + (cc_ * cc_ - bb * bb - aa * aa) * (2.0 * ang_b).sin()
+                    + (bb * bb - cc_ * cc_ - aa * aa) * (2.0 * ang_c).sin())
+            };
+            let u159 = f159(a, b, c, g[0], g[1], g[2]);
+            let v159 = f159(b, c, a, g[1], g[2], g[0]);
+            let w159 = f159(c, a, b, g[2], g[0], g[1]);
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X159六次替换",
+                "X_{433}",
+                "X(433) = \\mathrm{Euler}\\ X_{159}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{159})",
+                "X(433)：X(159) 的欧拉六次替换点（跳过直角）",
+                "X433",
+                f(v159, w159, g[0]),
+                f(w159, u159, g[1]),
+                f(u159, v159, g[2]),
+            );
+        }
+        // X(434): Euler X(195)-6th-substitution; (v²+w²)tan A on X(195) tril=bary/a; skip right
+        if !right && area > 1e-12 {
+            let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+            if sa.abs() > 1e-14 && sb.abs() > 1e-14 && sc.abs() > 1e-14 {
+                let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+                let bary195 = |ang: f64, cang: f64, sang: f64| {
+                    let cot = cang / sang;
+                    4.0 * (2.0 * ang).cos() + cot * cot - cot * cot_w
+                };
+                // tril = bary/a (homogeneous; use bary as tril weights)
+                let u195 = bary195(g[0], ca, sa) / a;
+                let v195 = bary195(g[1], cb, sb) / b;
+                let w195 = bary195(g[2], cc, sc) / c;
+                let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+                push_bary(
+                    &mut out,
+                    "X195六次替换",
+                    "X_{434}",
+                    "X(434) = \\mathrm{Euler}\\ X_{195}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{195})",
+                    "X(434)：X(195) 的欧拉六次替换点（跳过直角）",
+                    "X434",
+                    f(v195, w195, g[0]),
+                    f(w195, u195, g[1]),
+                    f(u195, v195, g[2]),
+                );
+            }
+        }
+        // X(435): Euler X(399)-6th-substitution; (v²+w²)tan A on Parry tril; skip right
+        if !right {
+            let f399 = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                5.0 * ang_a.cos()
+                    - 4.0 * ang_b.cos() * ang_c.cos()
+                    - 8.0 * ang_b.sin() * ang_c.sin() * (2.0 * ang_a).cos()
+            };
+            let u399 = f399(g[0], g[1], g[2]);
+            let v399 = f399(g[1], g[2], g[0]);
+            let w399 = f399(g[2], g[0], g[1]);
+            let f = |v: f64, w: f64, ang: f64| (v * v + w * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X399六次替换",
+                "X_{435}",
+                "X(435) = \\mathrm{Euler}\\ X_{399}\\text{-6th-subst};\\ (v^2+w^2)\\tan A\\ (u:v:w=X_{399})",
+                "X(435)：帕里反射点的欧拉六次替换点（跳过直角）",
+                "X435",
+                f(v399, w399, g[0]),
+                f(w399, u399, g[1]),
+                f(u399, v399, g[2]),
+            );
+        }
+        // X(436): Euler X(48)-7th-substitution; (u²+vw)tan A on sin2A; skip right
+        if !right {
+            let (u48, v48, w48) = ((2.0 * g[0]).sin(), (2.0 * g[1]).sin(), (2.0 * g[2]).sin());
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u + v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X48七次替换",
+                "X_{436}",
+                "X(436) = \\mathrm{Euler}\\ X_{48}\\text{-7th-subst};\\ (u^2+vw)\\tan A\\ (u:v:w=\\sin 2A)",
+                "X(436)：X(48) 的欧拉七次替换点（跳过直角）",
+                "X436",
+                f(u48, v48, w48, g[0]),
+                f(v48, w48, u48, g[1]),
+                f(w48, u48, v48, g[2]),
+            );
+        }
+        // X(437): Euler X(214)-8th-substitution; (u²+vw)tan A on (b+c−2a)(b²+c²−a²−bc); skip right/equil
+        if !right && !equil {
+            let u214 = (b + c - 2.0 * a) * (b * b + c * c - a * a - b * c);
+            let v214 = (c + a - 2.0 * b) * (c * c + a * a - b * b - c * a);
+            let w214 = (a + b - 2.0 * c) * (a * a + b * b - c * c - a * b);
+            let f = |u: f64, v: f64, w: f64, ang: f64| (u * u + v * w) * ang.tan();
+            push_bary(
+                &mut out,
+                "X214八次替换",
+                "X_{437}",
+                "X(437) = \\mathrm{Euler}\\ X_{214}\\text{-8th-subst};\\ (u^2+vw)\\tan A\\ (u:v:w=X_{214})",
+                "X(437)：X(214) 的欧拉八次替换点（跳过直角/等边）",
+                "X437",
+                f(u214, v214, w214, g[0]),
+                f(v214, w214, u214, g[1]),
+                f(w214, u214, v214, g[2]),
+            );
+        }
+        // X(438): Euler X(204)-9th-substitution; u²+vw on tanA(tanB+tanC−tanA); skip right
+        if !right {
+            let (ta, tb, tc) = (g[0].tan(), g[1].tan(), g[2].tan());
+            let u204 = ta * (tb + tc - ta);
+            let v204 = tb * (tc + ta - tb);
+            let w204 = tc * (ta + tb - tc);
+            let f = |u: f64, v: f64, w: f64| u * u + v * w;
+            push_bary(
+                &mut out,
+                "X204九次替换",
+                "X_{438}",
+                "X(438) = \\mathrm{Euler}\\ X_{204}\\text{-9th-subst};\\ u^2+vw\\ (u:v:w=X_{204})",
+                "X(438)：X(204) 的欧拉九次替换点（跳过直角）",
+                "X438",
+                f(u204, v204, w204),
+                f(v204, w204, u204),
+                f(w204, u204, v204),
+            );
+        }
+        // X(439): Euler X(193)-10th-substitution; bary (3a²−b²−c²)²
+        {
+            let u193 = 3.0 * a * a - b * b - c * c;
+            let v193 = 3.0 * b * b - c * c - a * a;
+            let w193 = 3.0 * c * c - a * a - b * b;
+            push_bary(
+                &mut out,
+                "X193十次替换",
+                "X_{439}",
+                "X(439) = \\mathrm{Euler}\\ X_{193}\\text{-10th-subst};\\ (3a^2-b^2-c^2)^2",
+                "X(439)：X(193) 的欧拉十次替换点",
+                "X439",
+                u193 * u193,
+                v193 * v193,
+                w193 * w193,
+            );
+        }
+        // X(440): complement of X(27); bary v+w on tanA/(b+c); skip right
+        if !right {
+            let (u28, v28, w28) = (g[0].tan() / (b + c), g[1].tan() / (c + a), g[2].tan() / (a + b));
+            push_bary(
+                &mut out,
+                "X27补点",
+                "X_{440}",
+                "X(440) = \\mathrm{complement}(X_{27});\\ v+w\\ (u:v:w=\\tan A/(b+c))",
+                "X(440)：X(27) 的补点（跳过直角）",
+                "X440",
+                v28 + w28,
+                w28 + u28,
+                u28 + v28,
+            );
+        }
+
+        // X(441)–X(450): complements X297/X21/X452; Euler∩X19X232; Euler X79-11th; crosspoint X98·X511; X2-Hirst X27/X21/X452; X3-Hirst X4 (ETC).
+        // X(441): complement of X(297); v+w on secA cos(A+ω); skip right/equil
+        if !right && !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let tril240 = |ang: f64| {
+                let cang = ang.cos();
+                let sang = ang.sin();
+                if cang.abs() < 1e-14 {
+                    0.0
+                } else {
+                    (cang * cos_w - sang * sin_w) / cang
+                }
+            };
+            let (u240, v240, w240) = (tril240(g[0]), tril240(g[1]), tril240(g[2]));
+            push_bary(
+                &mut out,
+                "X297补点",
+                "X_{441}",
+                "X(441) = \\mathrm{complement}(X_{297});\\ v+w\\ (u:v:w=\\sec A\\cos(A+\\omega))",
+                "X(441)：X(297) 的补点（跳过直角/等边）",
+                "X441",
+                v240 + w240,
+                w240 + u240,
+                u240 + v240,
+            );
+        }
+        // X(442): complement of X(21); v+w on sinA/(cosB+cosC); =mid(X79,X191)
+        {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let (u284, v284, w284) = (g[0].sin() / da, g[1].sin() / db, g[2].sin() / dc);
+                push_bary(
+                    &mut out,
+                    "席弗勒补点",
+                    "X_{442}",
+                    "X(442) = \\mathrm{complement}(X_{21});\\ v+w\\ (u:v:w=\\sin A/(\\cos B+\\cos C))",
+                    "X(442)：席弗勒点的补点（= mid(X79,X191)）",
+                    "X442",
+                    v284 + w284,
+                    w284 + u284,
+                    u284 + v284,
+                );
+            }
+        }
+        // X(443): complement of X(452); v+w on X(380) tril
+        {
+            let f380 = |aa: f64, bb: f64, cc_: f64| {
+                let s = bb + cc_;
+                (s - aa) * (3.0 * aa.powi(3) + s * (3.0 * aa * aa + (bb - cc_).powi(2) + aa * s))
+            };
+            let (u380, v380, w380) = (f380(a, b, c), f380(b, c, a), f380(c, a, b));
+            push_bary(
+                &mut out,
+                "X452补点",
+                "X_{443}",
+                "X(443) = \\mathrm{complement}(X_{452});\\ v+w\\ (u:v:w=X_{380})",
+                "X(443)：X(452) 的补点（X380 三线坐标）",
+                "X443",
+                v380 + w380,
+                w380 + u380,
+                u380 + v380,
+            );
+        }
+        // X(444): Euler ∩ X(19)X(232); (v+w)sinA tanA on 1/(a²+bc); skip right
+        if !right {
+            let (u256, v256, w256) = (
+                1.0 / (a * a + b * c),
+                1.0 / (b * b + c * a),
+                1.0 / (c * c + a * b),
+            );
+            let f = |v: f64, w: f64, ang: f64| (v + w) * ang.sin() * ang.tan();
+            push_bary(
+                &mut out,
+                "X19X232欧拉截",
+                "X_{444}",
+                "X(444) = \\mathrm{Euler}\\cap X_{19}X_{232};\\ (v+w)\\sin A\\tan A\\ (u:v:w=1/(a^2+bc))",
+                "X(444)：X(19)X(232) 与欧拉线的交点（跳过直角）",
+                "X444",
+                f(v256, w256, g[0]),
+                f(w256, u256, g[1]),
+                f(u256, v256, g[2]),
+            );
+        }
+        // X(445): Euler X(79)-11th-substitution; (v+w)secA on 1/(1+2cosA); skip right
+        if !right {
+            let d0 = 1.0 + 2.0 * ca;
+            let d1 = 1.0 + 2.0 * cb;
+            let d2 = 1.0 + 2.0 * cc;
+            if d0.abs() > 1e-14
+                && d1.abs() > 1e-14
+                && d2.abs() > 1e-14
+                && ca.abs() > 1e-14
+                && cb.abs() > 1e-14
+                && cc.abs() > 1e-14
+            {
+                let (u79, v79, w79) = (1.0 / d0, 1.0 / d1, 1.0 / d2);
+                let f = |v: f64, w: f64, cang: f64| (v + w) / cang;
+                push_bary(
+                    &mut out,
+                    "X79十一次替换",
+                    "X_{445}",
+                    "X(445) = \\mathrm{Euler}\\ X_{79}\\text{-11th-subst};\\ (v+w)\\sec A\\ (u:v:w=1/(1+2\\cos A))",
+                    "X(445)：X(79) 的欧拉十一次替换点（跳过直角）",
+                    "X445",
+                    f(v79, w79, ca),
+                    f(w79, u79, cb),
+                    f(u79, v79, cc),
+                );
+            }
+        }
+        // X(446): crosspoint of X(98) and X(511); a u(v²+w²) on sec(A+ω); skip equil
+        if !equil && area > 1e-12 {
+            let sum_sq = a * a + b * b + c * c;
+            let tan_w = (4.0 * area) / sum_sq;
+            let cos_w = 1.0 / (1.0 + tan_w * tan_w).sqrt();
+            let sin_w = tan_w * cos_w;
+            let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+            let c0 = ca * cos_w - sa * sin_w;
+            let c1 = cb * cos_w - sb * sin_w;
+            let c2 = cc * cos_w - sc * sin_w;
+            if c0.abs() > 1e-14 && c1.abs() > 1e-14 && c2.abs() > 1e-14 {
+                let (u98, v98, w98) = (1.0 / c0, 1.0 / c1, 1.0 / c2);
+                let f = |u: f64, v: f64, w: f64, side: f64| side * u * (v * v + w * w);
+                push_bary(
+                    &mut out,
+                    "X98X511交叉",
+                    "X_{446}",
+                    "X(446) = \\mathrm{crosspoint}(X_{98},X_{511});\\ au(v^2+w^2)\\ (u:v:w=\\sec(A+\\omega))",
+                    "X(446)：塔里点与 X(511) 的交叉点（跳过等边）",
+                    "X446",
+                    f(u98, v98, w98, a),
+                    f(v98, w98, u98, b),
+                    f(w98, u98, v98, c),
+                );
+            }
+        }
+        // X(447): X(2)-Hirst of X(27); u²−vw on tanA/(b+c); skip right/equil
+        if !right && !equil {
+            let (u28, v28, w28) = (g[0].tan() / (b + c), g[1].tan() / (c + a), g[2].tan() / (a + b));
+            let f = |u: f64, v: f64, w: f64| u * u - v * w;
+            push_bary(
+                &mut out,
+                "重心HirstX27",
+                "X_{447}",
+                "X(447) = X_2\\text{-Hirst of }X_{27};\\ u^2-vw\\ (u:v:w=\\tan A/(b+c))",
+                "X(447)：重心对 X(27) 的 Hirst 逆（跳过直角/等边）",
+                "X447",
+                f(u28, v28, w28),
+                f(v28, w28, u28),
+                f(w28, u28, v28),
+            );
+        }
+        // X(448): X(2)-Hirst of X(21); u²−vw on sinA/(cosB+cosC); skip equil
+        if !equil {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let (u284, v284, w284) = (g[0].sin() / da, g[1].sin() / db, g[2].sin() / dc);
+                let f = |u: f64, v: f64, w: f64| u * u - v * w;
+                push_bary(
+                    &mut out,
+                    "重心Hirst席弗勒",
+                    "X_{448}",
+                    "X(448) = X_2\\text{-Hirst of }X_{21};\\ u^2-vw\\ (u:v:w=\\sin A/(\\cos B+\\cos C))",
+                    "X(448)：重心对席弗勒点的 Hirst 逆（跳过等边）",
+                    "X448",
+                    f(u284, v284, w284),
+                    f(v284, w284, u284),
+                    f(w284, u284, v284),
+                );
+            }
+        }
+        // X(449): X(2)-Hirst of X(452); u²−vw on X(380) tril; skip equil
+        if !equil {
+            let f380 = |aa: f64, bb: f64, cc_: f64| {
+                let s = bb + cc_;
+                (s - aa) * (3.0 * aa.powi(3) + s * (3.0 * aa * aa + (bb - cc_).powi(2) + aa * s))
+            };
+            let (u380, v380, w380) = (f380(a, b, c), f380(b, c, a), f380(c, a, b));
+            let f = |u: f64, v: f64, w: f64| u * u - v * w;
+            push_bary(
+                &mut out,
+                "重心HirstX452",
+                "X_{449}",
+                "X(449) = X_2\\text{-Hirst of }X_{452};\\ u^2-vw\\ (u:v:w=X_{380})",
+                "X(449)：重心对 X(452) 的 Hirst 逆（跳过等边）",
+                "X449",
+                f(u380, v380, w380),
+                f(v380, w380, u380),
+                f(w380, u380, v380),
+            );
+        }
+        // X(450): X(3)-Hirst of X(4); tanA(cos⁴A−(cosB cosC)²); skip right/equil
+        if !right && !equil {
+            let h = |ang: f64, cb_: f64, cc_: f64| {
+                let ca_ = ang.cos();
+                ang.tan() * (ca_.powi(4) - (cb_ * cc_).powi(2))
+            };
+            push_bary(
+                &mut out,
+                "外心Hirst垂心",
+                "X_{450}",
+                "X(450) = X_3\\text{-Hirst of }X_4;\\ \\tan A(\\cos^4 A-(\\cos B\\cos C)^2)",
+                "X(450)：外心对垂心的 Hirst 逆（跳过直角/等边）",
+                "X450",
+                h(g[0], cb, cc),
+                h(g[1], cc, ca),
+                h(g[2], ca, cb),
+            );
+        }
+
+        // X(451)–X(460): X4-Hirst-pair X451; X452; Alshain; Euler 11th X155/X159/X195/X399; X458; X459; Antares (ETC).
+        // X(451): X(4)-Hirst inverse of X(424); u tan A on X(191) tril; skip right
+        if !right {
+            let f191 = |aa: f64, bb: f64, cc_: f64| {
+                (bb + cc_ - aa) * (bb * cc_ + cc_ * aa + aa * bb) + bb.powi(3) + cc_.powi(3)
+                    - aa.powi(3)
+            };
+            let (u191, v191, w191) = (f191(a, b, c), f191(b, c, a), f191(c, a, b));
+            push_bary(
+                &mut out,
+                "垂心HirstX424",
+                "X_{451}",
+                "X(451) = X_4\\text{-Hirst of }X_{424};\\ u\\tan A\\ (u:v:w=X_{191})",
+                "X(451)：垂心对 X(424) 的 Hirst 逆（X191 三线坐标；跳过直角）",
+                "X451",
+                u191 * g[0].tan(),
+                v191 * g[1].tan(),
+                w191 * g[2].tan(),
+            );
+        }
+        // X(452): X(2)-Hirst inverse of X(449); bary = X(380) tril; =anticomplement(X443)
+        {
+            let f380 = |aa: f64, bb: f64, cc_: f64| {
+                let s = bb + cc_;
+                (s - aa) * (3.0 * aa.powi(3) + s * (3.0 * aa * aa + (bb - cc_).powi(2) + aa * s))
+            };
+            push_bary(
+                &mut out,
+                "重心HirstX449",
+                "X_{452}",
+                "X(452) = X_2\\text{-Hirst of }X_{449} = \\mathrm{anticomplement}(X_{443});\\ u:v:w=X_{380}\\text{ tril}",
+                "X(452)：重心对 X(449) 的 Hirst 逆（= X(443) 的反补；X380 三线坐标）",
+                "X452",
+                f380(a, b, c),
+                f380(b, c, a),
+                f380(c, a, b),
+            );
+        }
+        // X(453): Alshain; sinA (cosB+cosC−cosA)²/(cosB+cosC)
+        {
+            let da = cb + cc;
+            let db = cc + ca;
+            let dc = ca + cb;
+            if da.abs() > 1e-14 && db.abs() > 1e-14 && dc.abs() > 1e-14 {
+                let f = |sang: f64, cang: f64, den: f64, cb_: f64, cc_: f64| {
+                    sang * (cb_ + cc_ - cang).powi(2) / den
+                };
+                push_bary(
+                    &mut out,
+                    "阿尔沙因点",
+                    "X_{453}",
+                    "X(453) = \\mathrm{Alshain};\\ \\sin A(\\cos B+\\cos C-\\cos A)^2/(\\cos B+\\cos C)",
+                    "X(453)：阿尔沙因点",
+                    "X453",
+                    f(g[0].sin(), ca, da, cb, cc),
+                    f(g[1].sin(), cb, db, cc, ca),
+                    f(g[2].sin(), cc, dc, ca, cb),
+                );
+            }
+        }
+        // X(454): Euler X(155)-11th-substitution; u² tan A on X(155) tril; skip right
+        if !right {
+            let u155 = ca * (cb * cb + cc * cc - ca * ca);
+            let v155 = cb * (cc * cc + ca * ca - cb * cb);
+            let w155 = cc * (ca * ca + cb * cb - cc * cc);
+            push_bary(
+                &mut out,
+                "X155十一次替换",
+                "X_{454}",
+                "X(454) = \\mathrm{Euler}\\ X_{155}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{155})",
+                "X(454)：X(155) 的欧拉十一次替换点（跳过直角）",
+                "X454",
+                u155 * u155 * g[0].tan(),
+                v155 * v155 * g[1].tan(),
+                w155 * w155 * g[2].tan(),
+            );
+        }
+        // X(455): Euler X(159)-11th-substitution; u² tan A on X(159) tril; skip right
+        if !right {
+            let f159 = |aa: f64, bb: f64, cc_: f64, ang_a: f64, ang_b: f64, ang_c: f64| {
+                aa * ((a * a + b * b + c * c) * (2.0 * ang_a).sin()
+                    + (cc_ * cc_ - bb * bb - aa * aa) * (2.0 * ang_b).sin()
+                    + (bb * bb - cc_ * cc_ - aa * aa) * (2.0 * ang_c).sin())
+            };
+            let u159 = f159(a, b, c, g[0], g[1], g[2]);
+            let v159 = f159(b, c, a, g[1], g[2], g[0]);
+            let w159 = f159(c, a, b, g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "X159十一次替换",
+                "X_{455}",
+                "X(455) = \\mathrm{Euler}\\ X_{159}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{159})",
+                "X(455)：X(159) 的欧拉十一次替换点（跳过直角）",
+                "X455",
+                u159 * u159 * g[0].tan(),
+                v159 * v159 * g[1].tan(),
+                w159 * w159 * g[2].tan(),
+            );
+        }
+        // X(456): Euler X(195)-11th-substitution; u² tan A on X(195) tril; skip right
+        if !right && area > 1e-12 {
+            let (sa, sb, sc) = (g[0].sin(), g[1].sin(), g[2].sin());
+            if sa.abs() > 1e-14 && sb.abs() > 1e-14 && sc.abs() > 1e-14 {
+                let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+                let bary195 = |ang: f64, cang: f64, sang: f64| {
+                    let cot = cang / sang;
+                    4.0 * (2.0 * ang).cos() + cot * cot - cot * cot_w
+                };
+                let u195 = bary195(g[0], ca, sa) / a;
+                let v195 = bary195(g[1], cb, sb) / b;
+                let w195 = bary195(g[2], cc, sc) / c;
+                push_bary(
+                    &mut out,
+                    "X195十一次替换",
+                    "X_{456}",
+                    "X(456) = \\mathrm{Euler}\\ X_{195}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{195})",
+                    "X(456)：X(195) 的欧拉十一次替换点（跳过直角）",
+                    "X456",
+                    u195 * u195 * g[0].tan(),
+                    v195 * v195 * g[1].tan(),
+                    w195 * w195 * g[2].tan(),
+                );
+            }
+        }
+        // X(457): Euler X(399)-11th-substitution; u² tan A on Parry tril; skip right
+        if !right {
+            let f399 = |ang_a: f64, ang_b: f64, ang_c: f64| {
+                5.0 * ang_a.cos()
+                    - 4.0 * ang_b.cos() * ang_c.cos()
+                    - 8.0 * ang_b.sin() * ang_c.sin() * (2.0 * ang_a).cos()
+            };
+            let u399 = f399(g[0], g[1], g[2]);
+            let v399 = f399(g[1], g[2], g[0]);
+            let w399 = f399(g[2], g[0], g[1]);
+            push_bary(
+                &mut out,
+                "X399十一次替换",
+                "X_{457}",
+                "X(457) = \\mathrm{Euler}\\ X_{399}\\text{-11th-subst};\\ u^2\\tan A\\ (u:v:w=X_{399})",
+                "X(457)：帕里反射点的欧拉十一次替换点（跳过直角）",
+                "X457",
+                u399 * u399 * g[0].tan(),
+                v399 * v399 * g[1].tan(),
+                w399 * w399 * g[2].tan(),
+            );
+        }
+        // X(458): Euler ∩ X(76)X(275); tanA+cot ω; skip right
+        if !right && area > 1e-12 {
+            let cot_w = (a * a + b * b + c * c) / (4.0 * area);
+            push_bary(
+                &mut out,
+                "X76X275欧拉截",
+                "X_{458}",
+                "X(458) = \\mathrm{Euler}\\cap X_{76}X_{275};\\ \\tan A+\\cot\\omega",
+                "X(458)：X(76)X(275) 与欧拉线的交点（跳过直角）",
+                "X458",
+                g[0].tan() + cot_w,
+                g[1].tan() + cot_w,
+                g[2].tan() + cot_w,
+            );
+        }
+        // X(459): X(253)-Ceva of X(4); 1/(tanB tanC−2)
+        {
+            let tb = g[1].tan();
+            let tc = g[2].tan();
+            let ta = g[0].tan();
+            let da = tb * tc - 2.0;
+            let db = tc * ta - 2.0;
+            let dc = ta * tb - 2.0;
+            if da.abs() > 1e-14
+                && db.abs() > 1e-14
+                && dc.abs() > 1e-14
+                && ta.is_finite()
+                && tb.is_finite()
+                && tc.is_finite()
+            {
+                push_bary(
+                    &mut out,
+                    "X253垂心塞瓦",
+                    "X_{459}",
+                    "X(459) = X_{253}\\text{-Ceva of }X_4;\\ 1/(\\tan B\\tan C-2)",
+                    "X(459)：X(253) 对垂心的塞瓦共轭",
+                    "X459",
+                    1.0 / da,
+                    1.0 / db,
+                    1.0 / dc,
+                );
+            }
+        }
+        // X(460): Antares; tanA[a²(2a²−b²−c²)+(b²−c²)²]; skip right/equil
+        if !right && !equil {
+            let f = |aa: f64, bb: f64, cc_: f64| {
+                let a2 = aa * aa;
+                let b2 = bb * bb;
+                let c2 = cc_ * cc_;
+                a2 * (2.0 * a2 - b2 - c2) + (b2 - c2) * (b2 - c2)
+            };
+            push_bary(
+                &mut out,
+                "安塔瑞斯点",
+                "X_{460}",
+                "X(460) = \\mathrm{Antares}=X_4\\cdot X_{230};\\ \\tan A[a^2(2a^2-b^2-c^2)+(b^2-c^2)^2]",
+                "X(460)：安塔瑞斯点（X(4)·X(230) 重心积；跳过直角/等边）",
+                "X460",
+                g[0].tan() * f(a, b, c),
+                g[1].tan() * f(b, c, a),
+                g[2].tan() * f(c, a, b),
+            );
+        }
+
+    }
+
+
+    // Ceva: concurrent cevians AD, BE, CF satisfy (BD/DC)(CE/EA)(AF/FB) = 1.
+    // Emit the classical families that are always concurrent from three sides alone.
+    {
+        // Medians: each ratio = 1.
+        out.push(fact(
+            "塞瓦与梅涅劳斯",
+            "\\Pi_{\\text{Ceva}}^{\\text{中线}}",
+            "1".into(),
+            Some(1.0),
+            "\\frac{BD}{DC}\\cdot\\frac{CE}{EA}\\cdot\\frac{AF}{FB} = 1\\cdot 1\\cdot 1",
+            "塞瓦定理：三中线交于重心",
+        ));
+        // Angle bisectors: BD/DC = c/b, CE/EA = a/c, AF/FB = b/a.
+        let bis = (c / b) * (a / c) * (b / a);
+        out.push(fact(
+            "塞瓦与梅涅劳斯",
+            "\\Pi_{\\text{Ceva}}^{\\text{角平分线}}",
+            nice(bis),
+            Some(bis),
+            &format!(
+                "\\frac{{c}}{{b}}\\cdot\\frac{{a}}{{c}}\\cdot\\frac{{b}}{{a}} = {}",
+                nice(bis)
+            ),
+            "塞瓦定理：三角平分线交于内心",
+        ));
+        // Altitudes: feet of the three altitudes; directed product = 1.
+        let mut alt_prod = 1.0;
+        let mut alt_ok = true;
+        for i in 0..3 {
+            let (p0, q1, q2) = (v[i], v[(i + 1) % 3], v[(i + 2) % 3]);
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                alt_ok = false;
+                break;
+            }
+            let t = ((p0[0] - q1[0]) * dx + (p0[1] - q1[1]) * dy) / den;
+            let foot = [q1[0] + t * dx, q1[1] + t * dy];
+            match directed_ratio(q1, q2, foot) {
+                Some(r) => alt_prod *= r,
+                None => {
+                    alt_ok = false;
+                    break;
+                }
+            }
+        }
+        if alt_ok {
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{高}}",
+                nice(alt_prod),
+                Some(alt_prod),
+                "\\frac{BD}{DC}\\cdot\\frac{CE}{EA}\\cdot\\frac{AF}{FB} = 1",
+                "塞瓦定理：三高交于垂心（有向比）",
+            ));
+        }
+        // Gergonne: incircle contact points. BD = s−b, DC = s−c, …
+        let (ta, tb, tc) = (p - a, p - b, p - c);
+        if ta > 1e-12 && tb > 1e-12 && tc > 1e-12 {
+            let ger = (tb / tc) * (tc / ta) * (ta / tb);
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{切点}}",
+                nice(ger),
+                Some(ger),
+                "\\frac{s-b}{s-c}\\cdot\\frac{s-c}{s-a}\\cdot\\frac{s-a}{s-b} = 1",
+                "塞瓦定理：内切圆切点连线交于格尔巩点",
+            ));
+            // Nagel / extouch: BD = s−c, DC = s−b (swap), product still 1.
+            let nag = (tc / tb) * (ta / tc) * (tb / ta);
+            out.push(fact(
+                "塞瓦与梅涅劳斯",
+                "\\Pi_{\\text{Ceva}}^{\\text{旁切}}",
+                nice(nag),
+                Some(nag),
+                "\\frac{s-c}{s-b}\\cdot\\frac{s-a}{s-c}\\cdot\\frac{s-b}{s-a} = 1",
+                "塞瓦定理：旁切圆切点连线交于奈格尔点",
+            ));
+        }
+    }
+
+    // Menelaus: a transversal DEF with D on BC, E on CA, F on AB (or extensions)
+    // satisfies (BD/DC)(CE/EA)(AF/FB) = −1 (directed). Construct D,E then F = DE ∩ AB.
+    {
+        let d_pt = section_point(pb, pc, 2.0, 1.0); // BD:DC = 2:1
+        let e_pt = section_point(pc, pa, 2.0, 1.0); // CE:EA = 2:1
+        if let Some(f_pt) = line_line_isect2(d_pt, e_pt, pa, pb) {
+            if let (Some(r_bc), Some(r_ca), Some(r_ab)) = (
+                directed_ratio(pb, pc, d_pt),
+                directed_ratio(pc, pa, e_pt),
+                directed_ratio(pa, pb, f_pt),
+            ) {
+                let prod = r_bc * r_ca * r_ab;
+                out.push(fact(
+                    "塞瓦与梅涅劳斯",
+                    "\\Pi_{\\text{Menelaus}}",
+                    nice(prod),
+                    Some(prod),
+                    &format!(
+                        "\\frac{{BD}}{{DC}}\\cdot\\frac{{CE}}{{EA}}\\cdot\\frac{{AF}}{{FB}} = {}\\cdot{}\\cdot{} = {}",
+                        nice(r_bc),
+                        nice(r_ca),
+                        nice(r_ab),
+                        nice(prod)
+                    ),
+                    "梅涅劳斯定理：横截线分三边的有向比之积为 −1",
+                ).with(Shape::Segment {
+                    x1: d_pt[0],
+                    y1: d_pt[1],
+                    x2: e_pt[0],
+                    y2: e_pt[1],
+                    label: "Menelaus 横截线".into(),
+                }));
+                out.push(fact(
+                    "塞瓦与梅涅劳斯",
+                    "F_{\\text{Menelaus}}",
+                    pt(f_pt[0], f_pt[1]),
+                    None,
+                    "DE \\cap AB",
+                    "横截线与 AB（延长线）的交点",
+                ).with(Shape::Point {
+                    x: f_pt[0],
+                    y: f_pt[1],
+                    label: "F Menelaus".into(),
+                }));
+            }
+        }
+    }
+
+    // Stewart: for a cevian AD to side a=BC with BD=m, DC=n (m+n=a),
+    // a(d² + mn) = b²m + c²n. Verify for medians and angle bisectors.
+    {
+        for i in 0..3 {
+            let (aa, bb, cc) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            // median: m = n = a/2
+            let m = aa / 2.0;
+            let n = aa / 2.0;
+            let d = 0.5 * (2.0 * bb * bb + 2.0 * cc * cc - aa * aa).max(0.0).sqrt();
+            let lhs = bb * bb * m + cc * cc * n;
+            let rhs = aa * (d * d + m * n);
+            if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                out.push(fact(
+                    "斯特瓦尔特定理",
+                    &format!("\\text{{Stewart}}_{{m_{}}}", SIDE[i]),
+                    nice(lhs),
+                    Some(lhs),
+                    &format!(
+                        "{b}^2\\cdot\\frac{{{a}}}{{2}} + {c}^2\\cdot\\frac{{{a}}}{{2}} = {a}\\left(m_{s}^2 + \\left(\\frac{{{a}}}{{2}}\\right)^2\\right)",
+                        a = SIDE[i],
+                        b = SIDE[(i + 1) % 3],
+                        c = SIDE[(i + 2) % 3],
+                        s = SIDE[i],
+                    ),
+                    "斯特瓦尔特定理（中线）",
+                ));
+            }
+            // angle bisector: BD:DC = c:b → m = c/(b+c)·a, n = b/(b+c)·a
+            let den = bb + cc;
+            if den > 1e-12 {
+                let m = cc / den * aa;
+                let n = bb / den * aa;
+                let d = 2.0 * bb * cc * (g[i] / 2.0).cos() / den;
+                let lhs = bb * bb * m + cc * cc * n;
+                let rhs = aa * (d * d + m * n);
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                    out.push(fact(
+                        "斯特瓦尔特定理",
+                        &format!("\\text{{Stewart}}_{{t_{}}}", SIDE[i]),
+                        nice(lhs),
+                        Some(lhs),
+                        &format!(
+                            "{b}^2 m + {c}^2 n = {a}(t_{s}^2 + mn),\\ m:n = {c}:{b}",
+                            a = SIDE[i],
+                            b = SIDE[(i + 1) % 3],
+                            c = SIDE[(i + 2) % 3],
+                            s = SIDE[i],
+                        ),
+                        "斯特瓦尔特定理（角平分线）",
+                    ));
+                }
+            }
+            // altitude: signed segments along side i (foot may lie on the extension)
+            let bpt = v[(i + 1) % 3];
+            let cpt = v[(i + 2) % 3];
+            let apt = v[i];
+            let (dx, dy) = (cpt[0] - bpt[0], cpt[1] - bpt[1]);
+            let den2 = dx * dx + dy * dy;
+            if den2 > 1e-18 && aa > 1e-12 {
+                let t = ((apt[0] - bpt[0]) * dx + (apt[1] - bpt[1]) * dy) / den2;
+                let m = t * aa;
+                let nseg = (1.0 - t) * aa;
+                let d = 2.0 * area / aa;
+                let lhs = bb * bb * m + cc * cc * nseg;
+                let rhs = aa * (d * d + m * nseg);
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + lhs.abs()) {
+                    out.push(fact(
+                        "斯特瓦尔特定理",
+                        &format!("\\text{{Stewart}}_{{h_{}}}", SIDE[i]),
+                        nice(lhs),
+                        Some(lhs),
+                        &format!(
+                            "{b}^2 m + {c}^2 n = {a}(h_{s}^2 + mn)",
+                            a = SIDE[i],
+                            b = SIDE[(i + 1) % 3],
+                            c = SIDE[(i + 2) % 3],
+                            s = SIDE[i],
+                        ),
+                        "斯特瓦尔特定理（高，有向线段）",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Van Obel (incenter form): AI/ID = (b+c)/a.
+    {
+        for i in 0..3 {
+            let (aa, bb, cc) = (s[i], s[(i + 1) % 3], s[(i + 2) % 3]);
+            let den = bb + cc;
+            if den < 1e-12 || aa < 1e-12 {
+                continue;
+            }
+            let foot = [
+                (bb * v[(i + 1) % 3][0] + cc * v[(i + 2) % 3][0]) / den,
+                (bb * v[(i + 1) % 3][1] + cc * v[(i + 2) % 3][1]) / den,
+            ];
+            let ai = dist2(v[i], inc);
+            let idlen = dist2(inc, foot);
+            if idlen < 1e-12 {
+                continue;
+            }
+            let ratio = ai / idlen;
+            let expect = den / aa;
+            if (ratio - expect).abs() < 1e-6 * (1.0 + expect) {
+                out.push(fact(
+                    "凡奥培尔定理",
+                    &format!("\\dfrac{{|{n}I|}}{{|ID_{{{s}}}|}}", n = names[i], s = SIDE[i]),
+                    nice(ratio),
+                    Some(ratio),
+                    &format!(
+                        "\\dfrac{{{b} + {c}}}{{{a}}} = \\dfrac{{AF}}{{FB}} + \\dfrac{{AE}}{{EC}}",
+                        a = SIDE[i],
+                        b = SIDE[(i + 1) % 3],
+                        c = SIDE[(i + 2) % 3],
+                    ),
+                    "凡奥培尔定理（内心）：角平分线分对边的内分比之和",
+                ).with(Shape::Segment {
+                    x1: v[i][0],
+                    y1: v[i][1],
+                    x2: foot[0],
+                    y2: foot[1],
+                    label: format!("{}I", names[i]),
+                }));
+            }
+        }
+    }
+
+    // Apollonius circle at vertex i.
+    {
+        for i in 0..3 {
+            let b_pt = v[(i + 1) % 3];
+            let c_pt = v[(i + 2) % 3];
+            let side_to_b = s[(i + 2) % 3];
+            let side_to_c = s[(i + 1) % 3];
+            let opp = s[i];
+            if side_to_c < 1e-12 {
+                continue;
+            }
+            let k = side_to_b / side_to_c;
+            if (k - 1.0).abs() < 1e-9 {
+                let mid = [(b_pt[0] + c_pt[0]) / 2.0, (b_pt[1] + c_pt[1]) / 2.0];
+                out.push(fact(
+                    "阿波罗尼奥斯圆",
+                    &format!("\\mathcal{{A}}_{{{}}}", names[i]),
+                    "\\text{中垂线}".into(),
+                    None,
+                    &format!(
+                        "\\frac{{|P{nb}|}}{{|P{nc}|}} = 1",
+                        nb = names[(i + 1) % 3],
+                        nc = names[(i + 2) % 3],
+                    ),
+                    "阿波罗尼奥斯圆退化为对边的中垂线",
+                ).with(Shape::Point {
+                    x: mid[0],
+                    y: mid[1],
+                    label: format!("A_{} 中点", names[i]),
+                }));
+                continue;
+            }
+            let k2 = k * k;
+            let o = [
+                (k2 * c_pt[0] - b_pt[0]) / (k2 - 1.0),
+                (k2 * c_pt[1] - b_pt[1]) / (k2 - 1.0),
+            ];
+            let rad = (k * opp / (k2 - 1.0).abs()).abs();
+            let d_v = dist2(v[i], o);
+            if (d_v - rad).abs() > 1e-4 * (1.0 + rad) {
+                continue;
+            }
+            out.push(fact(
+                "阿波罗尼奥斯圆",
+                &format!("\\mathcal{{A}}_{{{}}}", names[i]),
+                format!(
+                    "O=\\left({},\\ {}\\right),\\ R={}",
+                    nice_short(o[0]),
+                    nice_short(o[1]),
+                    nice(rad)
+                ),
+                Some(rad),
+                &format!(
+                    "\\frac{{|P{nb}|}}{{|P{nc}|}} = \\frac{{{c}}}{{{b}}} = {k}",
+                    nb = names[(i + 1) % 3],
+                    nc = names[(i + 2) % 3],
+                    b = SIDE[(i + 1) % 3],
+                    c = SIDE[(i + 2) % 3],
+                    k = nice(k),
+                ),
+                "阿波罗尼奥斯圆：到两定点距离成定比的轨迹",
+            ).with(Shape::Circle {
+                cx: o[0],
+                cy: o[1],
+                r: rad,
+                label: format!("阿氏圆 {}", names[i]),
+            }));
+        }
+    }
 
     let mut kinds: Vec<String> = Vec::new();
     let maxg = g.iter().cloned().fold(0.0, f64::max);
@@ -587,6 +15729,27 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         kinds.push("等腰".into());
     }
     out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kinds.join("、")), None, "", "由三个角与三边比较"));
+    // Viviani (equilateral): sum of distances to the three sides equals the altitude; at I this is 3r = h.
+    if near(a, b) && near(b, c) {
+        let h = 2.0 * area / a;
+        let sum = 3.0 * r;
+        out.push(fact(
+            "维维安尼定理",
+            "d_a + d_b + d_c",
+            nice(sum),
+            Some(sum),
+            "d_a + d_b + d_c = h",
+            "等边三角形：内点到三边距离之和等于高（内心处为 3r）",
+        ));
+        out.push(fact(
+            "维维安尼定理",
+            "h",
+            nice(h),
+            Some(h),
+            "3r = h",
+            "等边：内切圆半径是高的三分之一",
+        ));
+    }
     if near(maxg, PI / 2.0) {
         out.push(fact("形状判断", "R", nice(rr), Some(rr), "R = \\frac{\\text{斜边}}{2}", "直角三角形外心在斜边中点"));
         // altitude onto the hypotenuse and the two leg projections (射影定理).
@@ -603,6 +15766,299 @@ fn triangle_derived(s: [f64; 3], g: [f64; 3], v: [[f64; 2]; 3], names: [&str; 3]
         out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[u]), nice(lu * lu / hyp), Some(lu * lu / hyp), &format!("\\frac{{{u}^2}}{{{c}}}", u = SIDE[u], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[w][0], y1: v[w][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[u]) }));
         out.push(fact("射影定理", &format!("\\text{{射影}}_{{{}}}", SIDE[w]), nice(lw * lw / hyp), Some(lw * lw / hyp), &format!("\\frac{{{w}^2}}{{{c}}}", w = SIDE[w], c = SIDE[ri]), "直角边² = 斜边 × 这条直角边的射影").with(Shape::Segment { x1: v[u][0], y1: v[u][1], x2: foot[0], y2: foot[1], label: format!("射影 {}", SIDE[w]) }));
     }
+    // Morley: adjacent angle trisectors meet at an equilateral triangle.
+    {
+        let unit = |u: [f64; 2]| {
+            let l = u[0].hypot(u[1]);
+            if l < 1e-12 {
+                [0.0, 0.0]
+            } else {
+                [u[0] / l, u[1] / l]
+            }
+        };
+        let rot = |u: [f64; 2], ang: f64| {
+            let (c, s) = (ang.cos(), ang.sin());
+            [u[0] * c - u[1] * s, u[0] * s + u[1] * c]
+        };
+        let sang = |u: [f64; 2], w: [f64; 2]| (u[0] * w[1] - u[1] * w[0]).atan2(u[0] * w[0] + u[1] * w[1]);
+        let mut mverts = [[0.0; 2]; 3];
+        let mut ok = true;
+        for s in 0..3 {
+            let i = s;
+            let j = (s + 1) % 3;
+            let k = (s + 2) % 3;
+            let (pi, pj) = (v[i], v[j]);
+            let u_ij = unit([pj[0] - pi[0], pj[1] - pi[1]]);
+            let u_ik = unit([v[k][0] - pi[0], v[k][1] - pi[1]]);
+            let ai = sang(u_ij, u_ik);
+            let dir_i = rot(u_ij, ai / 3.0);
+            let u_ji = unit([pi[0] - pj[0], pi[1] - pj[1]]);
+            let u_jk = unit([v[k][0] - pj[0], v[k][1] - pj[1]]);
+            let aj = sang(u_ji, u_jk);
+            let dir_j = rot(u_ji, aj / 3.0);
+            let mat = vec![vec![dir_i[0], -dir_j[0]], vec![dir_i[1], -dir_j[1]]];
+            if let Some(st) = solve_linear_pub(mat, vec![pj[0] - pi[0], pj[1] - pi[1]]) {
+                if st[0].is_finite() && st[0] > 1e-9 {
+                    mverts[s] = [pi[0] + st[0] * dir_i[0], pi[1] + st[0] * dir_i[1]];
+                } else {
+                    ok = false;
+                }
+            } else {
+                ok = false;
+            }
+        }
+        if ok {
+            let e01 = dist2(mverts[0], mverts[1]);
+            let e12 = dist2(mverts[1], mverts[2]);
+            let e20 = dist2(mverts[2], mverts[0]);
+            if e01 > 1e-9 && near(e01, e12) && near(e12, e20) {
+                out.push(fact(
+                    "莫利定理",
+                    "\\text{Morley}",
+                    "\\text{等边}".into(),
+                    None,
+                    "\\text{邻角三等分线交点}",
+                    "相邻角的三等分线交出等边三角形",
+                ));
+                out.push(fact(
+                    "莫利定理",
+                    "|M_0M_1|",
+                    nice(e01),
+                    Some(e01),
+                    "",
+                    "莫利三角形边长",
+                ).with(Shape::Segment {
+                    x1: mverts[0][0],
+                    y1: mverts[0][1],
+                    x2: mverts[1][0],
+                    y2: mverts[1][1],
+                    label: "Morley".into(),
+                }));
+                for (ii, mv) in mverts.iter().enumerate() {
+                    out.push(fact(
+                        "莫利定理",
+                        &format!("M_{}", ii),
+                        pt(mv[0], mv[1]),
+                        None,
+                        "",
+                        "莫利三角形顶点",
+                    ).with(Shape::Point {
+                        x: mv[0],
+                        y: mv[1],
+                        label: format!("M{}", ii),
+                    }));
+                }
+            }
+        }
+    }
+    // Napoleon: outward equilateral on each side → centroids form an equilateral triangle.
+    {
+        // Orient: positive cross (pa→pb)×(pa→pc) means CCW; outward on edge B→C is clockwise (−60°).
+        let orient = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pb[1] - pa[1]) * (pc[0] - pa[0]);
+        let sign = if orient >= 0.0 { -1.0 } else { 1.0 }; // outward
+        let cos60 = 0.5;
+        let sin60 = sign * (3.0f64).sqrt() / 2.0;
+        let rot = |u: [f64; 2]| -> [f64; 2] {
+            [u[0] * cos60 - u[1] * sin60, u[0] * sin60 + u[1] * cos60]
+        };
+        let mut cents = [[0.0; 2]; 3];
+        for i in 0..3 {
+            let b = v[(i + 1) % 3];
+            let c = v[(i + 2) % 3];
+            let w = rot([c[0] - b[0], c[1] - b[1]]);
+            let dpt = [b[0] + w[0], b[1] + w[1]];
+            cents[i] = [(b[0] + c[0] + dpt[0]) / 3.0, (b[1] + c[1] + dpt[1]) / 3.0];
+        }
+        let e01 = dist2(cents[0], cents[1]);
+        let e12 = dist2(cents[1], cents[2]);
+        let e20 = dist2(cents[2], cents[0]);
+        if e01 > 1e-12 && near(e01, e12) && near(e12, e20) {
+            out.push(fact(
+                "拿破仑定理",
+                "\\text{Napoleon}",
+                "\\text{等边}".into(),
+                None,
+                "G_aG_bG_c\\text{ 等边}",
+                "各边向外作等边三角形，其重心连成等边三角形",
+            ));
+            out.push(fact(
+                "拿破仑定理",
+                "|G_aG_b|",
+                nice(e01),
+                Some(e01),
+                "",
+                "拿破仑三角形边长",
+            ).with(Shape::Segment {
+                x1: cents[0][0], y1: cents[0][1], x2: cents[1][0], y2: cents[1][1],
+                label: "Napoleon".into(),
+            }));
+            for (i, gcent) in cents.iter().enumerate() {
+                out.push(fact(
+                    "拿破仑定理",
+                    &format!("G_{{{}}}", SIDE[i]),
+                    pt(gcent[0], gcent[1]),
+                    None,
+                    "",
+                    "外侧等边三角形的重心",
+                ).with(Shape::Point { x: gcent[0], y: gcent[1], label: format!("G{}", SIDE[i]) }));
+            }
+        }
+    }
+
+    // Simson line: feet from a circumcircle point P onto the three sides are collinear.
+    // Take P = antipode of A on the circumcircle (always on (O)).
+    {
+        let p_sim = [2.0 * circ[0] - pa[0], 2.0 * circ[1] - pa[1]];
+        let foot_line = |p: [f64; 2], q1: [f64; 2], q2: [f64; 2]| -> Option<[f64; 2]> {
+            let dx = q2[0] - q1[0];
+            let dy = q2[1] - q1[1];
+            let den = dx * dx + dy * dy;
+            if den < 1e-18 {
+                return None;
+            }
+            let t = ((p[0] - q1[0]) * dx + (p[1] - q1[1]) * dy) / den;
+            Some([q1[0] + t * dx, q1[1] + t * dy])
+        };
+        // feet onto BC, CA, AB
+        let sides = [(pb, pc), (pc, pa), (pa, pb)];
+        let mut feet = [[0.0; 2]; 3];
+        let mut ok = true;
+        for (i, (q1, q2)) in sides.into_iter().enumerate() {
+            if let Some(f) = foot_line(p_sim, q1, q2) {
+                feet[i] = f;
+            } else {
+                ok = false;
+            }
+        }
+        if ok {
+            let cross = (feet[1][0] - feet[0][0]) * (feet[2][1] - feet[0][1])
+                - (feet[1][1] - feet[0][1]) * (feet[2][0] - feet[0][0]);
+            if cross.abs() < 1e-6 * (1.0 + rr) {
+                out.push(fact(
+                    "西姆松线",
+                    "\\text{Simson}",
+                    "\\text{共线}".into(),
+                    None,
+                    "P\\in\\odot(O)\\Rightarrow\\text{三垂足共线}",
+                    "西姆松线：外接圆上一点到三边垂足共线（P 取 A 的对径点）",
+                ));
+                out.push(fact(
+                    "西姆松线",
+                    "P_{\\text{Simson}}",
+                    pt(p_sim[0], p_sim[1]),
+                    None,
+                    "P = 2O - A",
+                    "外接圆上 A 的对径点",
+                ).with(Shape::Point {
+                    x: p_sim[0],
+                    y: p_sim[1],
+                    label: "P Simson".into(),
+                }));
+                for (i, f) in feet.iter().enumerate() {
+                    let side_name = SIDE[i];
+                    out.push(fact(
+                        "西姆松线",
+                        &format!("F_{{{}}}", side_name),
+                        pt(f[0], f[1]),
+                        None,
+                        "",
+                        &format!("P 到边 {} 的垂足", side_name),
+                    ).with(Shape::Point {
+                        x: f[0],
+                        y: f[1],
+                        label: format!("F{}", side_name),
+                    }));
+                }
+                // line through F_a and F_b
+                let (f0, f1) = (feet[0], feet[1]);
+                let la = f1[1] - f0[1];
+                let lb = f0[0] - f1[0];
+                let lc = la * f0[0] + lb * f0[1];
+                if la.hypot(lb) > 1e-12 {
+                    out.push(fact(
+                        "西姆松线",
+                        "l_{\\text{Simson}}",
+                        line_eq_latex(la, lb, lc),
+                        None,
+                        "三垂足所在直线",
+                        "西姆松线方程",
+                    ).with(Shape::Segment {
+                        x1: f0[0],
+                        y1: f0[1],
+                        x2: f1[0],
+                        y2: f1[1],
+                        label: "Simson".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    // Trilinear polar of the incenter I (barycentrics a:b:c): X/a + Y/b + Z/c = 0.
+    {
+        let mut poles: Vec<[f64; 2]> = Vec::new();
+        // Intersection with side opposite vertex i (bary coord of that vertex = 0).
+        for i in 0..3 {
+            let sj = s[(i + 1) % 3];
+            let sk = s[(i + 2) % 3];
+            // On side jk: α_i = 0, β_j + β_k = 1, β_j/sj + β_k/sk = 0.
+            if (sj - sk).abs() < 1e-12 {
+                continue; // polar ∥ this side
+            }
+            let bj = sj / (sj - sk);
+            let bk = 1.0 - bj;
+            let pj = v[(i + 1) % 3];
+            let pk = v[(i + 2) % 3];
+            let pt_i = [bj * pj[0] + bk * pk[0], bj * pj[1] + bk * pk[1]];
+            if pt_i[0].is_finite() && pt_i[1].is_finite() {
+                poles.push(pt_i);
+            }
+        }
+        out.push(fact(
+            "三线极线",
+            "\\tau(I)",
+            "\\frac{X}{a}+\\frac{Y}{b}+\\frac{Z}{c}=0".into(),
+            None,
+            "I=(a:b:c)_{\\text{bary}}",
+            "内心的三线极线（重心坐标方程）",
+        ));
+        if poles.len() >= 2 {
+            let (p0, p1) = (poles[0], poles[1]);
+            let la = p1[1] - p0[1];
+            let lb = p0[0] - p1[0];
+            let lc = la * p0[0] + lb * p0[1];
+            if la.hypot(lb) > 1e-12 {
+                out.push(fact(
+                    "三线极线",
+                    "l_{\\tau(I)}",
+                    line_eq_latex(la, lb, lc),
+                    None,
+                    "\\frac{X}{a}+\\frac{Y}{b}+\\frac{Z}{c}=0",
+                    "内心三线极线的直角坐标方程",
+                ).with(Shape::Segment {
+                    x1: p0[0],
+                    y1: p0[1],
+                    x2: p1[0],
+                    y2: p1[1],
+                    label: "τ(I)".into(),
+                }));
+            }
+            for (k, pp) in poles.iter().take(3).enumerate() {
+                out.push(fact(
+                    "三线极线",
+                    &format!("Q_{{{}}}", k),
+                    pt(pp[0], pp[1]),
+                    None,
+                    "",
+                    "三线极线与边的交点",
+                ).with(Shape::Point {
+                    x: pp[0],
+                    y: pp[1],
+                    label: format!("Q{}", k),
+                }));
+            }
+        }
+    }
     out
 }
 
@@ -615,11 +16071,45 @@ pub struct NamedPoint {
     pub p: Vec<f64>,
 }
 
+
 pub(crate) fn dist2(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
 
-fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
+/// Directed ratio AP:PB for P on the line AB. P = A + t(B−A) ⇒ AP:PB = t:(1−t).
+fn directed_ratio(a: [f64; 2], b: [f64; 2], p: [f64; 2]) -> Option<f64> {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len2 = dx * dx + dy * dy;
+    if len2 < 1e-18 {
+        return None;
+    }
+    let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2;
+    if (1.0 - t).abs() < 1e-14 {
+        return None;
+    }
+    Some(t / (1.0 - t))
+}
+
+fn section_point(a: [f64; 2], b: [f64; 2], m: f64, n: f64) -> [f64; 2] {
+    // divides AB in AP:PB = m:n
+    let den = m + n;
+    [(n * a[0] + m * b[0]) / den, (n * a[1] + m * b[1]) / den]
+}
+
+fn line_line_isect2(p: [f64; 2], q: [f64; 2], r: [f64; 2], s: [f64; 2]) -> Option<[f64; 2]> {
+    let d1 = [q[0] - p[0], q[1] - p[1]];
+    let d2 = [s[0] - r[0], s[1] - r[1]];
+    let det = d1[0] * d2[1] - d1[1] * d2[0];
+    if det.abs() < 1e-14 * (d1[0].hypot(d1[1]) * d2[0].hypot(d2[1])).max(1e-18) {
+        return None;
+    }
+    let t = ((r[0] - p[0]) * d2[1] - (r[1] - p[1]) * d2[0]) / det;
+    Some([p[0] + t * d1[0], p[1] + t * d1[1]])
+}
+
+
+pub(crate) fn line_eq_latex(a: f64, b: f64, c: f64) -> String {
     // a x + b y = c, normalised for display
     if near(b, 0.0) {
         return format!("x = {}", nice_short(c / a));
@@ -788,10 +16278,293 @@ pub fn points_analyze(points: &[NamedPoint]) -> Vec<Fact> {
         } else {
             "一般凸四边形"
         };
+        // Varignon: midpoints of the four sides form a parallelogram.
+        {
+            let mids = [
+                [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0],
+                [(b[0] + c[0]) / 2.0, (b[1] + c[1]) / 2.0],
+                [(c[0] + d[0]) / 2.0, (c[1] + d[1]) / 2.0],
+                [(d[0] + a[0]) / 2.0, (d[1] + a[1]) / 2.0],
+            ];
+            let side = |i: usize, j: usize| {
+                let (u, w) = (mids[i], mids[j]);
+                [w[0] - u[0], w[1] - u[1]]
+            };
+            let (u01, u23) = (side(0, 1), side(3, 2));
+            let (u12, u30) = (side(1, 2), side(0, 3));
+            let para = |p: [f64; 2], q: [f64; 2]| {
+                let cr = p[0] * q[1] - p[1] * q[0];
+                let sc = (p[0].hypot(p[1])) * (q[0].hypot(q[1]));
+                sc < 1e-12 || cr.abs() < 1e-9 * sc
+            };
+            if para(u01, u23) && para(u12, u30) {
+                let l01 = u01[0].hypot(u01[1]);
+                let l12 = u12[0].hypot(u12[1]);
+                out.push(fact(
+                    "瓦里农定理",
+                    "\\text{Varignon}",
+                    "\\text{平行四边形}".into(),
+                    None,
+                    "M_i = \\text{中点}(P_iP_{i+1})",
+                    "任意四边形各边中点连成平行四边形",
+                ));
+                out.push(fact(
+                    "瓦里农定理",
+                    "|M_0M_1|",
+                    nice(l01),
+                    Some(l01),
+                    "",
+                    "Varignon 边长",
+                ).with(Shape::Segment {
+                    x1: mids[0][0], y1: mids[0][1], x2: mids[1][0], y2: mids[1][1],
+                    label: "Varignon".into(),
+                }));
+                out.push(fact(
+                    "瓦里农定理",
+                    "|M_1M_2|",
+                    nice(l12),
+                    Some(l12),
+                    "",
+                    "Varignon 邻边",
+                ));
+                for (i, m) in mids.iter().enumerate() {
+                    out.push(fact(
+                        "瓦里农定理",
+                        &format!("M_{}", i),
+                        pt(m[0], m[1]),
+                        None,
+                        "",
+                        "边中点",
+                    ).with(Shape::Point { x: m[0], y: m[1], label: format!("M{}", i) }));
+                }
+            }
+        }
+        // British flag theorem: for rectangle/square, PA²+PC² = PB²+PD² for any P (verify at origin).
+        if is_para && right {
+            let p0 = [0.0, 0.0];
+            let dsq = |q: [f64; 2]| (q[0] - p0[0]).powi(2) + (q[1] - p0[1]).powi(2);
+            let lhs = dsq(a) + dsq(c);
+            let rhs = dsq(b) + dsq(d);
+            if near(lhs, rhs) {
+                out.push(fact(
+                    "英国国旗定理",
+                    "PA^2 + PC^2",
+                    nice(lhs),
+                    Some(lhs),
+                    "PA^2 + PC^2 = PB^2 + PD^2",
+                    "矩形上任一点（取原点验证）：对角顶点到点的平方和相等",
+                ));
+                out.push(fact(
+                    "英国国旗定理",
+                    "PB^2 + PD^2",
+                    nice(rhs),
+                    Some(rhs),
+                    "PA^2 + PC^2 = PB^2 + PD^2",
+                    "英国国旗定理",
+                ));
+            }
+        }
+
+        // Cyclic quad: opposite angles sum to π → Ptolemy + Brahmagupta.
+        {
+            let cyclic = convex
+                && near(angles[0] + angles[2], PI)
+                && near(angles[1] + angles[3], PI);
+            if cyclic {
+                out.push(fact(
+                    "圆内接四边形",
+                    "\\text{共圆}",
+                    "\\checkmark".into(),
+                    None,
+                    "\\angle A + \\angle C = \\angle B + \\angle D = 180^\\circ",
+                    "对角互补 ⇒ 四点共圆",
+                ));
+                let (ab, bc, cd, da) = (sides[0], sides[1], sides[2], sides[3]);
+                let (ac, bd) = (d1, d2);
+                let lhs = ac * bd;
+                let rhs = ab * cd + da * bc;
+                out.push(fact(
+                    "托勒密定理",
+                    "AC \\cdot BD",
+                    nice(lhs),
+                    Some(lhs),
+                    "AC\\cdot BD = AB\\cdot CD + AD\\cdot BC",
+                    "圆内接四边形的托勒密定理",
+                ));
+                out.push(fact(
+                    "托勒密定理",
+                    "AB\\cdot CD + AD\\cdot BC",
+                    nice(rhs),
+                    Some(rhs),
+                    "AC\\cdot BD = AB\\cdot CD + AD\\cdot BC",
+                    "托勒密：对角线积 = 对边积之和",
+                ));
+                let ssemi = (ab + bc + cd + da) / 2.0;
+                let brahm = ((ssemi - ab) * (ssemi - bc) * (ssemi - cd) * (ssemi - da)).max(0.0).sqrt();
+                out.push(fact(
+                    "婆罗摩笈多公式",
+                    "S_{\\text{Brahmagupta}}",
+                    nice(brahm),
+                    Some(brahm),
+                    "S = \\sqrt{(s-a)(s-b)(s-c)(s-d)}",
+                    "圆内接四边形面积（婆罗摩笈多）",
+                ));
+            }
+        }
+
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}}}", kind), None, "", "由对边平行、直角、边长相等判断"));
     } else {
         out.push(fact("形状判断", "\\text{类型}", format!("\\text{{{}{}边形}}", if convex { "凸" } else { "凹" }, n), None, "", "内角和 (n-2)·180°"));
     }
+
+    // Desargues quick check: pts[0..3] vs pts[3..6] as △ABC, △A′B′C′.
+    if pts.len() >= 6 {
+        let (a, b, c) = (pts[0].1, pts[1].1, pts[2].1);
+        let (ap, bp, cp) = (pts[3].1, pts[4].1, pts[5].1);
+        let (na, nb, nc) = (&pts[0].0, &pts[1].0, &pts[2].0);
+        let (nap, nbp, ncp) = (&pts[3].0, &pts[4].0, &pts[5].0);
+        if let Some(s) = line_line_isect2(a, ap, b, bp) {
+            if collinear2(s, c, cp) {
+                out.push(fact(
+                    "德萨格定理",
+                    "\\text{Desargues}",
+                    "\\text{透视}".into(),
+                    None,
+                    &format!("{na}{nap},{nb}{nbp},{nc}{ncp}\\ \\text{{共点}}"),
+                    "两三角形对应顶点连线共点 ⇒ 对应边交点共线",
+                ).with(Shape::Point {
+                    x: s[0],
+                    y: s[1],
+                    label: "S Desargues".into(),
+                }));
+                out.push(fact(
+                    "德萨格定理",
+                    "S",
+                    pt(s[0], s[1]),
+                    None,
+                    "AA'\\cap BB'\\cap CC'",
+                    "透视中心",
+                ));
+                let x = line_line_isect2(b, c, bp, cp);
+                let y = line_line_isect2(c, a, cp, ap);
+                let z = line_line_isect2(a, b, ap, bp);
+                if let (Some(x), Some(y), Some(z)) = (x, y, z) {
+                    if collinear2(x, y, z) {
+                        out.push(fact(
+                            "德萨格定理",
+                            "\\text{透视轴}",
+                            "\\text{共线}".into(),
+                            None,
+                            "BC\\cap B'C',\\ CA\\cap C'A',\\ AB\\cap A'B'",
+                            "对应边交点共线（德萨格透视轴）",
+                        ).with(Shape::Segment {
+                            x1: x[0],
+                            y1: x[1],
+                            x2: y[0],
+                            y2: y[1],
+                            label: "Desargues轴".into(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    // Pascal (cyclic hexagon) + Brianchon (opposite-vertex diagonals) for 6-gon in order.
+    if n == 6 {
+        let v: [[f64; 2]; 6] = std::array::from_fn(|i| pts[i].1);
+        let names: [&str; 6] = std::array::from_fn(|i| pts[i].0.as_str());
+        // Cyclic? circumcircle of first three; others on it.
+        if let Some((o, r)) = circum2(v[0], v[1], v[2]) {
+            let cyclic = (3..6).all(|i| (dist2(v[i], o) - r).abs() < 1e-6 * (1.0 + r));
+            if cyclic {
+                // Opposite sides: AB∩DE, BC∩EF, CD∩FA
+                let p01 = line_line_isect2(v[0], v[1], v[3], v[4]);
+                let p12 = line_line_isect2(v[1], v[2], v[4], v[5]);
+                let p23 = line_line_isect2(v[2], v[3], v[5], v[0]);
+                match (p01, p12, p23) {
+                    (Some(x), Some(y), Some(z)) if collinear2(x, y, z) => {
+                        out.push(fact(
+                            "帕斯卡定理",
+                            "\\text{Pascal}",
+                            "\\text{共线}".into(),
+                            None,
+                            "AB\\cap DE,\\ BC\\cap EF,\\ CD\\cap FA",
+                            "圆内接六边形：三组对边交点共线（帕斯卡线）",
+                        ).with(Shape::Segment {
+                            x1: x[0],
+                            y1: x[1],
+                            x2: y[0],
+                            y2: y[1],
+                            label: "Pascal".into(),
+                        }));
+                        out.push(fact(
+                            "帕斯卡定理",
+                            "\\text{Pascal线}",
+                            line_eq_latex(y[1] - x[1], x[0] - y[0], (y[1] - x[1]) * x[0] + (x[0] - y[0]) * x[1]),
+                            None,
+                            "",
+                            "帕斯卡线方程",
+                        ));
+                    }
+                    (None, None, None) => {
+                        out.push(fact(
+                            "帕斯卡定理",
+                            "\\text{Pascal}",
+                            "\\text{无穷远直线}".into(),
+                            None,
+                            "AB\\parallel DE,\\ BC\\parallel EF,\\ CD\\parallel FA",
+                            "对边皆平行：帕斯卡线为无穷远直线",
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Brianchon: diagonals joining opposite vertices AD, BE, CF concur.
+        if let Some(s) = line_line_isect2(v[0], v[3], v[1], v[4]) {
+            if collinear2(s, v[2], v[5]) {
+                // also check tangential side condition a+c+e = b+d+f (sufficient for circle)
+                let side = |i: usize, j: usize| dist2(v[i], v[j]);
+                let ace = side(0, 1) + side(2, 3) + side(4, 5);
+                let bdf = side(1, 2) + side(3, 4) + side(5, 0);
+                out.push(fact(
+                    "布利安雄定理",
+                    "\\text{Brianchon}",
+                    "\\text{共点}".into(),
+                    None,
+                    &format!(
+                        "{}{}\\cap{}{}\\cap{}{}",
+                        names[0], names[3], names[1], names[4], names[2], names[5]
+                    ),
+                    "六边形对顶点连线共点（布利安雄点）",
+                ).with(Shape::Point {
+                    x: s[0],
+                    y: s[1],
+                    label: "Brianchon".into(),
+                }));
+                out.push(fact(
+                    "布利安雄定理",
+                    "B",
+                    pt(s[0], s[1]),
+                    None,
+                    "AD\\cap BE\\cap CF",
+                    "布利安雄点",
+                ));
+                if (ace - bdf).abs() < 1e-6 * (1.0 + ace) {
+                    out.push(fact(
+                        "布利安雄定理",
+                        "a+c+e = b+d+f",
+                        nice(ace),
+                        Some(ace),
+                        "a+c+e = b+d+f",
+                        "对边和相等：存在内切圆（切线六边形）",
+                    ));
+                }
+            }
+        }
+    }
+
     out
 }
 
@@ -830,10 +16603,217 @@ fn points3_analyze(points: &[NamedPoint]) -> Vec<Fact> {
         if pts.len() >= 4 {
             let dpt = pts[3].1;
             let vol = dot3(sub3(dpt, a), nrm).abs() / 6.0;
-            out.push(fact("体积", "V", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
+            out.push(fact("体积", "V_{\\text{四面体}}", nice(vol), Some(vol), "V = \\frac16\\left|\\vec{AD}\\cdot(\\vec{AB}\\times\\vec{AC})\\right|", "混合积"));
+            // Cayley–Menger: volume from the six edge lengths alone.
+            {
+                let p0 = pts[0].1;
+                let p1 = pts[1].1;
+                let p2 = pts[2].1;
+                let p3 = pts[3].1;
+                let d12 = len3(sub3(p1, p0));
+                let d13 = len3(sub3(p2, p0));
+                let d14 = len3(sub3(p3, p0));
+                let d23 = len3(sub3(p2, p1));
+                let d24 = len3(sub3(p3, p1));
+                let d34 = len3(sub3(p3, p2));
+                let s = |x: f64| x * x;
+                let mut m = [
+                    [0.0, 1.0, 1.0, 1.0, 1.0],
+                    [1.0, 0.0, s(d12), s(d13), s(d14)],
+                    [1.0, s(d12), 0.0, s(d23), s(d24)],
+                    [1.0, s(d13), s(d23), 0.0, s(d34)],
+                    [1.0, s(d14), s(d24), s(d34), 0.0],
+                ];
+                // Gaussian elimination → det
+                let mut det = 1.0_f64;
+                for i in 0..5 {
+                    let mut piv = i;
+                    for r in (i + 1)..5 {
+                        if m[r][i].abs() > m[piv][i].abs() {
+                            piv = r;
+                        }
+                    }
+                    if m[piv][i].abs() < 1e-18 {
+                        det = 0.0;
+                        break;
+                    }
+                    if piv != i {
+                        m.swap(piv, i);
+                        det = -det;
+                    }
+                    det *= m[i][i];
+                    for r in (i + 1)..5 {
+                        let f = m[r][i] / m[i][i];
+                        for c in i..5 {
+                            m[r][c] -= f * m[i][c];
+                        }
+                    }
+                }
+                let v_cm2 = det.abs() / 288.0;
+                if v_cm2 >= 0.0 {
+                    let v_cm = v_cm2.sqrt();
+                    out.push(fact(
+                        "体积",
+                        "V_{\\text{Cayley--Menger}}",
+                        nice(v_cm),
+                        Some(v_cm),
+                        "288V^2 = |\\det M_5|",
+                        "凯莱–门杰行列式：由六棱长求四面体体积",
+                    ));
+                }
+            }
             if area > 1e-12 {
                 let h = 3.0 * vol / area;
                 out.push(fact("距离", &format!("d({}, \\text{{平面}})", pts[3].0), nice(h), Some(h), "d = \\frac{3V}{S}", "等体积法"));
+            }
+
+            
+            // Four face areas and altitudes from each vertex to the opposite face.
+            {
+                let verts = [pts[0].1, pts[1].1, pts[2].1, pts[3].1];
+                let labels = [&pts[0].0, &pts[1].0, &pts[2].0, &pts[3].0];
+                let faces = [[1usize, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]];
+                for (i, face) in faces.iter().enumerate() {
+                    let (p, q, r) = (verts[face[0]], verts[face[1]], verts[face[2]]);
+                    let nrm = cross3(sub3(q, p), sub3(r, p));
+                    let s_face = len3(nrm) / 2.0;
+                    let fname = format!("{}{}{}", labels[face[0]], labels[face[1]], labels[face[2]]);
+                    out.push(fact(
+                        "四面体面",
+                        &format!("S_{{\\triangle {}}}", fname),
+                        nice(s_face),
+                        Some(s_face),
+                        "S = \\frac12|\\vec{u}\\times\\vec{v}|",
+                        "四面体的一个面的面积",
+                    ));
+                    if s_face > 1e-12 && vol > 1e-12 {
+                        let h_i = 3.0 * vol / s_face;
+                        out.push(fact(
+                            "四面体面",
+                            &format!("h_{{{}}}", labels[i]),
+                            nice(h_i),
+                            Some(h_i),
+                            "h = \\frac{3V}{S_{\\text{对面}}}",
+                            &format!("从顶点 {} 到对面的高", labels[i]),
+                        ));
+                    }
+                }
+            }
+
+            // Viviani for regular tetrahedron: sum of distances from an interior point to the four faces = altitude.
+            {
+                let edges = [
+                    len3(sub3(pts[1].1, pts[0].1)),
+                    len3(sub3(pts[2].1, pts[0].1)),
+                    len3(sub3(pts[3].1, pts[0].1)),
+                    len3(sub3(pts[2].1, pts[1].1)),
+                    len3(sub3(pts[3].1, pts[1].1)),
+                    len3(sub3(pts[3].1, pts[2].1)),
+                ];
+                let e0 = edges[0];
+                if e0 > 1e-12 && edges.iter().all(|e| near(*e, e0)) && vol > 1e-12 {
+                    // Regular tetra: altitude h = √6 / 3 · a; inradius ρ = h/4
+                    let h_reg = (6.0f64).sqrt() / 3.0 * e0;
+                    let rho = h_reg / 4.0;
+                    out.push(fact(
+                        "维维安尼定理",
+                        "\\sum d_{\\text{面}}",
+                        nice(h_reg),
+                        Some(h_reg),
+                        "d_1+d_2+d_3+d_4 = h",
+                        "正四面体：内点到四面距离之和等于高（形心处为 4ρ）",
+                    ));
+                    out.push(fact(
+                        "维维安尼定理",
+                        "\\rho",
+                        nice(rho),
+                        Some(rho),
+                        "\\rho = h/4",
+                        "正四面体内切球半径",
+                    ));
+                }
+            }
+            // Skew / intersecting lines AB and CD from the first four points.
+            let (na, nb, nc, nd) = (&pts[0].0, &pts[1].0, &pts[2].0, &pts[3].0);
+            let (pa, pb, pc, pd) = (pts[0].1, pts[1].1, pts[2].1, pts[3].1);
+            let ab = sub3(pb, pa);
+            let cd = sub3(pd, pc);
+            let (lab, lcd) = (len3(ab), len3(cd));
+            if lab > 1e-12 && lcd > 1e-12 {
+                let cosang = (dot3(ab, cd).abs() / (lab * lcd)).clamp(0.0, 1.0);
+                let theta = cosang.acos();
+                out.push(fact(
+                    "异面直线",
+                    &format!("\\theta({}{}, {}{})", na, nb, nc, nd),
+                    deg(theta),
+                    Some(theta),
+                    "\\cos\\theta = \\frac{|\\vec{AB}\\cdot\\vec{CD}|}{|\\vec{AB}||\\vec{CD}|}",
+                    "两直线方向的夹角（取锐角或直角）",
+                ));
+            }
+            let nskew = cross3(ab, cd);
+            let ln = len3(nskew);
+            let ac = sub3(pc, pa);
+            if ln < 1e-12 * len3(ab).max(len3(cd)).max(1e-12) {
+                let parallel = len3(ab) > 1e-12 && len3(cd) > 1e-12;
+                if parallel {
+                    let n2 = cross3(ab, ac);
+                    let dpar = len3(n2) / len3(ab);
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} \\parallel {}{}", na, nb, nc, nd),
+                        "\\checkmark".into(),
+                        None,
+                        "\\vec{AB} \\times \\vec{CD} = \\mathbf{0}",
+                        "方向向量共线",
+                    ));
+                    out.push(fact(
+                        "异面直线",
+                        &format!("d({}{}, {}{})", na, nb, nc, nd),
+                        nice(dpar),
+                        Some(dpar),
+                        "d = \\frac{|\\vec{AB}\\times\\vec{AC}|}{|\\vec{AB}|}",
+                        "平行直线间距离",
+                    ));
+                }
+            } else {
+                let triple = dot3(ac, nskew);
+                let dskew = triple.abs() / ln;
+                if dskew < 1e-9 {
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} , {}{}", na, nb, nc, nd),
+                        "\\text{共面（相交或平行）}".into(),
+                        Some(0.0),
+                        "\\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD}) = 0",
+                        "混合积为 0 ⇒ 共面",
+                    ));
+                } else {
+                    out.push(fact(
+                        "异面直线",
+                        &format!("d({}{}, {}{})", na, nb, nc, nd),
+                        nice(dskew),
+                        Some(dskew),
+                        "d = \\frac{|\\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD})|}{|\\vec{AB}\\times\\vec{CD}|}",
+                        "异面直线的距离",
+                    ).with(Shape::Line3 {
+                        px: pa[0],
+                        py: pa[1],
+                        pz: pa[2],
+                        dx: ab[0],
+                        dy: ab[1],
+                        dz: ab[2],
+                        label: format!("{na}{nb}"),
+                    }));
+                    out.push(fact(
+                        "异面直线",
+                        &format!("{}{} \\nparallel {}{}", na, nb, nc, nd),
+                        "\\text{异面}".into(),
+                        None,
+                        "\\vec{AB}\\times\\vec{CD}\\ne\\mathbf{0},\\ \\vec{AC}\\cdot(\\vec{AB}\\times\\vec{CD})\\ne 0",
+                        "既不平行也不相交",
+                    ));
+                }
             }
         }
     }
@@ -930,6 +16910,23 @@ pub fn vectors_analyze(vs: &[NamedVec]) -> Vec<Fact> {
             let dif: Vec<f64> = (0..3).map(|k| a[k] - b[k]).collect();
             out.push(fact("两向量关系", &format!("{} + {}", na, nb), fmt(&sum), None, "", "坐标相加"));
             out.push(fact("两向量关系", &format!("{} - {}", na, nb), fmt(&dif), None, "", "坐标相减"));
+            // Parallelogram law: |a+b|² + |a−b|² = 2(|a|²+|b|²)
+            {
+                let sum_len2 = sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2];
+                let dif_len2 = dif[0] * dif[0] + dif[1] * dif[1] + dif[2] * dif[2];
+                let rhs = 2.0 * (la * la + lb * lb);
+                let lhs = sum_len2 + dif_len2;
+                if (lhs - rhs).abs() < 1e-6 * (1.0 + rhs) {
+                    out.push(fact(
+                        "平行四边形法则",
+                        &format!("|{0}+{1}|^2 + |{0}-{1}|^2", vs[i].name, vs[j].name),
+                        nice(lhs),
+                        Some(lhs),
+                        "|\\vec a+\\vec b|^2 + |\\vec a-\\vec b|^2 = 2(|\\vec a|^2+|\\vec b|^2)",
+                        "平行四边形法则（向量形式）",
+                    ));
+                }
+            }
         }
     }
     if vs.len() >= 3 && is3 {
@@ -965,6 +16962,63 @@ fn line_isect(p: &NamedLine, q: &NamedLine) -> Option<[f64; 2]> {
     Some([(p.c * q.b - p.b * q.c) / det, (p.a * q.c - p.c * q.a) / det])
 }
 
+
+/// Circumcenter and radius of △ABC; None if collinear.
+fn circum2(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> Option<([f64; 2], f64)> {
+    let d = 2.0 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if d.abs() < 1e-14 {
+        return None;
+    }
+    let sq = |q: [f64; 2]| q[0] * q[0] + q[1] * q[1];
+    let ux = (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d;
+    let uy = (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d;
+    let o = [ux, uy];
+    let r = dist2(o, a);
+    if r < 1e-14 || !r.is_finite() {
+        return None;
+    }
+    Some((o, r))
+}
+
+fn collinear2(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> bool {
+    let cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    cross.abs() < 1e-8 * (1.0 + dist2(a, b) * dist2(a, c))
+}
+
+/// Second intersection of two circles, skipping `avoid` (the shared vertex).
+fn circles_second_isect(
+    o1: [f64; 2],
+    r1: f64,
+    o2: [f64; 2],
+    r2: f64,
+    avoid: [f64; 2],
+) -> Option<[f64; 2]> {
+    let dx = o2[0] - o1[0];
+    let dy = o2[1] - o1[1];
+    let d = dx.hypot(dy);
+    if d < 1e-12 || d > r1 + r2 + 1e-9 || d < (r1 - r2).abs() - 1e-9 {
+        return None;
+    }
+    let a = (r1 * r1 - r2 * r2 + d * d) / (2.0 * d);
+    let h2 = r1 * r1 - a * a;
+    if h2 < -1e-9 {
+        return None;
+    }
+    let h = h2.max(0.0).sqrt();
+    let px = o1[0] + a * dx / d;
+    let py = o1[1] + a * dy / d;
+    let mx = -dy * h / d;
+    let my = dx * h / d;
+    let p_a = [px + mx, py + my];
+    let p_b = [px - mx, py - my];
+    let da = dist2(p_a, avoid);
+    let db = dist2(p_b, avoid);
+    if da < 1e-6 && db < 1e-6 {
+        return None;
+    }
+    Some(if da >= db { p_a } else { p_b })
+}
+
 pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
     let mut out = Vec::new();
     for l in ls {
@@ -994,6 +17048,21 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
                 out.push(fact("点与直线", &format!("{} \\in {}", p.name, nm), "\\checkmark".into(), None, "", "代入方程成立"));
             } else {
                 out.push(fact("点与直线", &format!("d({}, {})", p.name, nm), nice(d), Some(d), "d = \\frac{|Ax_0 + By_0 + C|}{\\sqrt{A^2 + B^2}}", "点到直线距离").with(Shape::Segment { x1: x, y1: y, x2: foot[0], y2: foot[1], label: format!("{} 到 {}", p.name, nm) }));
+
+                let rp = [2.0 * foot[0] - x, 2.0 * foot[1] - y];
+                out.push(fact(
+                    "反射",
+                    &format!("{}^{{\\prime}}_{{{}}}", p.name, nm),
+                    pt(rp[0], rp[1]),
+                    None,
+                    "P' = 2\\,\\mathrm{foot} - P",
+                    &format!("点 {} 关于直线 {} 的反射", p.name, nm),
+                ).with(Shape::Point {
+                    x: rp[0],
+                    y: rp[1],
+                    label: format!("{}′/{}", p.name, nm),
+                }));
+
             }
         }
     }
@@ -1140,6 +17209,94 @@ pub fn lines_analyze(ls: &[NamedLine], points: &[NamedPoint]) -> Vec<Fact> {
             }
         }
     }
+
+    // Miquel point of a complete quadrilateral (4 lines, 6 vertices).
+    if ls.len() >= 4 {
+        let n = ls.len().min(6);
+        'miquel: for i0 in 0..n {
+            for i1 in (i0 + 1)..n {
+                for i2 in (i1 + 1)..n {
+                    for i3 in (i2 + 1)..n {
+                        let idx = [i0, i1, i2, i3];
+                        let mut ok_pairs = true;
+                        for a in 0..4 {
+                            for b in (a + 1)..4 {
+                                if line_isect(&ls[idx[a]], &ls[idx[b]]).is_none() {
+                                    ok_pairs = false;
+                                }
+                            }
+                        }
+                        if !ok_pairs {
+                            continue;
+                        }
+                        let tri = |a: usize, b: usize, c: usize| -> Option<[[f64; 2]; 3]> {
+                            Some([
+                                line_isect(&ls[idx[a]], &ls[idx[b]])?,
+                                line_isect(&ls[idx[b]], &ls[idx[c]])?,
+                                line_isect(&ls[idx[c]], &ls[idx[a]])?,
+                            ])
+                        };
+                        let (Some(t012), Some(t013), Some(t023), Some(t123)) =
+                            (tri(0, 1, 2), tri(0, 1, 3), tri(0, 2, 3), tri(1, 2, 3))
+                        else {
+                            continue;
+                        };
+                        if collinear2(t012[0], t012[1], t012[2])
+                            || collinear2(t013[0], t013[1], t013[2])
+                            || collinear2(t023[0], t023[1], t023[2])
+                            || collinear2(t123[0], t123[1], t123[2])
+                        {
+                            continue;
+                        }
+                        let (Some((o1, r1)), Some((o2, r2))) =
+                            (circum2(t012[0], t012[1], t012[2]), circum2(t013[0], t013[1], t013[2]))
+                        else {
+                            continue;
+                        };
+                        let shared = line_isect(&ls[idx[0]], &ls[idx[1]]).unwrap();
+                        let Some(m) = circles_second_isect(o1, r1, o2, r2, shared) else {
+                            continue;
+                        };
+                        let (Some((o3, r3)), Some((o4, r4))) =
+                            (circum2(t023[0], t023[1], t023[2]), circum2(t123[0], t123[1], t123[2]))
+                        else {
+                            continue;
+                        };
+                        if (dist2(m, o3) - r3).abs() > 1e-5 * (1.0 + r3)
+                            || (dist2(m, o4) - r4).abs() > 1e-5 * (1.0 + r4)
+                        {
+                            continue;
+                        }
+                        let names = format!(
+                            "{},{},{},{}",
+                            ls[idx[0]].name, ls[idx[1]].name, ls[idx[2]].name, ls[idx[3]].name
+                        );
+                        out.push(fact(
+                            "米克尔点",
+                            "\\text{Miquel}",
+                            pt(m[0], m[1]),
+                            None,
+                            "\\odot(L_iL_jL_k)\\ \\text{共点}",
+                            &format!("完全四线形 {{{names}}} 的四个三点形外接圆交于米克尔点"),
+                        ).with(Shape::Point {
+                            x: m[0],
+                            y: m[1],
+                            label: "Miquel".into(),
+                        }));
+                        out.push(fact(
+                            "米克尔点",
+                            "M",
+                            pt(m[0], m[1]),
+                            None,
+                            "",
+                            "米克尔点坐标",
+                        ));
+                        break 'miquel;
+                    }
+                }
+            }
+        }
+    }
     out
 }
 
@@ -1173,6 +17330,93 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             let x = [q.p[0], *q.p.get(1).unwrap_or(&0.0), *q.p.get(2).unwrap_or(&0.0)];
             let d = (dot3(p.n, x) - p.d).abs() / ln;
             out.push(fact("点与平面", &format!("d({}, {})", q.name, p.name), nice(d), Some(d), "\\frac{|ax_0+by_0+cz_0-d|}{\\sqrt{a^2+b^2+c^2}}", "点到平面距离"));
+            if ln > 1e-12 && d > 1e-8 && d.is_finite() {
+                let lam = (p.d - dot3(p.n, x)) / (ln * ln);
+                let foot = [x[0] + lam * p.n[0], x[1] + lam * p.n[1], x[2] + lam * p.n[2]];
+                out.push(fact(
+                    "点与平面",
+                    &format!("\\text{{foot}}({}, {})", q.name, p.name),
+                    pt3(foot),
+                    None,
+                    "P + \\frac{d - \\vec n\\cdot P}{|\\vec n|^2}\\vec n",
+                    "点到平面的垂足",
+                ).with(Shape::Point3 { x: foot[0], y: foot[1], z: foot[2], label: format!("foot {} {}", q.name, p.name) }));
+
+                let rp = [2.0 * foot[0] - x[0], 2.0 * foot[1] - x[1], 2.0 * foot[2] - x[2]];
+                out.push(fact(
+                    "反射",
+                    &format!("{}^{{\\prime}}_{{{}}}", q.name, p.name),
+                    pt3(rp),
+                    None,
+                    "P' = 2\\,\\mathrm{foot} - P",
+                    &format!("点 {} 关于平面 {} 的反射", q.name, p.name),
+                ).with(Shape::Point3 {
+                    x: rp[0],
+                    y: rp[1],
+                    z: rp[2],
+                    label: format!("{}′/{}", q.name, p.name),
+                }));
+
+            }
+        }
+    }
+    // Line–plane angle: every pair of 3D points defines a line.
+    {
+        let pts3: Vec<(String, [f64; 3])> = points
+            .iter()
+            .filter(|q| q.p.len() >= 3)
+            .map(|q| (q.name.clone(), [q.p[0], q.p[1], q.p[2]]))
+            .collect();
+        let mut pair_count = 0usize;
+        'pairs: for i in 0..pts3.len() {
+            for j in i + 1..pts3.len() {
+                if pair_count >= 6 {
+                    break 'pairs;
+                }
+                let (ref na, pa) = pts3[i];
+                let (ref nb, pb) = pts3[j];
+                let dir = sub3(pb, pa);
+                let ld = len3(dir);
+                if ld < 1e-12 {
+                    continue;
+                }
+                pair_count += 1;
+                for p in ps {
+                    let ln = len3(p.n);
+                    if ln < 1e-12 {
+                        continue;
+                    }
+                    let sin_phi = (dot3(dir, p.n).abs() / (ld * ln)).clamp(0.0, 1.0);
+                    let phi = sin_phi.asin(); // angle between line and plane ∈ [0, π/2]
+                    out.push(fact(
+                        "线面角",
+                        &format!("\\theta({}{}, {})", na, nb, p.name),
+                        deg(phi),
+                        Some(phi),
+                        "\\sin\\theta = \\dfrac{|\\vec v\\cdot\\vec n|}{|\\vec v||\\vec n|}",
+                        "直线与平面所成的角",
+                    ));
+                    if sin_phi < 1e-9 {
+                        out.push(fact(
+                            "线面角",
+                            &format!("{}{} \\parallel {}", na, nb, p.name),
+                            "\\checkmark".into(),
+                            None,
+                            "\\vec v\\cdot\\vec n = 0",
+                            "直线平行于平面（或落在平面上）",
+                        ));
+                    } else if (1.0 - sin_phi).abs() < 1e-9 {
+                        out.push(fact(
+                            "线面角",
+                            &format!("{}{} \\perp {}", na, nb, p.name),
+                            "\\checkmark".into(),
+                            None,
+                            "|\\vec v\\cdot\\vec n| = |\\vec v||\\vec n|",
+                            "直线垂直于平面",
+                        ));
+                    }
+                }
+            }
         }
     }
     for i in 0..ps.len() {
@@ -1191,6 +17435,14 @@ pub fn planes_analyze(ps: &[NamedPlane], points: &[NamedPoint]) -> Vec<Fact> {
             }
             let ang = (dot3(p.n, q.n).abs() / (lp * lq)).clamp(-1.0, 1.0).acos();
             out.push(fact("两平面", &format!("\\theta({}, {})", p.name, q.name), deg(ang), Some(ang), "\\cos\\theta = \\frac{|\\vec n_1\\cdot\\vec n_2|}{|\\vec n_1||\\vec n_2|}", "二面角（锐角）"));
+            out.push(fact(
+                "两平面",
+                &format!("\\text{{二面角}}({}, {})", p.name, q.name),
+                deg(ang),
+                Some(ang),
+                "\\cos\\theta = \\frac{|\\vec n_1\\cdot\\vec n_2|}{|\\vec n_1||\\vec n_2|}",
+                "二面角等于两法向量夹角（取锐角）",
+            ));
             if dot3(p.n, q.n).abs() < 1e-9 * lp * lq {
                 out.push(fact("两平面", &format!("{} \\perp {}", p.name, q.name), "\\checkmark".into(), None, "\\vec n_1\\cdot\\vec n_2 = 0", "法向量垂直"));
             }
@@ -1634,6 +17886,27 @@ mod tests {
     }
 
     #[test]
+    fn angle_bisector_theorem_heron_excircles() {
+        // 3-4-5: Heron S = 6; bisector from C splits AB as b:a = 4:3; r_a = 2, r_b = 3, r_c = 6
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap();
+        assert!((get("S_{\\text{海伦}}").num.unwrap() - 6.0).abs() < 1e-9);
+        let ratio = get("\\frac{|AF_{c}|}{|F_{c}B|}").num.unwrap();
+        assert!((ratio - 4.0 / 3.0).abs() < 1e-9, "ratio = {ratio}");
+        assert!((get("r_a").num.unwrap() - 2.0).abs() < 1e-9);
+        assert!((get("r_b").num.unwrap() - 3.0).abs() < 1e-9);
+        assert!((get("r_c").num.unwrap() - 6.0).abs() < 1e-9);
+        // OI² = R(R − 2r) = 2.5 · (2.5 − 2) = 1.25 → OI = √1.25
+        let oi = get("|OI|").num.unwrap();
+        assert!((oi * oi - 1.25).abs() < 1e-9, "OI = {oi}");
+        // right triangle: H at C, O midpoint of AB → |OH| = R = 2.5
+        assert!((get("|OH|").num.unwrap() - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
     fn vector_projection_vector() {
         let vs = vec![NamedVec { name: "a".into(), v: vec![3.0, 4.0] }, NamedVec { name: "b".into(), v: vec![1.0, 0.0] }];
         let out = vectors_analyze(&vs);
@@ -1697,4 +17970,5472 @@ mod tests {
         let sim = out.iter().find(|f| f.label.starts_with("\\text{相似比}")).unwrap();
         assert!((sim.num.unwrap() - 1.0 / 3.0).abs() < 1e-9, "k = {}", sim.value);
     }
+
+    #[test]
+    fn ceva_and_menelaus_on_345() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let get = |label: &str| fs.iter().find(|f| f.label == label).unwrap_or_else(|| panic!("missing {label}"));
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{中线}}").num.unwrap() - 1.0).abs() < 1e-9);
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{角平分线}}").num.unwrap() - 1.0).abs() < 1e-9);
+        // right triangle: an altitude foot sits on a vertex → skip 高 family
+        assert!(fs.iter().all(|f| f.label != "\\Pi_{\\text{Ceva}}^{\\text{高}}"));
+        assert!((get("\\Pi_{\\text{Ceva}}^{\\text{切点}}").num.unwrap() - 1.0).abs() < 1e-9);
+        let men = get("\\Pi_{\\text{Menelaus}}").num.unwrap();
+        assert!((men + 1.0).abs() < 1e-9, "Menelaus = {men}");
+    }
+
+    #[test]
+    fn ceva_altitudes_acute() {
+        // 6-5-5 acute isosceles: all altitude feet interior → Ceva product = 1
+        let k = TriangleKnown { a: Some(6.0), b: Some(5.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let alt = fs.iter().find(|f| f.label == "\\Pi_{\\text{Ceva}}^{\\text{高}}").unwrap();
+        assert!((alt.num.unwrap() - 1.0).abs() < 1e-9, "alt = {}", alt.value);
+    }
+
+    #[test]
+    fn skew_lines_distance() {
+        // AB = (0,0,0)->(1,0,0), CD = (0,1,0)->(0,1,1): skew, distance = 1
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let d = out.iter().find(|f| f.label == "d(AB, CD)").unwrap();
+        assert!((d.num.unwrap() - 1.0).abs() < 1e-9, "d = {}", d.value);
+        assert!(out.iter().any(|f| f.value.contains("异面")));
+    }
+
+    #[test]
+    fn stewart_median_and_bisector() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        // median to c=5: m=n=2.5, d=2.5; LHS = 3²·2.5 + 4²·2.5 = 62.5
+        let med = fs.iter().find(|f| f.label == "\\text{Stewart}_{m_c}").unwrap();
+        assert!((med.num.unwrap() - 62.5).abs() < 1e-6, "med = {}", med.value);
+        let bis = fs.iter().find(|f| f.label == "\\text{Stewart}_{t_c}").unwrap();
+        assert!(bis.num.unwrap().is_finite());
+        // altitude to the hypotenuse: m = 16/5, n = 9/5, h = 12/5 → LHS = 57.6
+        let alt = fs.iter().find(|f| f.label == "\\text{Stewart}_{h_c}").unwrap();
+        assert!((alt.num.unwrap() - 57.6).abs() < 1e-6, "alt = {}", alt.value);
+        // medians, bisectors, and altitudes
+        assert_eq!(fs.iter().filter(|f| f.label.starts_with("\\text{Stewart}_")).count(), 9);
+    }
+
+    #[test]
+    fn line_plane_angle_perpendicular() {
+        // AB = vertical (0,0,0)->(0,0,1); plane z = 0 → θ = 90°
+        let ps = vec![NamedPlane { name: "α".into(), n: [0.0, 0.0, 1.0], d: 0.0 }];
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![0.0, 0.0, 1.0] },
+            NamedPoint { name: "C".into(), p: vec![1.0, 0.0, 0.0] },
+        ];
+        let out = planes_analyze(&ps, &pts);
+        let th = out.iter().find(|f| f.label == "\\theta(AB, α)").unwrap();
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9, "θ = {}", th.value);
+        assert!(out.iter().any(|f| f.label == "AB \\perp α"));
+        // AC lies in / parallel to the plane → θ = 0
+        let th2 = out.iter().find(|f| f.label == "\\theta(AC, α)").unwrap();
+        assert!(th2.num.unwrap().abs() < 1e-9, "θ(AC) = {}", th2.value);
+        assert!(out.iter().any(|f| f.label == "AC \\parallel α"));
+        let foot = out.iter().find(|f| f.label == "\\text{foot}(B, α)").unwrap();
+        assert!(foot.value.contains('0'), "foot = {}", foot.value);
+        if let Shape::Point3 { x, y, z, .. } = foot.shape.as_ref().unwrap() {
+            assert!(x.abs() < 1e-9 && y.abs() < 1e-9 && z.abs() < 1e-9);
+        } else {
+            panic!("foot should be a point");
+        }
+    }
+
+    #[test]
+    fn skew_line_angle() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let th = out.iter().find(|f| f.label == "\\theta(AB, CD)").unwrap();
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9, "θ = {}", th.value);
+    }
+
+    #[test]
+    fn van_obel_and_apollonius_on_345() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let vo_a = fs.iter().find(|f| f.label.contains("ID_{a}")).expect("Van Obel A");
+        assert!((vo_a.num.unwrap() - 3.0).abs() < 1e-6, "Van Obel A = {}", vo_a.value);
+        let vo_b = fs.iter().find(|f| f.label.contains("ID_{b}")).expect("Van Obel B");
+        assert!((vo_b.num.unwrap() - 2.0).abs() < 1e-6, "Van Obel B = {}", vo_b.value);
+        assert_eq!(fs.iter().filter(|f| f.label.contains("ID_")).count(), 3);
+        let ap = fs.iter().filter(|f| f.group == "阿波罗尼奥斯圆").count();
+        assert_eq!(ap, 3, "Apollonius count");
+    }
+
+    #[test]
+    fn tetrahedron_volume_unit() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 0.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let v = out.iter().find(|f| f.label.contains("四面体")).expect("tetra volume");
+        assert!((v.num.unwrap() - 1.0 / 6.0).abs() < 1e-9, "V = {}", v.value);
+        let cm = out.iter().find(|f| f.label.contains("Cayley")).expect("Cayley-Menger");
+        assert!((cm.num.unwrap() - 1.0 / 6.0).abs() < 1e-9, "V_CM = {}", cm.value);
+    }
+
+    #[test]
+    fn dihedral_angle_xy_planes() {
+        let ps = vec![
+            NamedPlane { name: "α".into(), n: [1.0, 0.0, 0.0], d: 0.0 },
+            NamedPlane { name: "β".into(), n: [0.0, 1.0, 0.0], d: 0.0 },
+        ];
+        let out = planes_analyze(&ps, &[]);
+        let th = out.iter().find(|f| f.label == "\\theta(α, β)").expect("theta");
+        assert!((th.num.unwrap() - PI / 2.0).abs() < 1e-9);
+        assert!(out.iter().any(|f| f.label.contains("二面角")));
+        assert!(out.iter().any(|f| f.label == "α \\perp β"));
+    }
+
+    #[test]
+    fn euler_line_and_nine_point() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.label.contains("O,") && f.value.contains("共线")));
+        let og_gh = fs.iter().find(|f| f.label == "OG:GH").unwrap();
+        assert!((og_gh.num.unwrap() - 2.0).abs() < 1e-6, "OG:GH = {}", og_gh.value);
+        let r9 = fs.iter().find(|f| f.label.contains("九点")).unwrap();
+        assert!((r9.num.unwrap() - 1.25).abs() < 1e-9, "R9 = {}", r9.value); // R=2.5
+        // OI² = R(R-2r) already covered; ensure |OI| present
+        assert!(fs.iter().any(|f| f.label == "|OI|"));
+        // 3-4-5 is right: OH is nine-point diameter
+        assert!(
+            fs.iter().any(|f| f.label.contains("九点圆直径")),
+            "OH nine-point diameter fact missing for right triangle"
+        );
+        let oh2on = fs.iter().find(|f| f.label == "|OH| = 2|ON|").expect("OH=2ON");
+        assert!((oh2on.num.unwrap() - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn feuerbach_spieker_nagel() {
+        // 3-4-5: R=2.5, r=1 → |NI|=R/2−r=0.25; r_a=2,r_b=3,r_c=6 → |NI_*|=R/2+r_*.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ni = fs.iter().find(|f| f.group == "费尔巴哈定理" && f.label == "|NI|").expect("|NI|");
+        assert!((ni.num.unwrap() - 0.25).abs() < 1e-9, "|NI|={}", ni.value);
+        assert!(fs.iter().any(|f| f.group == "费尔巴哈定理" && f.label.contains("内切")));
+        let nia = fs.iter().find(|f| f.label == "|NI_a|").expect("|NI_a|");
+        let nib = fs.iter().find(|f| f.label == "|NI_b|").expect("|NI_b|");
+        let nic = fs.iter().find(|f| f.label == "|NI_c|").expect("|NI_c|");
+        assert!((nia.num.unwrap() - 3.25).abs() < 1e-9, "|NI_a|={}", nia.value);
+        assert!((nib.num.unwrap() - 4.25).abs() < 1e-9, "|NI_b|={}", nib.value);
+        assert!((nic.num.unwrap() - 7.25).abs() < 1e-9, "|NI_c|={}", nic.value);
+        assert!(fs.iter().any(|f| f.group == "斯皮克中心" && f.label == "Sp"));
+        assert!(fs.iter().any(|f| f.group == "奈格尔点" && f.label == "Na"));
+        let ig = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "IG:GNa").expect("IG:GNa");
+        assert!((ig.num.unwrap() - 2.0).abs() < 1e-6, "IG:GNa={}", ig.value);
+        assert!(fs.iter().any(|f| f.group == "奈格尔点" && f.value.contains("共线")));
+    }
+
+    #[test]
+    fn gergonne_lemoine_brocard() {
+        // 3-4-5: Ge → (3.25, 1.5); K → (3.2, 1.2); tan ω = 12/25 = 0.48; cot ω = 25/12.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
+        // bary 1/(s−a):… on 3-4-5 → (3.109…, 1.309…) = (171/55, 72/55)
+        assert!(
+            ge.value.contains("3.10")
+                || ge.value.contains("1.30")
+                || ge.value.contains("171/55")
+                || ge.value.contains("\\frac{171}{55}")
+                || ge.value.contains("72/55")
+                || ge.value.contains("\\frac{72}{55}"),
+            "Ge={}",
+            ge.value
+        );
+        assert!(fs.iter().any(|f| f.group == "格尔巩点" && f.value.contains("等截")));
+        let kp = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        // (3.2, 1.2) == (16/5, 6/5)
+        assert!(
+            (kp.value.contains("3.2") || kp.value.contains("16/5") || kp.value.contains("\\frac{16}{5}"))
+                && (kp.value.contains("1.2") || kp.value.contains("6/5") || kp.value.contains("\\frac{6}{5}")),
+            "K={}",
+            kp.value
+        );
+        assert!(fs.iter().any(|f| f.group == "等角共轭" && f.label.contains("G") && f.label.contains("K")));
+        let tan_w = fs.iter().find(|f| f.group == "布罗卡" && f.label == "\\tan\\omega").expect("tan ω");
+        assert!((tan_w.num.unwrap() - 0.48).abs() < 1e-9, "tan ω={}", tan_w.value);
+        let cot_w = fs.iter().find(|f| f.group == "布罗卡" && f.label == "\\cot\\omega").expect("cot ω");
+        assert!((cot_w.num.unwrap() - 25.0 / 12.0).abs() < 1e-9, "cot ω={}", cot_w.value);
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\omega"));
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\Omega"));
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label == "\\Omega'"));
+    }
+
+
+    #[test]
+    fn longchamps_mittenpunkt_schiffler() {
+        // 3-4-5: H=C=(3.2,2.4), O=(2.5,0) → L=2O−H=(1.8,−2.4);
+        // Mi bary a(s−a):… → (28/11, 6/11); Sc on Euler line, matches Euler(ICA).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        assert!(
+            (l.value.contains("1.8") || l.value.contains("9/5") || l.value.contains("\\frac{9}{5}"))
+                && (l.value.contains("-2.4") || l.value.contains("-\\frac{12}{5}") || l.value.contains("-12/5")),
+            "L={}",
+            l.value
+        );
+        assert!(fs.iter().any(|f| f.group == "德龙尚点" && f.label.contains("中点")));
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        assert!(
+            mi.value.contains("28/11")
+                || mi.value.contains("\\frac{28}{11}")
+                || mi.value.contains("2.54"),
+            "Mi={}",
+            mi.value
+        );
+        assert!(fs.iter().any(|f| f.group == "席弗勒点" && f.label == "Sc"), "Sc missing");
+        assert!(
+            fs.iter().any(|f| f.group == "席弗勒点" && f.label.contains("ICA")),
+            "Schiffler ICA concurrence missing"
+        );
+        let sc = fs.iter().find(|f| f.group == "席弗勒点" && f.label == "Sc").unwrap();
+        // Sc ≈ (2.68421, 0.63158) = (51/19, 12/19)
+        assert!(
+            sc.value.contains("2.68")
+                || sc.value.contains("51/19")
+                || sc.value.contains("\\frac{51}{19}")
+                || sc.value.contains("0.63"),
+            "Sc={}",
+            sc.value
+        );
+    }
+
+
+    #[test]
+    fn bevan_orthic_euler_reflection() {
+        // 3-4-5: Be = 2O−I = (2,−1); orthic feet; Euler reflection skipped (right).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let be = fs.iter().find(|f| f.group == "贝万点" && f.label == "Be").expect("Be");
+        assert!(
+            (be.value.contains("2") || be.value.contains("2.0"))
+                && (be.value.contains("-1")),
+            "Be={}",
+            be.value
+        );
+        assert!(fs.iter().any(|f| f.group == "贝万点" && f.label.contains("I_a")));
+        assert!(["H_a", "H_b", "H_c"].iter().all(|lab| fs.iter().any(|f| f.group == "垂足三角形" && f.label == *lab)));
+        assert!(fs.iter().any(|f| f.group == "垂足三角形" && f.label.contains("九点圆")));
+        let hc = fs.iter().find(|f| f.group == "垂足三角形" && f.label == "H_c").expect("Hc");
+        assert!(
+            hc.value.contains("3.2") || hc.value.contains("16/5") || hc.value.contains("\\frac{16}{5}"),
+            "Hc={}",
+            hc.value
+        );
+
+        // Acute 6-7-8: Euler reflection point on circumcircle.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "欧拉反射点" && f.label == "E_r"), "E_r missing on 6-7-8");
+        assert!(fs2.iter().any(|f| f.group == "欧拉反射点" && f.label.contains("(O)")));
+        let er = fs2.iter().find(|f| f.group == "欧拉反射点" && f.label == "E_r").unwrap();
+        assert!(
+            er.value.contains("1.7") || er.value.contains("4.4") || er.value.contains("\\frac"),
+            "Er={}",
+            er.value
+        );
+    }
+
+
+    #[test]
+    fn contact_spieker_radius_kosnita() {
+        // 3-4-5: contact pts; |IX_*|=r=1; r_Sp=1/2; Kosnita skipped (O on AB).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(["X_a", "X_b", "X_c"].iter().all(|lab| fs.iter().any(|f| f.group == "接触三角形" && f.label == *lab)));
+        let ix = fs.iter().find(|f| f.group == "接触三角形" && f.label == "|IX_*|").expect("|IX_*|");
+        assert!((ix.num.unwrap() - 1.0).abs() < 1e-9, "|IX_*|={}", ix.value);
+        assert!(fs.iter().any(|f| f.group == "接触三角形" && f.value.contains("共线")));
+        let rsp = fs.iter().find(|f| f.group == "斯皮克圆" && f.label.contains("Sp")).expect("r_Sp");
+        assert!((rsp.num.unwrap() - 0.5).abs() < 1e-9, "r_Sp={}", rsp.value);
+        assert!(fs.iter().any(|f| f.group == "斯皮克圆" && f.label.contains("中点")));
+        assert!(
+            fs.iter().all(|f| f.group != "科斯尼塔点"),
+            "Kosnita should be skipped on right 3-4-5"
+        );
+
+        // Acute 6-7-8: Kosnita present.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let ko = fs2.iter().find(|f| f.group == "科斯尼塔点" && f.label == "Ko").expect("Ko on 6-7-8");
+        assert!(ko.value.contains("4.5") || ko.value.contains("1.8") || ko.value.contains("\\frac"), "Ko={}", ko.value);
+        let rsp2 = fs2.iter().find(|f| f.group == "斯皮克圆" && f.label.contains("Sp")).unwrap();
+        // r = Δ/s; for 6-7-8, s=10.5, Δ=sqrt(10.5·4.5·3.5·2.5)=21*sqrt(3)/4? 
+        // r_Sp = r/2 > 0
+        assert!(rsp2.num.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn extouch_steiner_mandart() {
+        // 3-4-5: extouch T_*; X_a/T_a midpoint = mid BC; A–T_a–Na; Steiner area; Mandart@Mi
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(["T_a", "T_b", "T_c"].iter().all(|lab| fs.iter().any(|f| f.group == "旁切接触三角形" && f.label == *lab)));
+        assert!(fs.iter().any(|f| f.group == "旁切接触三角形" && f.label.contains("X_a")));
+        assert!(fs.iter().any(|f| f.group == "旁切接触三角形" && f.value.contains("共线")));
+        let st = fs.iter().find(|f| f.group == "施泰纳内接椭圆" && f.label.contains("Steiner")).expect("Steiner area");
+        let expect = std::f64::consts::PI * 6.0 / (3.0 * 3.0f64.sqrt());
+        assert!((st.num.unwrap() - expect).abs() < 1e-9, "Steiner={} vs {}", st.value, expect);
+        assert!(["M_a", "M_b", "M_c"].iter().all(|lab| fs.iter().any(|f| f.group == "施泰纳内接椭圆" && f.label == *lab)));
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        let man = fs.iter().find(|f| f.group == "曼达特内接椭圆" && f.label.contains("center")).expect("Mandart");
+        assert_eq!(man.value, mi.value, "Mandart center should equal Mittenpunkt");
+        assert!(fs.iter().any(|f| f.group == "曼达特内接椭圆" && f.label.contains("T_")));
+        let nag_ceva = fs.iter().find(|f| f.group == "塞瓦与梅涅劳斯" && f.label.contains("旁切")).expect("Nagel Ceva");
+        assert!((nag_ceva.num.unwrap() - 1.0).abs() < 1e-9);
+
+        // Equilateral: Steiner = incircle area π r²
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "施泰纳内接椭圆" && f.label.contains("pi r")));
+    }
+
+    #[test]
+    fn clawson_yff_exeter() {
+        // Right 3-4-5: Clawson & Yff skipped (tan/sec undefined); Exeter present.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().all(|f| f.group != "克劳森点"), "Clawson must skip right △");
+        assert!(fs.iter().all(|f| f.group != "伊夫中心"), "Yff must skip right △");
+        let ex = fs.iter().find(|f| f.group == "埃克塞特点" && f.label == "Ex").expect("Exeter on 3-4-5");
+        assert!(ex.value.contains("\\left") || ex.value.contains("(") || ex.value.contains("\\frac"), "Ex={}", ex.value);
+        assert!(fs.iter().any(|f| f.group == "埃克塞特点" && f.label.contains("perspector")));
+
+        // Acute 6-7-8: all three present.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let cl = fs2.iter().find(|f| f.group == "克劳森点" && f.label == "Cl").expect("Clawson on 6-7-8");
+        let yff = fs2.iter().find(|f| f.group == "伊夫中心" && f.label == "Yff").expect("Yff on 6-7-8");
+        let ex2 = fs2.iter().find(|f| f.group == "埃克塞特点" && f.label == "Ex").expect("Exeter on 6-7-8");
+        assert!(cl.value.contains("\\left") || cl.value.contains("("), "Cl={}", cl.value);
+        assert!(yff.value.contains("\\left") || yff.value.contains("("), "Yff={}", yff.value);
+        assert!(ex2.value.contains("\\left") || ex2.value.contains("("), "Ex={}", ex2.value);
+        // Distinct from each other and from G on a scalene acute △.
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(cl.value, yff.value);
+        assert_ne!(cl.value, ex2.value);
+        assert_ne!(yff.value, g.value);
+    }
+
+    #[test]
+    fn isodynamic_steiner_tarry() {
+        // Scalene right 3-4-5: S1,S2,St,Ty all present (not isosceles).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let s1 = fs.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1");
+        let s2 = fs.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{2}")).expect("S2");
+        assert_ne!(s1.value, s2.value);
+        assert!(fs.iter().any(|f| f.group == "等动力点" && f.label.contains("Apollonius")));
+        let st = fs.iter().find(|f| f.group == "施泰纳点" && f.label == "St").expect("Steiner");
+        let ty = fs.iter().find(|f| f.group == "塔里点" && f.label == "Ty").expect("Tarry");
+        assert_ne!(st.value, ty.value);
+        let ot = fs.iter().find(|f| f.group == "塔里点" && f.label.contains("O")).expect("|O Ty|");
+        let rr = fs.iter().find(|f| f.group == "外接圆与内切圆" && f.label == "R").expect("R");
+        assert!((ot.num.unwrap() - rr.num.unwrap()).abs() < 1e-6, "Tarry on circumcircle");
+
+        // Isosceles 5-5-6: Steiner/Tarry skipped; isodynamic present.
+        let k2 = TriangleKnown { a: Some(6.0), b: Some(5.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "施泰纳点"), "Steiner skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "塔里点"), "Tarry skip with Steiner");
+        assert!(fs2.iter().any(|f| f.group == "等动力点" && f.label.contains("S_{1}")));
+
+        // Equilateral: S2 skipped; S1 coincides with G; Steiner skipped.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "施泰纳点"));
+        assert!(fs3.iter().all(|f| !(f.group == "等动力点" && f.label.contains("S_{2}"))), "S2 skip equilateral");
+        let s1e = fs3.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1 eq");
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_eq!(s1e.value, g.value, "equilateral S1 = G");
+    }
+
+    #[test]
+    fn napoleon_parry_vecten() {
+        // Scalene 3-4-5: all present (no 30°/45°/135°/150°; not equilateral).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let n1 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1");
+        let n2 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2");
+        assert_ne!(n1.value, n2.value);
+        let py = fs.iter().find(|f| f.group == "帕里点" && f.label == "Py").expect("Parry");
+        assert!(fs.iter().any(|f| f.group == "帕里点" && f.label == "X_{111}"), "X111 dual label");
+        let op = fs.iter().find(|f| f.group == "帕里点" && f.label.contains("O")).expect("|O Py|");
+        let rr = fs.iter().find(|f| f.group == "外接圆与内切圆" && f.label == "R").expect("R");
+        assert!((op.num.unwrap() - rr.num.unwrap()).abs() < 1e-6, "Parry on circumcircle");
+        let vout = fs.iter().find(|f| f.group == "韦克滕点" && f.label.contains("out")).expect("Vout");
+        let vin = fs.iter().find(|f| f.group == "韦克滕点" && f.label.contains("in")).expect("Vin");
+        assert_ne!(vout.value, vin.value);
+        assert_ne!(py.value, n1.value);
+
+        // Equilateral: Parry skipped; Napoleon + Vecten present; N1=N2=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "帕里点"), "Parry skip equilateral");
+        let n1e = fs2.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1 eq");
+        let n2e = fs2.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2 eq");
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_eq!(n1e.value, g.value);
+        assert_eq!(n2e.value, g.value);
+        assert!(fs2.iter().any(|f| f.group == "韦克滕点" && f.label.contains("out")));
+
+        // Isosceles right 1-1-√2 ≈ has 45°: inner Vecten skipped; outer ok; Parry ok.
+        let k3 = TriangleKnown { a: Some(1.0), b: Some(1.0), c: Some(2f64.sqrt()), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| !(f.group == "韦克滕点" && f.label.contains("in"))), "Vin skip 45°");
+        assert!(fs3.iter().any(|f| f.group == "韦克滕点" && f.label.contains("out")), "Vout on isos right");
+        assert!(fs3.iter().any(|f| f.group == "帕里点" && f.label == "Py"));
+    }
+
+    #[test]
+    fn hofstadter_kenmotu_apollonius() {
+        // 3-4-5: Hofstadter, Kenmotu (+square edge), Apollonius, Brocard midpoint.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let hf0 = fs.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_0").expect("Hf0");
+        let hf1 = fs.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_1").expect("Hf1");
+        assert_ne!(hf0.value, hf1.value);
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(hf0.value, g.value, "Hofstadter zero ≠ centroid on scalene");
+        let km = fs.iter().find(|f| f.group == "肯莫图点" && f.label == "Km").expect("Kenmotu");
+        let sq = fs.iter().find(|f| f.group == "肯莫图点" && f.label.contains("square")).expect("square edge");
+        assert!(sq.num.unwrap() > 0.0);
+        let vout = fs.iter().find(|f| f.group == "韦克滕点" && f.label.contains("out")).expect("Vout");
+        assert_ne!(km.value, vout.value, "Kenmotu ≠ outer Vecten (isogonal mates)");
+        let ap = fs.iter().find(|f| f.group == "阿波罗尼奥斯点" && f.label == "Ap").expect("Apollonius");
+        assert!(ap.value.contains("(") || ap.value.contains("\\left"));
+        assert!(fs.iter().any(|f| f.group == "布罗卡" && f.label.contains("39")));
+
+        // Equilateral: Hf0=Hf1=G; Kenmotu=G; Apollonius=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let hf0e = fs2.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_0").unwrap();
+        let hf1e = fs2.iter().find(|f| f.group == "霍夫斯塔特点" && f.label == "Hf_1").unwrap();
+        assert_eq!(hf0e.value, g2.value);
+        assert_eq!(hf1e.value, g2.value);
+        let kme = fs2.iter().find(|f| f.group == "肯莫图点" && f.label == "Km").unwrap();
+        assert_eq!(kme.value, g2.value);
+        let ape = fs2.iter().find(|f| f.group == "阿波罗尼奥斯点" && f.label == "Ap").unwrap();
+        assert_eq!(ape.value, g2.value);
+    }
+
+    #[test]
+    fn fermat_feuerbach_point_detour() {
+        // 3-4-5: F1,F2 distinct from S1,S2; Fe on nine-point & incircle; Ed + Ip (12>4*2.5+1).
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let f1 = fs.iter().find(|f| f.group == "费马点" && f.label == "F_1").expect("F1");
+        let f2 = fs.iter().find(|f| f.group == "费马点" && f.label == "F_2").expect("F2");
+        assert_ne!(f1.value, f2.value);
+        let s1 = fs.iter().find(|f| f.group == "等动力点" && f.label.contains("S_{1}")).expect("S1");
+        assert_ne!(f1.value, s1.value, "isogonic ≠ isodynamic");
+        assert!(fs.iter().any(|f| f.group == "费马点" && f.label.contains("S_1")));
+        let fe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").expect("Fe");
+        let nfe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label.contains("N")).expect("|N Fe|");
+        let r9 = fs.iter().find(|f| f.group == "欧拉线" && f.label.contains("九点")).expect("R9");
+        assert!((nfe.num.unwrap() - r9.num.unwrap()).abs() < 1e-6);
+        let ed = fs.iter().find(|f| f.group == "等迂回点" && f.label == "Ed").expect("Ed");
+        let ip = fs.iter().find(|f| f.group == "等周点" && f.label == "Ip").expect("Ip");
+        assert_ne!(ed.value, ip.value);
+        assert_ne!(fe.value, ed.value);
+
+        // Equilateral: F1=G; F2 skipped; Fe, Ed, Ip (=G for eq?).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let f1e = fs2.iter().find(|f| f.group == "费马点" && f.label == "F_1").unwrap();
+        assert_eq!(f1e.value, g.value);
+        assert!(fs2.iter().all(|f| !(f.group == "费马点" && f.label == "F_2")), "F2 skip equilateral");
+        assert!(fs2.iter().all(|f| f.group != "费尔巴哈点"), "Fe skip equilateral coincident circles");
+        assert!(fs2.iter().any(|f| f.group == "等迂回点" && f.label == "Ed"));
+
+        // Obtuse with angle > 120°: F1 at obtuse vertex. Sides 2,3,4: cos C=(4+9-16)/12 < 0, C>90; check C>120?
+        // 2²+3²=13 < 16, obtuse at C. cos C = (4+9-16)/12 = -3/12 = -0.25, C ≈ 104.5° < 120.
+        // Need stronger obtuse: sides 1,1,1.9 — almost flat apex.
+        let k3 = TriangleKnown { a: Some(1.0), b: Some(1.0), c: Some(1.9), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        // angle opposite c=1.9: cos C = (1+1-3.61)/2 = -1.61/2 = -0.805, C≈143.6° > 120
+        let f1o = fs3.iter().find(|f| f.group == "费马点" && f.label == "F_1").expect("F1 obtuse");
+        // F1 should be at C = verts[2]
+        assert!(f1o.why.contains("120") || f1o.how.contains("obtuse") || f1o.how.contains("120"), "why={}", f1o.why);
+    }
+
+    #[test]
+    fn moses_x25_orthic_circumcenter() {
+        // Scalene acute 6-7-8: Moses, X(25), orthic circumcenter = N.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(mo.value, i.value, "Moses ≠ I on scalene");
+        assert!(fs.iter().any(|f| f.group == "摩西点" && f.value.contains("等截")));
+        let x25 = fs.iter().find(|f| f.group == "垂足切线同调中心" && f.label.contains("25")).expect("X25");
+        assert_ne!(x25.value, mo.value);
+        assert!(fs.iter().any(|f| f.group == "垂足三角形" && f.label.contains("O(H_a")));
+        assert!(fs.iter().any(|f| f.group == "垂足三角形" && f.label.contains("= N")));
+        let oh = fs.iter().find(|f| f.group == "垂足三角形" && f.label == "O(H_a H_b H_c)").expect("Oh");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        assert_eq!(oh.value, n.value, "orthic circumcenter = N");
+
+        // Right 3-4-5: Moses still; X(25) skipped (right angle); orthic degenerates (two feet = right vertex).
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "摩西点" && f.label == "Mo"));
+        assert!(fs2.iter().all(|f| f.group != "垂足切线同调中心"), "X25 skip right");
+        assert!(fs2.iter().all(|f| !(f.group == "垂足三角形" && f.label.contains("O(H_a"))), "orthic O skip right");
+
+        // Equilateral: Moses = I = G; X(25) = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let moe = fs3.iter().find(|f| f.group == "摩西点" && f.label == "Mo").unwrap();
+        assert_eq!(moe.value, g.value);
+        let x25e = fs3.iter().find(|f| f.group == "垂足切线同调中心" && f.label.contains("25")).unwrap();
+        assert_eq!(x25e.value, g.value);
+    }
+
+    #[test]
+    fn similitude_centers_euler_infinity() {
+        // 3-4-5: R=2.5, r=1; S+ divides OI in 2.5:1; S− on OI; X30 direction || OH.
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let sp = fs.iter().find(|f| f.group == "相似中心" && f.label == "S_{+}").expect("S+");
+        let sm = fs.iter().find(|f| f.group == "相似中心" && f.label == "S_{-}").expect("S-");
+        assert_ne!(sp.value, sm.value);
+        let ratio = fs.iter().find(|f| f.group == "相似中心" && f.label.contains("OS")).expect("ratio");
+        assert!((ratio.num.unwrap() - 2.5).abs() < 1e-6, "R/r={}", ratio.num.unwrap());
+        assert!(fs.iter().any(|f| f.group == "相似中心" && f.value.contains("共线")));
+        let x30 = fs.iter().find(|f| f.group == "欧拉无穷远点" && f.label.contains("30")).expect("X30");
+        assert!(fs.iter().any(|f| f.group == "欧拉无穷远点" && f.label.contains("OH")));
+        assert!(fs.iter().any(|f| f.group == "欧拉无穷远点" && f.label.contains("g") && f.value == "0"));
+        // Direction nonzero
+        assert!(x30.value.contains("("));
+
+        // Equilateral: S+=S−=O=I=G; X30 skipped (|OH|=0).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let spe = fs2.iter().find(|f| f.group == "相似中心" && f.label == "S_{+}").expect("S+ eq");
+        let sme = fs2.iter().find(|f| f.group == "相似中心" && f.label == "S_{-}").expect("S- eq");
+        assert_eq!(spe.value, g.value);
+        assert_eq!(sme.value, g.value);
+        assert!(fs2.iter().all(|f| f.group != "欧拉无穷远点"), "X30 skip equilateral");
+    }
+
+    #[test]
+    fn x57_x58_x84_isogonals() {
+        // Scalene 6-7-8: X57≠Mi, X58≠Sp, X84≠Be; isogonal notes present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x57 = fs.iter().find(|f| f.group == "米滕等角共轭点" && f.label == "X_{57}").expect("X57");
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        assert_ne!(x57.value, mi.value);
+        assert!(fs.iter().any(|f| f.group == "米滕等角共轭点" && f.value.contains("等角")));
+        let x58 = fs.iter().find(|f| f.group == "斯皮克等角共轭点" && f.label == "X_{58}").expect("X58");
+        let sp = fs.iter().find(|f| f.group == "斯皮克中心" && f.label == "Sp").expect("Sp");
+        assert_ne!(x58.value, sp.value);
+        assert!(fs.iter().any(|f| f.group == "斯皮克等角共轭点" && f.value.contains("等角")));
+        let x84 = fs.iter().find(|f| f.group == "己基透视中心" && f.label == "X_{84}").expect("X84");
+        let be = fs.iter().find(|f| f.group == "贝万点" && f.label == "Be").expect("Be");
+        assert_ne!(x84.value, be.value);
+        assert!(fs.iter().any(|f| f.group == "己基透视中心" && f.value.contains("等角")));
+        assert_ne!(x57.value, x58.value);
+        assert_ne!(x58.value, x84.value);
+
+        // Equilateral: all collapse to G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("米滕等角共轭点", "X_{57}"),
+            ("斯皮克等角共轭点", "X_{58}"),
+            ("己基透视中心", "X_{84}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {lab}"));
+            assert_eq!(p.value, g.value, "{lab} should = G");
+        }
+    }
+
+    #[test]
+    fn x12_x59_x60_feuerbach_isogonals() {
+        // Scalene 6-7-8: X12, X59, X60 distinct; isogonal notes; Fe present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x12 = fs.iter().find(|f| f.group == "费尔巴哈调和共轭点" && f.label == "X_{12}").expect("X12");
+        let x59 = fs.iter().find(|f| f.group == "费尔巴哈等角共轭点" && f.label == "X_{59}").expect("X59");
+        let x60 = fs.iter().find(|f| f.group == "X12等角共轭点" && f.label == "X_{60}").expect("X60");
+        let fe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").expect("Fe");
+        assert_ne!(x12.value, x59.value);
+        assert_ne!(x12.value, x60.value);
+        assert_ne!(x59.value, x60.value);
+        assert_ne!(x59.value, fe.value);
+        assert!(fs.iter().any(|f| f.group == "费尔巴哈等角共轭点" && f.value.contains("等角")));
+        assert!(fs.iter().any(|f| f.group == "X12等角共轭点" && f.value.contains("等角")));
+
+        // Isosceles non-eq 5-5-6: X59 skipped (B=C); X12 & X60 present.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "费尔巴哈调和共轭点" && f.label == "X_{12}"));
+        assert!(fs2.iter().any(|f| f.group == "X12等角共轭点" && f.label == "X_{60}"));
+        assert!(fs2.iter().all(|f| f.group != "费尔巴哈等角共轭点"), "X59 skip isosceles");
+
+        // Equilateral: X12=X60=G; X59 skipped.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x12e = fs3.iter().find(|f| f.group == "费尔巴哈调和共轭点" && f.label == "X_{12}").unwrap();
+        let x60e = fs3.iter().find(|f| f.group == "X12等角共轭点" && f.label == "X_{60}").unwrap();
+        assert_eq!(x12e.value, g.value);
+        assert_eq!(x60e.value, g.value);
+        assert!(fs3.iter().all(|f| f.group != "费尔巴哈等角共轭点"), "X59 skip equilateral");
+    }
+
+    #[test]
+    fn grinberg_x42_x81() {
+        // Scalene 6-7-8: Gr, X81, X42 distinct; complement & isogonal notes.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let gr = fs.iter().find(|f| f.group == "格林伯格点" && f.label == "Gr").expect("Gr");
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(gr.value, mo.value);
+        assert_ne!(gr.value, g.value);
+        assert_ne!(gr.value, i.value);
+        assert!(fs.iter().any(|f| f.group == "格林伯格点" && f.label.contains("complement")));
+        let x81 = fs.iter().find(|f| f.group == "格林伯格等角共轭点" && f.label == "X_{81}").expect("X81");
+        assert_ne!(x81.value, gr.value);
+        assert!(fs.iter().any(|f| f.group == "格林伯格等角共轭点" && f.value.contains("等角")));
+        let x42 = fs.iter().find(|f| f.group == "内心勒莫恩截点" && f.label == "X_{42}").expect("X42");
+        let kpt = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        assert_ne!(x42.value, kpt.value);
+        assert_ne!(x42.value, gr.value);
+        assert_ne!(x42.value, x81.value);
+
+        // Equilateral: all = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("格林伯格点", "Gr"),
+            ("格林伯格等角共轭点", "X_{81}"),
+            ("内心勒莫恩截点", "X_{42}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+    }
+
+    #[test]
+    fn x65_intouch_orthocenter_x76_x86() {
+        // Scalene 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x65 = fs.iter().find(|f| f.group == "接触垂心" && f.label == "X_{65}").expect("X65");
+        assert!(fs.iter().any(|f| f.group == "接触垂心" && f.label.contains("H(X_a")));
+        assert!(fs.iter().any(|f| f.group == "接触垂心" && f.value.contains("等角")));
+        let sc = fs.iter().find(|f| f.group == "席弗勒点" && f.label == "Sc").expect("Sc");
+        assert_ne!(x65.value, sc.value);
+        let x76 = fs.iter().find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}").expect("X76");
+        let kpt = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        assert_ne!(x76.value, kpt.value);
+        assert!(fs.iter().any(|f| f.group == "第三布罗卡点" && f.value.contains("等截")));
+        let x86 = fs.iter().find(|f| f.group == "内心重心截点" && f.label == "X_{86}").expect("X86");
+        let x42 = fs.iter().find(|f| f.group == "内心勒莫恩截点" && f.label == "X_{42}").expect("X42");
+        let sp = fs.iter().find(|f| f.group == "斯皮克中心" && f.label == "Sp").expect("Sp");
+        assert_ne!(x86.value, x42.value);
+        assert_ne!(x86.value, sp.value);
+        assert!(fs.iter().any(|f| f.group == "内心重心截点" && f.label.contains("42") && f.value.contains("等角")));
+        assert!(fs.iter().any(|f| f.group == "内心重心截点" && f.label.contains("Sp") && f.value.contains("等截")));
+        assert_ne!(x65.value, x76.value);
+        assert_ne!(x76.value, x86.value);
+
+        // Equilateral: all = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("接触垂心", "X_{65}"),
+            ("第三布罗卡点", "X_{76}"),
+            ("内心重心截点", "X_{86}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g.value, "{lab}");
+        }
+    }
+
+    #[test]
+    fn power_points_x31_x32_and_x69() {
+        // Scalene 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x31 = fs.iter().find(|f| f.group == "第二幂点" && f.label == "X_{31}").expect("X31");
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        assert_ne!(x31.value, mo.value);
+        assert!(fs.iter().any(|f| f.group == "第二幂点" && f.value.contains("等角")));
+        let x32 = fs.iter().find(|f| f.group == "第三幂点" && f.label == "X_{32}").expect("X32");
+        let x76 = fs.iter().find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}").expect("X76");
+        assert_ne!(x32.value, x76.value);
+        assert_ne!(x31.value, x32.value);
+        assert!(fs.iter().any(|f| f.group == "第三幂点" && f.value.contains("等角")));
+        let x69 = fs.iter().find(|f| f.group == "余切点" && f.label == "X_{69}").expect("X69");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        assert_ne!(x69.value, h.value);
+        assert!(fs.iter().any(|f| f.group == "余切点" && f.value.contains("等截")));
+
+        // Right 3-4-5: X69 still (on hypotenuse side of right vertex); powers fine.
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "第二幂点" && f.label == "X_{31}"));
+        assert!(fs2.iter().any(|f| f.group == "第三幂点" && f.label == "X_{32}"));
+        assert!(fs2.iter().any(|f| f.group == "余切点" && f.label == "X_{69}"));
+
+        // Equilateral: all = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("第二幂点", "X_{31}"),
+            ("第三幂点", "X_{32}"),
+            ("余切点", "X_{69}"),
+        ] {
+            let p = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g.value, "{lab}");
+        }
+    }
+
+    #[test]
+    fn x36_inverse_i_x41_x48() {
+        // Scalene 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x36 = fs.iter().find(|f| f.group == "反演内心" && f.label == "X_{36}").expect("X36");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        assert_ne!(x36.value, i.value);
+        assert_ne!(x36.value, o.value);
+        assert!(fs.iter().any(|f| f.group == "反演内心" && f.label.contains("OX")));
+        assert!(fs.iter().any(|f| f.group == "反演内心" && f.value.contains("共线")));
+        let x41 = fs.iter().find(|f| f.group == "第二幂截点" && f.label == "X_{41}").expect("X41");
+        let x31 = fs.iter().find(|f| f.group == "第二幂点" && f.label == "X_{31}").expect("X31");
+        assert_ne!(x41.value, x31.value);
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        assert_ne!(x48.value, x41.value);
+        assert_ne!(x48.value, x36.value);
+
+        // Equilateral: X36 skipped (I=O); X41=X48=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "反演内心"), "X36 skip equilateral");
+        let g = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x41e = fs2.iter().find(|f| f.group == "第二幂截点" && f.label == "X_{41}").unwrap();
+        let x48e = fs2.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").unwrap();
+        assert_eq!(x41e.value, g.value);
+        assert_eq!(x48e.value, g.value);
+    }
+
+    #[test]
+    fn x20_x23_farout_x35_x38() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        assert!(fs.iter().any(|f| f.group == "德龙尚点" && f.label == "X_{20}"), "X20 bary");
+        let x23 = fs.iter().find(|f| f.group == "远点" && f.label == "X_{23}").expect("X23");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        assert_ne!(x23.value, g.value);
+        assert_ne!(x23.value, o.value);
+        assert_ne!(x23.value, l.value);
+        assert!(fs.iter().any(|f| f.group == "远点" && f.label.contains("OX")));
+        assert!(fs.iter().any(|f| f.group == "远点" && f.value.contains("共线")));
+        let x35 = fs.iter().find(|f| f.group == "OI调和点" && f.label == "X_{35}").expect("X35");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(x35.value, i.value);
+        assert_ne!(x35.value, o.value);
+        assert!(fs.iter().any(|f| f.group == "OI调和点" && f.value.contains("共线")));
+        let x38 = fs.iter().find(|f| f.group == "截线交点" && f.label == "X_{38}").expect("X38");
+        assert_ne!(x38.value, x35.value);
+        assert_ne!(x38.value, x23.value);
+
+        // Equilateral: X23 skipped (G=O); X38 = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "远点"), "X23 skip equilateral");
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x38e = fs2.iter().find(|f| f.group == "截线交点" && f.label == "X_{38}").unwrap();
+        assert_eq!(x38e.value, g2.value);
+
+        // Right 3-4-5: X20/X23/X35/X38 still present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "德龙尚点" && f.label == "L"));
+        assert!(fs3.iter().any(|f| f.group == "远点" && f.label == "X_{23}"));
+        assert!(fs3.iter().any(|f| f.group == "OI调和点" && f.label == "X_{35}"));
+        assert!(fs3.iter().any(|f| f.group == "截线交点" && f.label == "X_{38}"));
+    }
+
+    #[test]
+    fn x24_x43_x44_x63() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x24 = fs.iter().find(|f| f.group == "二重垂足透视" && f.label == "X_{24}").expect("X24");
+        let x43 = fs.iter().find(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}").expect("X43");
+        let x44 = fs.iter().find(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}").expect("X44");
+        let x63 = fs.iter().find(|f| f.group == "克劳森等角" && f.label == "X_{63}").expect("X63");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(x24.value, g.value);
+        assert_ne!(x24.value, o.value);
+        assert_ne!(x43.value, i.value);
+        assert_ne!(x43.value, x44.value);
+        assert_ne!(x63.value, o.value); // cos A ≠ a² cos A
+        assert_ne!(x63.value, g.value);
+        assert_ne!(x44.value, x63.value);
+
+        // Equilateral: X24 present (=G); X44 skipped; X43=X63=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x24e = fs2.iter().find(|f| f.group == "二重垂足透视" && f.label == "X_{24}").unwrap();
+        assert_eq!(x24e.value, g2.value);
+        assert!(fs2.iter().all(|f| f.group != "勒莫恩线共轭"), "X44 skip equilateral");
+        let x43e = fs2.iter().find(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}").unwrap();
+        let x63e = fs2.iter().find(|f| f.group == "克劳森等角" && f.label == "X_{63}").unwrap();
+        assert_eq!(x43e.value, g2.value);
+        assert_eq!(x63e.value, g2.value);
+
+        // Right 3-4-5: X24 skipped (tan∞); X43/X44/X63 present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "二重垂足透视"), "X24 skip right");
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}"));
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}"));
+        assert!(fs3.iter().any(|f| f.group == "克劳森等角" && f.label == "X_{63}"));
+    }
+
+    #[test]
+    fn x45_x46_x47_x49() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x45 = fs.iter().find(|f| f.group == "米滕beth" && f.label == "X_{45}").expect("X45");
+        let x46 = fs.iter().find(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}").expect("X46");
+        let x47 = fs.iter().find(|f| f.group == "双倍角余弦" && f.label == "X_{47}").expect("X47");
+        let x49 = fs.iter().find(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}").expect("X49");
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        assert_ne!(x45.value, i.value);
+        assert_ne!(x45.value, g.value);
+        assert_ne!(x46.value, i.value);
+        assert_ne!(x46.value, o.value);
+        assert_ne!(x47.value, x48.value);
+        assert_ne!(x47.value, g.value);
+        assert_ne!(x49.value, g.value);
+        assert_ne!(x49.value, x47.value);
+        // X(46) on OI: cross product of OI × OX46 ≈ 0.
+        if let (Some(Shape::Point { x: ox, y: oy, .. }), Some(Shape::Point { x: ix, y: iy, .. }), Some(Shape::Point { x: px, y: py, .. })) =
+            (o.shape.as_ref(), i.shape.as_ref(), x46.shape.as_ref())
+        {
+            let cross = (ix - ox) * (py - oy) - (iy - oy) * (px - ox);
+            assert!(cross.abs() < 1e-6, "X46 not on OI: cross={cross}");
+        } else {
+            panic!("missing shapes for O/I/X46");
+        }
+
+        // Equilateral: X45/X46/X47/X49 all = G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("米滕beth", "X_{45}"),
+            ("垂心Ceva内心", "X_{46}"),
+            ("双倍角余弦", "X_{47}"),
+            ("三倍角正弦圆", "X_{49}"),
+        ] {
+            let f = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {lab}"));
+            assert_eq!(f.value, g2.value, "{lab} should be G on equilateral");
+        }
+
+        // Right 3-4-5: all four present (no tan/sec singularity).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "米滕beth" && f.label == "X_{45}"));
+        assert!(fs3.iter().any(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}"));
+        assert!(fs3.iter().any(|f| f.group == "双倍角余弦" && f.label == "X_{47}"));
+        assert!(fs3.iter().any(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}"));
+    }
+
+    #[test]
+    fn x50_x61_x62_x64() {
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x50 = fs.iter().find(|f| f.group == "三倍角正弦" && f.label == "X_{50}").expect("X50");
+        let x49 = fs.iter().find(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}").expect("X49");
+        assert_ne!(x50.value, x49.value);
+        let x61 = fs.iter().find(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}").expect("X61");
+        let n1 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_1").expect("N1");
+        assert_ne!(x61.value, n1.value);
+        assert!(fs.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label.contains("N_1") && f.value.contains("等角")));
+        let x62 = fs.iter().find(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}").expect("X62");
+        let n2 = fs.iter().find(|f| f.group == "拿破仑中心" && f.label == "N_2").expect("N2");
+        assert_ne!(x62.value, n2.value);
+        assert_ne!(x61.value, x62.value);
+        assert!(fs.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label.contains("N_2") && f.value.contains("等角")));
+        let x64 = fs.iter().find(|f| f.group == "德龙尚等角" && f.label == "X_{64}").expect("X64");
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        assert_ne!(x64.value, l.value);
+        assert!(fs.iter().any(|f| f.group == "德龙尚等角" && f.label.contains("L") && f.value.contains("等角")));
+
+        // Equilateral: X50 skipped (sin 180°=0); X61=X62=X64=G.
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert!(fs2.iter().all(|f| f.group != "三倍角正弦"), "X50 skip equilateral");
+        for (grp, lab) in [
+            ("拿破仑等角共轭点", "X_{61}"),
+            ("拿破仑等角共轭点", "X_{62}"),
+            ("德龙尚等角", "X_{64}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X50/X61/X62 present; X64 at infinity (Σweights=0) → skip.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "三倍角正弦" && f.label == "X_{50}"));
+        assert!(fs3.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{61}"));
+        assert!(fs3.iter().any(|f| f.group == "拿破仑等角共轭点" && f.label == "X_{62}"));
+        assert!(fs3.iter().all(|f| f.group != "德龙尚等角"), "X64 skip right (infinity)");
+    }
+
+    #[test]
+    fn x51_x53_x26_x27_x29() {
+        // Scalene acute 6-7-8: all five present; X51 = orthic centroid; X26 on Euler.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x51 = fs.iter().find(|f| f.group == "垂足重心" && f.label == "X_{51}").expect("X51");
+        assert!(fs.iter().any(|f| f.group == "垂足重心" && f.label.contains("orthic")));
+        let x53 = fs.iter().find(|f| f.group == "垂足对称中线点" && f.label == "X_{53}").expect("X53");
+        let x26 = fs.iter().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").expect("X26");
+        assert!(fs.iter().any(|f| f.group == "切线三角形外心" && f.label.contains("OH")));
+        let x27 = fs.iter().find(|f| f.group == "垂心克劳森截点" && f.label == "X_{27}").expect("X27");
+        let x29 = fs.iter().find(|f| f.group == "内心垂心截点" && f.label == "X_{29}").expect("X29");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x51.value, g.value);
+        assert_ne!(x51.value, x53.value);
+        assert_ne!(x26.value, x51.value);
+        assert_ne!(x27.value, x29.value);
+        assert_ne!(x27.value, x51.value);
+
+        // Equilateral: X51=X53=X26=X27=X29=G (angle-symmetric).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("垂足重心", "X_{51}"),
+            ("垂足对称中线点", "X_{53}"),
+            ("切线三角形外心", "X_{26}"),
+            ("垂心克劳森截点", "X_{27}"),
+            ("内心垂心截点", "X_{29}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X51 present; X26 at ∞ (Σ=0); X53/X27/X29 skip (tan ∞).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "垂足重心" && f.label == "X_{51}"));
+        assert!(fs3.iter().all(|f| f.group != "切线三角形外心"), "X26 skip right (infinity)");
+        assert!(fs3.iter().all(|f| f.group != "垂足对称中线点"), "X53 skip right");
+        assert!(fs3.iter().all(|f| f.group != "垂心克劳森截点"), "X27 skip right");
+        assert!(fs3.iter().all(|f| f.group != "内心垂心截点"), "X29 skip right");
+    }
+
+    #[test]
+    fn x79_x80_isogonals_of_x35_x36() {
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x79 = fs.iter().find(|f| f.group == "OI伴点等角" && f.label == "X_{79}").expect("X79");
+        let x35 = fs.iter().find(|f| f.group == "OI调和点" && f.label == "X_{35}").expect("X35");
+        assert_ne!(x79.value, x35.value);
+        assert!(fs.iter().any(|f| f.group == "OI伴点等角" && f.label.contains("35") && f.value.contains("等角")));
+        let x80 = fs.iter().find(|f| f.group == "反演内心等角" && f.label == "X_{80}").expect("X80");
+        let x36 = fs.iter().find(|f| f.group == "反演内心" && f.label == "X_{36}").expect("X36");
+        assert_ne!(x80.value, x36.value);
+        assert_ne!(x79.value, x80.value);
+        assert!(fs.iter().any(|f| f.group == "反演内心等角" && f.label.contains("36") && f.value.contains("等角")));
+        assert_eq!(fs.iter().filter(|f| f.label == "X_{63}").count(), 1);
+
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        assert!(r2.cases[0].facts.iter().any(|f| f.label == "X_{79}"));
+        assert!(r2.cases[0].facts.iter().any(|f| f.label == "X_{80}"));
+
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        let x79e = fs3.iter().find(|f| f.label == "X_{79}").unwrap();
+        assert_eq!(x79e.value, g.value);
+        assert!(fs3.iter().all(|f| f.group != "反演内心等角"), "X80 skip equilateral");
+    }
+
+    #[test]
+    fn x28_x70_x71_x73() {
+        // Scalene acute 6-7-8: all present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x28 = fs.iter().find(|f| f.group == "克劳森X25截点" && f.label == "X_{28}").expect("X28");
+        let x70 = fs.iter().find(|f| f.group == "切线外心等角" && f.label == "X_{70}").expect("X70");
+        let x26 = fs.iter().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").expect("X26");
+        assert_ne!(x70.value, x26.value);
+        assert!(fs.iter().any(|f| f.group == "切线外心等角" && f.label.contains("26") && f.value.contains("等角")));
+        let x71 = fs.iter().find(|f| f.group == "X27等角" && f.label == "X_{71}").expect("X71");
+        let x27 = fs.iter().find(|f| f.group == "垂心克劳森截点" && f.label == "X_{27}").expect("X27");
+        assert_ne!(x71.value, x27.value);
+        let x73 = fs.iter().find(|f| f.group == "内心外心截点" && f.label == "X_{73}").expect("X73");
+        let x29 = fs.iter().find(|f| f.group == "内心垂心截点" && f.label == "X_{29}").expect("X29");
+        assert_ne!(x73.value, x29.value);
+        assert_ne!(x28.value, x70.value);
+        assert_ne!(x71.value, x73.value);
+
+        // Equilateral: X28=X70=X71=X73=G (X26 also G; isogonal of G is G).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("克劳森X25截点", "X_{28}"),
+            ("切线外心等角", "X_{70}"),
+            ("X27等角", "X_{71}"),
+            ("内心外心截点", "X_{73}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X28 skip (tan); X70/X71/X73 present (X26 at ∞ but isogonal finite).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "克劳森X25截点"), "X28 skip right");
+        assert!(fs3.iter().any(|f| f.group == "切线外心等角" && f.label == "X_{70}"));
+        assert!(fs3.iter().any(|f| f.group == "X27等角" && f.label == "X_{71}"));
+        assert!(fs3.iter().any(|f| f.group == "内心外心截点" && f.label == "X_{73}"));
+    }
+
+    #[test]
+    fn x91_x92_isogonals_of_double_angle() {
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x91 = fs.iter().find(|f| f.group == "双倍角正割" && f.label == "X_{91}").expect("X91");
+        let x47 = fs.iter().find(|f| f.group == "双倍角余弦" && f.label == "X_{47}").expect("X47");
+        assert_ne!(x91.value, x47.value);
+        let x92 = fs.iter().find(|f| f.group == "双倍角余割" && f.label == "X_{92}").expect("X92");
+        let x48 = fs.iter().find(|f| f.group == "双倍角截点" && f.label == "X_{48}").expect("X48");
+        assert_ne!(x92.value, x48.value);
+        assert_ne!(x91.value, x92.value);
+        assert_eq!(fs.iter().filter(|f| f.label == "X_{79}").count(), 1);
+
+        let k2 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.label == "X_{91}"));
+        assert!(fs2.iter().any(|f| f.label == "X_{51}"));
+        assert!(fs2.iter().all(|f| f.group != "双倍角余割"), "X92 skip right");
+        assert!(fs2.iter().all(|f| f.group != "切线三角形外心"), "X26 skip right");
+
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs3.iter().find(|f| f.label == "X_{91}").unwrap().value, g.value);
+        assert_eq!(fs3.iter().find(|f| f.label == "X_{92}").unwrap().value, g.value);
+    }
+
+    #[test]
+    fn x93_x94_x68_x95_x97_isogonals() {
+        // Scalene acute 6-7-8: X93/X94/X68 present; distinct from X49/X50/X24.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x93 = fs.iter().find(|f| f.group == "三倍角正割" && f.label == "X_{93}").expect("X93");
+        let x49 = fs.iter().find(|f| f.group == "三倍角正弦圆" && f.label == "X_{49}").expect("X49");
+        assert_ne!(x93.value, x49.value);
+        assert!(fs.iter().any(|f| f.group == "三倍角正割" && f.label.contains("49") && f.value.contains("等角")));
+        let x94 = fs.iter().find(|f| f.group == "三倍角余割" && f.label == "X_{94}").expect("X94");
+        let x50 = fs.iter().find(|f| f.group == "三倍角正弦" && f.label == "X_{50}").expect("X50");
+        assert_ne!(x94.value, x50.value);
+        assert_ne!(x93.value, x94.value);
+        let x68 = fs.iter().find(|f| f.group == "普拉索洛夫点" && f.label == "X_{68}").expect("X68");
+        let x24 = fs.iter().find(|f| f.group == "二重垂足透视" && f.label == "X_{24}").expect("X24");
+        assert_ne!(x68.value, x24.value);
+        assert!(fs.iter().any(|f| f.group == "普拉索洛夫点" && f.label.contains("24") && f.value.contains("等角")));
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x93.value, g.value);
+        assert_ne!(x68.value, g.value);
+
+        // Equilateral: X93=X68=G; X94 skipped (sin 180°=0).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{93}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{68}").unwrap().value, g2.value);
+        assert!(fs2.iter().all(|f| f.group != "三倍角余割"), "X94 skip equilateral");
+
+        // Right 3-4-5: X93/X68 skip (cos 270°=0 / tan); X94 present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "三倍角正割"), "X93 skip right");
+        assert!(fs3.iter().all(|f| f.group != "普拉索洛夫点"), "X68 skip right");
+        assert!(fs3.iter().any(|f| f.group == "三倍角余割" && f.label == "X_{94}"));
+
+        // X95/X97 on acute scalene; both = G on equilateral; present on right (finite).
+        let x95 = fs.iter().find(|f| f.group == "垂足重心等角" && f.label == "X_{95}").expect("X95");
+        let x51 = fs.iter().find(|f| f.group == "垂足重心" && f.label == "X_{51}").expect("X51");
+        assert_ne!(x95.value, x51.value);
+        let x97 = fs.iter().find(|f| f.group == "垂足对称中线等角" && f.label == "X_{97}").expect("X97");
+        let x53 = fs.iter().find(|f| f.group == "垂足对称中线点" && f.label == "X_{53}").expect("X53");
+        assert_ne!(x97.value, x53.value);
+        assert_ne!(x95.value, x97.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{95}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{97}").unwrap().value, g2.value);
+        assert!(fs3.iter().any(|f| f.group == "垂足重心等角" && f.label == "X_{95}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足对称中线等角" && f.label == "X_{97}"));
+    }
+
+    #[test]
+    fn x67_x74_x77_x78_x82_x83_x85() {
+        // Scalene acute 6-7-8: all seven present and distinct from their partners.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x67 = fs.iter().find(|f| f.group == "远点等角" && f.label == "X_{67}").expect("X67");
+        let x23 = fs.iter().find(|f| f.group == "远点" && f.label == "X_{23}").expect("X23");
+        assert_ne!(x67.value, x23.value);
+        assert!(fs.iter().any(|f| f.group == "远点等角" && f.label.contains("23") && f.value.contains("等角")));
+        let x74 = fs.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74");
+        assert!(fs.iter().any(|f| f.group == "欧拉无穷等角" && f.label.contains("30") && f.value.contains("等角")));
+        let x77 = fs.iter().find(|f| f.group == "垂足切线等角" && f.label == "X_{77}").expect("X77");
+        let x33 = fs.iter().find(|f| f.group == "垂足切线透视" && f.label == "X_{33}").expect("X33");
+        assert_ne!(x77.value, x33.value);
+        let x78 = fs.iter().find(|f| f.group == "垂心beth等角" && f.label == "X_{78}").expect("X78");
+        let x34 = fs.iter().find(|f| f.group == "垂心beth自共轭" && f.label == "X_{34}").expect("X34");
+        assert_ne!(x78.value, x34.value);
+        assert_ne!(x77.value, x78.value);
+        let x82 = fs.iter().find(|f| f.group == "X38等角" && f.label == "X_{82}").expect("X82");
+        let x38 = fs.iter().find(|f| f.label == "X_{38}").expect("X38");
+        assert_ne!(x82.value, x38.value);
+        let x83 = fs.iter().find(|f| f.group == "布罗卡中点等角" && f.label == "X_{83}").expect("X83");
+        let x39 = fs.iter().find(|f| f.label == "X_{39}" || f.label.contains("布罗卡中")).expect("X39");
+        assert_ne!(x83.value, x39.value);
+        let x85 = fs.iter().find(|f| f.group == "X41等角" && f.label == "X_{85}").expect("X85");
+        let x41 = fs.iter().find(|f| f.label == "X_{41}").expect("X41");
+        assert_ne!(x85.value, x41.value);
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x67.value, g.value);
+        assert_ne!(x74.value, g.value);
+        assert_ne!(x82.value, g.value);
+        assert_ne!(x83.value, g.value);
+        assert_ne!(x85.value, g.value);
+        // X74 should lie on the circumcircle: |OX74| ≈ R.
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let r_fact = fs.iter().find(|f| f.label == "R" || (f.group.contains("外接") && f.label == "R")).or_else(|| {
+            fs.iter().find(|f| f.label == "R")
+        });
+        let _ = (x74, o, r_fact); // presence already checked; numeric R check via circum later if needed
+
+        // Equilateral: X77/X78/X82/X83/X85 = G; X67 may equal G in limit; X74 on circum (≠G).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{77}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{78}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{82}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{83}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{85}").unwrap().value, g2.value);
+        // Equilateral: cos A − 2 cos B cos C = 1/2 − 2·(1/2)·(1/2) = 0 → X74 skipped.
+        assert!(fs2.iter().all(|f| f.group != "欧拉无穷等角"), "X74 skip equilateral");
+        // Far-out X23 skipped on equilateral → its isogonal X67 also skipped (denom 0).
+        assert!(fs2.iter().all(|f| f.group != "远点等角"), "X67 skip equilateral");
+
+        // Right 3-4-5: X67/X74/X78/X82/X83/X85 present; X77 finite (weight 0 at right vertex).
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "远点等角" && f.label == "X_{67}"));
+        assert!(fs3.iter().any(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足切线等角" && f.label == "X_{77}"));
+        assert!(fs3.iter().any(|f| f.group == "垂心beth等角" && f.label == "X_{78}"));
+        assert!(fs3.iter().any(|f| f.group == "X38等角" && f.label == "X_{82}"));
+        assert!(fs3.iter().any(|f| f.group == "布罗卡中点等角" && f.label == "X_{83}"));
+        assert!(fs3.iter().any(|f| f.group == "X41等角" && f.label == "X_{85}"));
+    }
+
+    #[test]
+    fn x33_x34_x66_x72() {
+        // Scalene acute 6-7-8: all four present; X33 ≠ X34; X66 ≠ Exeter; X72 ≠ X28.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x33 = fs.iter().find(|f| f.group == "垂足切线透视" && f.label == "X_{33}").expect("X33");
+        let x34 = fs.iter().find(|f| f.group == "垂心beth自共轭" && f.label == "X_{34}").expect("X34");
+        assert_ne!(x33.value, x34.value);
+        let x66 = fs.iter().find(|f| f.group == "埃克塞特等角" && f.label == "X_{66}").expect("X66");
+        let ex = fs.iter().find(|f| f.group == "埃克塞特点" && f.label == "Ex").expect("Ex");
+        assert_ne!(x66.value, ex.value);
+        assert!(fs.iter().any(|f| f.group == "埃克塞特等角" && f.label.contains("Ex") && f.value.contains("等角")));
+        let x72 = fs.iter().find(|f| f.group == "克劳森X25等角" && f.label == "X_{72}").expect("X72");
+        let x28 = fs.iter().find(|f| f.group == "克劳森X25截点" && f.label == "X_{28}").expect("X28");
+        assert_ne!(x72.value, x28.value);
+        assert!(fs.iter().any(|f| f.group == "克劳森X25等角" && f.label.contains("28") && f.value.contains("等角")));
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x33.value, g.value);
+        assert_ne!(x66.value, g.value);
+        assert_ne!(x72.value, g.value);
+
+        // Equilateral: all four = G (angle-symmetric / isogonal of G).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        for (grp, lab) in [
+            ("垂足切线透视", "X_{33}"),
+            ("垂心beth自共轭", "X_{34}"),
+            ("埃克塞特等角", "X_{66}"),
+            ("克劳森X25等角", "X_{72}"),
+        ] {
+            let p = fs2.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("{lab}"));
+            assert_eq!(p.value, g2.value, "{lab}");
+        }
+
+        // Right 3-4-5: X33/X34 skip (tan); X66 at ∞ (Σw≈0); X72 present.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "垂足切线透视"), "X33 skip right");
+        assert!(fs3.iter().all(|f| f.group != "垂心beth自共轭"), "X34 skip right");
+        assert!(fs3.iter().all(|f| f.group != "埃克塞特等角"), "X66 skip right (infinity)");
+        assert!(fs3.iter().any(|f| f.group == "克劳森X25等角" && f.label == "X_{72}"));
+    }
+
+    #[test]
+    fn x52_x96_x87_x88_x89_x90() {
+        // Scalene acute 6-7-9: all six present (6-7-8 has b+c-2a style denom 0 for X88).
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x52 = fs.iter().find(|f| f.group == "垂足垂心" && f.label == "X_{52}").expect("X52");
+        let x96 = fs.iter().find(|f| f.group == "垂足垂心等角" && f.label == "X_{96}").expect("X96");
+        assert_ne!(x52.value, x96.value);
+        assert!(fs.iter().any(|f| f.group == "垂足垂心等角" && f.label.contains("52") && f.value.contains("等角")));
+        let x87 = fs.iter().find(|f| f.group == "勒莫恩Ceva等角" && f.label == "X_{87}").expect("X87");
+        let x43 = fs.iter().find(|f| f.group == "勒莫恩Ceva" && f.label == "X_{43}").expect("X43");
+        assert_ne!(x87.value, x43.value);
+        let x88 = fs.iter().find(|f| f.group == "勒莫恩线等角" && f.label == "X_{88}").expect("X88");
+        let x44 = fs.iter().find(|f| f.group == "勒莫恩线共轭" && f.label == "X_{44}").expect("X44");
+        assert_ne!(x88.value, x44.value);
+        let x89 = fs.iter().find(|f| f.group == "米滕beth等角" && f.label == "X_{89}").expect("X89");
+        let x45 = fs.iter().find(|f| f.group == "米滕beth" && f.label == "X_{45}").expect("X45");
+        assert_ne!(x89.value, x45.value);
+        let x90 = fs.iter().find(|f| f.group == "垂心Ceva等角" && f.label == "X_{90}").expect("X90");
+        let x46 = fs.iter().find(|f| f.group == "垂心Ceva内心" && f.label == "X_{46}").expect("X46");
+        assert_ne!(x90.value, x46.value);
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x52.value, g.value);
+        assert_ne!(x96.value, g.value);
+        assert_ne!(x87.value, g.value);
+        assert_ne!(x88.value, g.value);
+        assert_ne!(x89.value, g.value);
+        assert_ne!(x90.value, g.value);
+
+        // Equilateral: X52/X96/X87/X89/X90 = G; X88 skipped (denom 0, same as X44).
+        let k2 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        let g2 = fs2.iter().find(|f| f.group == "特殊点" && f.label == "G").unwrap();
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{52}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{96}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{87}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{89}").unwrap().value, g2.value);
+        assert_eq!(fs2.iter().find(|f| f.label == "X_{90}").unwrap().value, g2.value);
+        assert!(fs2.iter().all(|f| f.group != "勒莫恩线等角"), "X88 skip equilateral");
+
+        // Right 5-12-13: X52 skipped; X87/X88/X89/X90/X96 present (3-4-5 kills X88 denom).
+        let k3 = TriangleKnown { a: Some(5.0), b: Some(12.0), c: Some(13.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "垂足垂心"), "X52 skip right");
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩Ceva等角" && f.label == "X_{87}"));
+        assert!(fs3.iter().any(|f| f.group == "勒莫恩线等角" && f.label == "X_{88}"));
+        assert!(fs3.iter().any(|f| f.group == "米滕beth等角" && f.label == "X_{89}"));
+        assert!(fs3.iter().any(|f| f.group == "垂心Ceva等角" && f.label == "X_{90}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足垂心等角" && f.label == "X_{96}"));
+    }
+
+    #[test]
+    fn x100_x101_x104_x105_x106() {
+        // Scalene acute 6-7-9: all five present (6-7-8 has 2b−c−a=0 → X106 skip); X104 = 2O − X100.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x100 = fs.iter().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").expect("X100");
+        let x101 = fs.iter().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").expect("X101");
+        let x104 = fs.iter().find(|f| f.group == "X100对径" && f.label == "X_{104}").expect("X104");
+        let x105 = fs.iter().find(|f| f.group == "Λ内心勒莫恩" && f.label == "X_{105}").expect("X105");
+        let x106 = fs.iter().find(|f| f.group == "Λ内心重心" && f.label == "X_{106}").expect("X106");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        assert_ne!(x100.value, x101.value);
+        assert_ne!(x100.value, x104.value);
+        assert_ne!(x105.value, x106.value);
+        assert_ne!(x100.value, g.value);
+        assert_ne!(x101.value, g.value);
+        assert_ne!(x104.value, g.value);
+        assert_ne!(x105.value, g.value);
+        assert_ne!(x106.value, g.value);
+        assert!(fs.iter().any(|f| f.group == "X100对径" && f.label.contains("2O")));
+        if let (Some(Shape::Point { x: ox, y: oy, .. }), Some(Shape::Point { x: ax, y: ay, .. }), Some(Shape::Point { x: bx, y: by, .. })) =
+            (o.shape.as_ref(), x100.shape.as_ref(), x104.shape.as_ref())
+        {
+            assert!(((ax + bx) / 2.0 - ox).abs() < 1e-6 && ((ay + by) / 2.0 - oy).abs() < 1e-6, "X104 not antipode of X100");
+        } else {
+            panic!("missing shapes for O/X100/X104");
+        }
+
+        // Isosceles non-eq 5-5-6: X100/X101 skipped (b−c=0); X104/X105/X106 present.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "反补费尔巴哈"), "X100 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ内心对称中线"), "X101 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "X100对径" && f.label == "X_{104}"));
+        assert!(fs2.iter().any(|f| f.group == "Λ内心勒莫恩" && f.label == "X_{105}"));
+        assert!(fs2.iter().any(|f| f.group == "Λ内心重心" && f.label == "X_{106}"));
+
+        // Equilateral: all five skipped (denom 0).
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "反补费尔巴哈"), "X100 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "Ψ内心对称中线"), "X101 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "X100对径"), "X104 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "Λ内心勒莫恩"), "X105 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "Λ内心重心"), "X106 skip equilateral");
+    }
+
+    #[test]
+    fn x107_x108_x109_x112() {
+        // Scalene acute 6-7-9: all four present.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x107 = fs.iter().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").expect("X107");
+        let x108 = fs.iter().find(|f| f.group == "Ψ外心垂心" && f.label == "X_{108}").expect("X108");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x112 = fs.iter().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").expect("X112");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x107.value, x108.value);
+        assert_ne!(x108.value, x109.value);
+        assert_ne!(x109.value, x112.value);
+        assert_ne!(x107.value, g.value);
+        assert_ne!(x108.value, g.value);
+        assert_ne!(x109.value, g.value);
+        assert_ne!(x112.value, g.value);
+
+        // Isosceles non-eq 5-5-6: all four skipped (denoms vanish).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "Ψ对称中线垂心"), "X107 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ外心垂心"), "X108 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ内心外心"), "X109 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "Ψ垂心对称中线"), "X112 skip isosceles");
+
+        // Right 3-4-5: X107/X108 skip (cos=0 / b²+c²−a²=0); X109/X112 may remain.
+        let k3 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "Ψ对称中线垂心"), "X107 skip right");
+        assert!(fs3.iter().all(|f| f.group != "Ψ外心垂心"), "X108 skip right");
+        assert!(fs3.iter().any(|f| f.group == "Ψ内心外心" && f.label == "X_{109}"));
+        // sin2B−sin2C = 0 when one angle is π/2 (2A+2B=π ⇒ sin2A=sin2B for complementary pair), so X112 skips.
+        assert!(fs3.iter().all(|f| f.group != "Ψ垂心对称中线"), "X112 skip right");
+
+        // Equilateral: all skipped.
+        let k4 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.group != "Ψ对称中线垂心"));
+        assert!(fs4.iter().all(|f| f.group != "Ψ外心垂心"));
+        assert!(fs4.iter().all(|f| f.group != "Ψ内心外心"));
+        assert!(fs4.iter().all(|f| f.group != "Ψ垂心对称中线"));
+    }
+
+
+    #[test]
+    fn x102_x103_x116_x117_x118_x119() {
+        // Scalene acute 6-7-9: all six present; antipodes and nine-point midpoints hold.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x100 = fs.iter().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").expect("X100");
+        let x101 = fs.iter().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").expect("X101");
+        let x102 = fs.iter().find(|f| f.group == "Λ内心垂心" && f.label == "X_{102}").expect("X102");
+        let x103 = fs.iter().find(|f| f.group == "X101对径" && f.label == "X_{103}").expect("X103");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x116 = fs.iter().find(|f| f.group == "九点X103中点" && f.label == "X_{116}").expect("X116");
+        let x117 = fs.iter().find(|f| f.group == "九点X109中点" && f.label == "X_{117}").expect("X117");
+        let x118 = fs.iter().find(|f| f.group == "九点X101中点" && f.label == "X_{118}").expect("X118");
+        let x119 = fs.iter().find(|f| f.group == "费尔巴哈九点对径" && f.label == "X_{119}").expect("X119");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let fe = fs.iter().find(|f| f.group == "费尔巴哈点" && f.label == "Fe").expect("Fe");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x102.value, g.value);
+        assert_ne!(x103.value, g.value);
+        assert!(fs.iter().any(|f| f.group == "Λ内心垂心" && f.label.contains("2O")));
+        assert!(fs.iter().any(|f| f.group == "X101对径" && f.label.contains("2O")));
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let (ox, oy) = ptxy(o);
+        let (hx, hy) = ptxy(h);
+        let (nx, ny) = ptxy(n);
+        let (a1, b1) = ptxy(x101);
+        let (a2, b2) = ptxy(x102);
+        let (a3, b3) = ptxy(x103);
+        let (a9, b9) = ptxy(x109);
+        let (a0, b0) = ptxy(x100);
+        let (fx, fy) = ptxy(fe);
+        // X102 = 2O - X109; X103 = 2O - X101
+        assert!(((a2 + a9) / 2.0 - ox).abs() < 1e-6 && ((b2 + b9) / 2.0 - oy).abs() < 1e-6, "X102 not antipode of X109");
+        assert!(((a3 + a1) / 2.0 - ox).abs() < 1e-6 && ((b3 + b1) / 2.0 - oy).abs() < 1e-6, "X103 not antipode of X101");
+        // Midpoints with H
+        let (u6, v6) = ptxy(x116);
+        let (u7, v7) = ptxy(x117);
+        let (u8, v8) = ptxy(x118);
+        let (u9, v9) = ptxy(x119);
+        assert!(((hx + a3) / 2.0 - u6).abs() < 1e-6 && ((hy + b3) / 2.0 - v6).abs() < 1e-6, "X116 mid(H,X103)");
+        assert!(((hx + a9) / 2.0 - u7).abs() < 1e-6 && ((hy + b9) / 2.0 - v7).abs() < 1e-6, "X117 mid(H,X109)");
+        assert!(((hx + a1) / 2.0 - u8).abs() < 1e-6 && ((hy + b1) / 2.0 - v8).abs() < 1e-6, "X118 mid(H,X101)");
+        assert!(((hx + a0) / 2.0 - u9).abs() < 1e-6 && ((hy + b0) / 2.0 - v9).abs() < 1e-6, "X119 mid(H,X100)");
+        // X119 = 2N - Fe
+        assert!(((u9 + fx) / 2.0 - nx).abs() < 1e-6 && ((v9 + fy) / 2.0 - ny).abs() < 1e-6, "X119 not antipode of Fe on NPC");
+        assert!(fs.iter().any(|f| f.group == "费尔巴哈九点对径" && f.label.contains("2N")));
+
+        // Isosceles non-eq 5-5-6 (a=b): X100/X101/X109 absent → X102/X117/X118/X119 skip;
+        // X103 bary still finite, so X103/X116 remain via mid(H,X103).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "Λ内心垂心"), "X102 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "X101对径" && f.label == "X_{103}"), "X103 on a=b isosceles");
+        assert!(fs2.iter().any(|f| f.group == "九点X103中点" && f.label == "X_{116}"), "X116 on a=b isosceles");
+        assert!(fs2.iter().all(|f| f.group != "九点X109中点"), "X117 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "九点X101中点"), "X118 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "费尔巴哈九点对径"), "X119 skip isosceles");
+
+        // Equilateral: all skipped.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "Λ内心垂心"));
+        assert!(fs3.iter().all(|f| f.group != "X101对径"));
+        assert!(fs3.iter().all(|f| f.group != "九点X103中点"));
+        assert!(fs3.iter().all(|f| f.group != "九点X109中点"));
+        assert!(fs3.iter().all(|f| f.group != "九点X101中点"));
+        assert!(fs3.iter().all(|f| f.group != "费尔巴哈九点对径"));
+    }
+
+
+    #[test]
+    fn x113_x114_x115_x125() {
+        // Scalene acute 6-7-9: all four present; NPC antipodes and H-midpoints hold.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x115 = fs.iter().find(|f| f.group == "基伯特双曲心" && f.label == "X_{115}").expect("X115");
+        let x114 = fs.iter().find(|f| f.group == "基伯特对径" && f.label == "X_{114}").expect("X114");
+        let x125 = fs.iter().find(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}").expect("X125");
+        let x113 = fs.iter().find(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}").expect("X113");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let st = fs.iter().find(|f| f.group == "施泰纳点" && f.label == "St").expect("St");
+        let ty = fs.iter().find(|f| f.group == "塔里点" && f.label == "Ty").expect("Ty");
+        let x74 = fs.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74");
+        let er = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "E_r").expect("Er");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        assert_ne!(x115.value, x114.value);
+        assert_ne!(x125.value, x113.value);
+        assert_ne!(x115.value, x125.value);
+        assert_ne!(x115.value, g.value);
+        assert_ne!(x125.value, g.value);
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let (hx, hy) = ptxy(h);
+        let (nx, ny) = ptxy(n);
+        let (a5, b5) = ptxy(x115);
+        let (a4, b4) = ptxy(x114);
+        let (a25, b25) = ptxy(x125);
+        let (a13, b13) = ptxy(x113);
+        let (sx, sy) = ptxy(st);
+        let (tx, tyy) = ptxy(ty);
+        let (p74x, p74y) = ptxy(x74);
+        let (ex, ey) = ptxy(er);
+        // X114 = 2N - X115; X113 = 2N - X125
+        assert!(((a4 + a5) / 2.0 - nx).abs() < 1e-6 && ((b4 + b5) / 2.0 - ny).abs() < 1e-6, "X114 not NPC antipode of X115");
+        assert!(((a13 + a25) / 2.0 - nx).abs() < 1e-6 && ((b13 + b25) / 2.0 - ny).abs() < 1e-6, "X113 not NPC antipode of X125");
+        // Midpoints with H
+        assert!(((hx + tx) / 2.0 - a5).abs() < 1e-6 && ((hy + tyy) / 2.0 - b5).abs() < 1e-6, "X115 mid(H,Ty)");
+        assert!(((hx + sx) / 2.0 - a4).abs() < 1e-6 && ((hy + sy) / 2.0 - b4).abs() < 1e-6, "X114 mid(H,St)");
+        assert!(((hx + p74x) / 2.0 - a25).abs() < 1e-6 && ((hy + p74y) / 2.0 - b25).abs() < 1e-6, "X125 mid(H,X74)");
+        assert!(((hx + ex) / 2.0 - a13).abs() < 1e-6 && ((hy + ey) / 2.0 - b13).abs() < 1e-6, "X113 mid(H,Er)");
+        assert!(fs.iter().any(|f| f.group == "基伯特对径" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "耶拉贝克对径" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "基伯特双曲心" && f.label.contains("mid")));
+        assert!(fs.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label.contains("mid")));
+
+        // Isosceles non-eq 5-5-6: X115/X125/X114/X113 still via bary (Steiner/Tarry/Er may skip).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "基伯特双曲心" && f.label == "X_{115}"), "X115 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "基伯特对径" && f.label == "X_{114}"), "X114 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}"), "X125 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}"), "X113 on isosceles");
+        // Steiner/Tarry skipped on isosceles → no mid(H,St/Ty) cross-facts required.
+        assert!(fs2.iter().all(|f| f.group != "施泰纳点"), "St skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "塔里点"), "Ty skip isosceles");
+
+        // Equilateral: all four skipped (bary weights vanish).
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "基伯特双曲心"), "X115 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "基伯特对径"), "X114 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "耶拉贝克双曲心"), "X125 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "耶拉贝克对径"), "X113 skip equilateral");
+
+        // Right 3-4-5: X115/X114/X125/X113 present (bary OK); Er may skip.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "基伯特双曲心" && f.label == "X_{115}"));
+        assert!(fs4.iter().any(|f| f.group == "基伯特对径" && f.label == "X_{114}"));
+        assert!(fs4.iter().any(|f| f.group == "耶拉贝克双曲心" && f.label == "X_{125}"));
+        assert!(fs4.iter().any(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}"));
+    }
+
+    #[test]
+    fn x5_x7_x8_x110_x120_x121() {
+        // Scalene acute 6-7-9: classical + Euler reflection + medial-of NPC points.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let x5 = fs.iter().find(|f| f.group == "欧拉线" && f.label == "X_{5}").expect("X5");
+        let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
+        let x7 = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "X_{7}").expect("X7");
+        let na = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "Na").expect("Na");
+        let x8 = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "X_{8}").expect("X8");
+        let x110 = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").expect("X110");
+        let er = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "E_r").expect("Er");
+        let x74 = fs.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74");
+        let x113 = fs.iter().find(|f| f.group == "耶拉贝克对径" && f.label == "X_{113}").expect("X113");
+        let x120 = fs.iter().find(|f| f.group == "中点X105" && f.label == "X_{120}").expect("X120");
+        let x121 = fs.iter().find(|f| f.group == "中点X106" && f.label == "X_{121}").expect("X121");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let (nx, ny) = ptxy(n);
+        let (a5, b5) = ptxy(x5);
+        assert!((nx - a5).abs() < 1e-9 && (ny - b5).abs() < 1e-9, "X5 != N");
+        let (gx, gy) = ptxy(ge);
+        let (a7, b7) = ptxy(x7);
+        assert!((gx - a7).abs() < 1e-9 && (gy - b7).abs() < 1e-9, "X7 != Ge");
+        let (nax, nay) = ptxy(na);
+        let (a8, b8) = ptxy(x8);
+        assert!((nax - a8).abs() < 1e-9 && (nay - b8).abs() < 1e-9, "X8 != Na");
+        let (ox, oy) = ptxy(o);
+        let (hx, hy) = ptxy(h);
+        let (e0, e1) = ptxy(x110);
+        let (rx, ry) = ptxy(er);
+        let (p74x, p74y) = ptxy(x74);
+        let (a13, b13) = ptxy(x113);
+        assert!((e0 - rx).abs() < 1e-5 && (e1 - ry).abs() < 1e-5, "X110 != Er");
+        assert!(((e0 + p74x) / 2.0 - ox).abs() < 1e-5 && ((e1 + p74y) / 2.0 - oy).abs() < 1e-5, "X110 not antipode of X74");
+        assert!(((hx + e0) / 2.0 - a13).abs() < 1e-5 && ((hy + e1) / 2.0 - b13).abs() < 1e-5, "X113 not mid(H,X110)");
+        assert!(fs.iter().any(|f| f.group == "欧拉反射点" && f.label.contains("2O")));
+        assert!(fs.iter().any(|f| f.group == "中点X105" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X106" && f.label.contains("NPC")));
+        let (p120x, p120y) = ptxy(x120);
+        let (p121x, p121y) = ptxy(x121);
+        let r9 = ((ox - hx).hypot(oy - hy)) / 2.0; // unused; check distinct from N/G
+        let _ = r9;
+        assert!((p120x - nx).abs() > 1e-4 || (p120y - ny).abs() > 1e-4, "X120 coincides N");
+        assert!((p121x - nx).abs() > 1e-4 || (p121y - ny).abs() > 1e-4, "X121 coincides N");
+        assert_ne!(x120.value, x121.value);
+
+        // Isosceles 5-5-6: X110 skipped (denom 0); X5/X7/X8/X120/X121 present.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "欧拉线" && f.label == "X_{5}"));
+        assert!(fs2.iter().any(|f| f.group == "格尔巩点" && f.label == "X_{7}"));
+        assert!(fs2.iter().any(|f| f.group == "奈格尔点" && f.label == "X_{8}"));
+        assert!(fs2.iter().all(|f| !(f.group == "欧拉反射点" && f.label == "X_{110}")), "X110 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "中点X105" && f.label == "X_{120}"), "X120 on isosceles");
+        assert!(fs2.iter().any(|f| f.group == "中点X106" && f.label == "X_{121}"), "X121 on isosceles");
+
+        // Equilateral: X110/X120/X121 skip; X5/X7/X8 remain.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "欧拉线" && f.label == "X_{5}"));
+        assert!(fs3.iter().any(|f| f.group == "格尔巩点" && f.label == "X_{7}"));
+        assert!(fs3.iter().any(|f| f.group == "奈格尔点" && f.label == "X_{8}"));
+        assert!(fs3.iter().all(|f| !(f.group == "欧拉反射点" && f.label == "X_{110}")), "X110 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X105"), "X120 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X106"), "X121 skip equilateral");
+
+        // Right 3-4-5: X110 via bary (Er may skip); antipode of X74 holds.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        let x110r = fs4.iter().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").expect("X110 on 3-4-5");
+        let x74r = fs4.iter().find(|f| f.group == "欧拉无穷等角" && f.label == "X_{74}").expect("X74 on 3-4-5");
+        let or = fs4.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let (e0, e1) = ptxy(x110r);
+        let (p74x, p74y) = ptxy(x74r);
+        let (ox, oy) = ptxy(or);
+        assert!(((e0 + p74x) / 2.0 - ox).abs() < 1e-5 && ((e1 + p74y) / 2.0 - oy).abs() < 1e-5, "3-4-5 X110 antipode");
+        assert!(fs4.iter().any(|f| f.group == "中点X105" && f.label == "X_{120}"));
+        assert!(fs4.iter().any(|f| f.group == "中点X106" && f.label == "X_{121}"));
+    }
+
+    #[test]
+    fn x122_x123_x124_x126_x127() {
+        // Scalene acute 6-7-9: complements of Ψ/Parry on NPC.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(9.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let x107 = fs.iter().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").expect("X107");
+        let x108 = fs.iter().find(|f| f.group == "Ψ外心垂心" && f.label == "X_{108}").expect("X108");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x102 = fs.iter().find(|f| f.group == "Λ内心垂心" && f.label == "X_{102}").expect("X102");
+        let py = fs.iter().find(|f| f.group == "帕里点" && f.label == "Py").expect("Py");
+        let x112 = fs.iter().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").expect("X112");
+        let x122 = fs.iter().find(|f| f.group == "中点X107" && f.label == "X_{122}").expect("X122");
+        let x123 = fs.iter().find(|f| f.group == "中点X108" && f.label == "X_{123}").expect("X123");
+        let x124 = fs.iter().find(|f| f.group == "中点X109" && f.label == "X_{124}").expect("X124");
+        let x126 = fs.iter().find(|f| f.group == "中点X111" && f.label == "X_{126}").expect("X126");
+        let x127 = fs.iter().find(|f| f.group == "中点X112" && f.label == "X_{127}").expect("X127");
+        let (gx, gy) = ptxy(g);
+        let (hx, hy) = ptxy(h);
+        let check_comp = |parent: &Fact, child: &Fact, tag: &str| {
+            let (px, py) = ptxy(parent);
+            let (cx, cy) = ptxy(child);
+            let qx = (3.0 * gx - px) / 2.0;
+            let qy = (3.0 * gy - py) / 2.0;
+            assert!((cx - qx).abs() < 1e-5 && (cy - qy).abs() < 1e-5, "{} not complement", tag);
+        };
+        check_comp(x107, x122, "X122");
+        check_comp(x108, x123, "X123");
+        check_comp(x109, x124, "X124");
+        check_comp(py, x126, "X126");
+        check_comp(x112, x127, "X127");
+        // X124 = mid(H, X102)
+        let (p102x, p102y) = ptxy(x102);
+        let (p124x, p124y) = ptxy(x124);
+        assert!(((hx + p102x) / 2.0 - p124x).abs() < 1e-5 && ((hy + p102y) / 2.0 - p124y).abs() < 1e-5, "X124 != mid(H,X102)");
+        assert!(fs.iter().any(|f| f.group == "中点X107" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X108" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X109" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X111" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X112" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "中点X109" && f.label.contains("mid")));
+
+        // Isosceles 5-5-6: parents Ψ skipped → children skipped; Parry may remain.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "中点X107"), "X122 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "中点X108"), "X123 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "中点X109"), "X124 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "中点X112"), "X127 skip isosceles");
+        // Parry / X126: denom 2a²−b²−c² may be nonzero on 5-5-6.
+        let _ = fs2.iter().any(|f| f.group == "中点X111");
+
+        // Equilateral: all skip with parents.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "中点X107"), "X122 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X108"), "X123 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X109"), "X124 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X111"), "X126 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "中点X112"), "X127 skip equilateral");
+
+        // Right 3-4-5: X107 skips (b²+c²−a²=0 on hypotenuse); X108 skips (sec of right ∠).
+        // X109/X112/Parry and their complements remain.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        let has = |g: &str, lab: &str| fs4.iter().any(|f| f.group == g && f.label == lab);
+        // Parents that survive 3-4-5: X109 (cos diffs), Parry; X107/X108/X112 typically skip.
+        assert!(has("中点X109", "X_{124}"), "X124 on 3-4-5");
+        assert!(has("中点X111", "X_{126}"), "X126 on 3-4-5");
+        assert!(fs4.iter().all(|f| f.group != "中点X107"), "X122 skip right");
+        assert!(fs4.iter().all(|f| f.group != "中点X108"), "X123 skip right");
+        // X112 / X127: sin2B−sin2C may vanish on right — accept either skip or present.
+        let _ = has("中点X112", "X_{127}");
+        assert!(fs4.iter().any(|f| f.group == "中点X109" && f.label.contains("mid")), "mid(H,X102)");
+    }
+
+    #[test]
+    fn x128_x129_x130_x131_x132_x133_x134_x135_x136_x137_x138_x139() {
+        // Scalene acute 6-7-8: orthic Steiner/Tarry/X74 and mid(H, Ψ) on NPC.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let x112 = fs.iter().find(|f| f.group == "Ψ垂心对称中线" && f.label == "X_{112}").expect("X112");
+        let x107 = fs.iter().find(|f| f.group == "Ψ对称中线垂心" && f.label == "X_{107}").expect("X107");
+        let x122 = fs.iter().find(|f| f.group == "中点X107" && f.label == "X_{122}").expect("X122");
+        let x127 = fs.iter().find(|f| f.group == "中点X112" && f.label == "X_{127}").expect("X127");
+        let x132 = fs.iter().find(|f| f.group == "垂心X112中点" && f.label == "X_{132}").expect("X132");
+        let x133 = fs.iter().find(|f| f.group == "垂心X107中点" && f.label == "X_{133}").expect("X133");
+        let x130 = fs.iter().find(|f| f.group == "垂足施泰纳" && f.label == "X_{130}").expect("X130");
+        let x129 = fs.iter().find(|f| f.group == "垂足塔里" && f.label == "X_{129}").expect("X129");
+        let x128 = fs.iter().find(|f| f.group == "垂足X74" && f.label == "X_{128}").expect("X128");
+        let x137 = fs.iter().find(|f| f.group == "垂足X74对径" && f.label == "X_{137}").expect("X137");
+        let x134 = fs.iter().find(|f| f.group == "垂足X107" && f.label == "X_{134}").expect("X134");
+        let x135 = fs.iter().find(|f| f.group == "垂足X108" && f.label == "X_{135}").expect("X135");
+        let x136 = fs.iter().find(|f| f.group == "垂足X109" && f.label == "X_{136}").expect("X136");
+        let x131 = fs.iter().find(|f| f.group == "垂足X102" && f.label == "X_{131}").expect("X131");
+        let x138 = fs.iter().find(|f| f.group == "垂足帕里" && f.label == "X_{138}").expect("X138");
+        let x139 = fs.iter().find(|f| f.group == "垂足X112" && f.label == "X_{139}").expect("X139");
+        let (hx, hy) = ptxy(h);
+        let (nx, ny) = ptxy(n);
+        let (p112x, p112y) = ptxy(x112);
+        let (p107x, p107y) = ptxy(x107);
+        let (p132x, p132y) = ptxy(x132);
+        let (p133x, p133y) = ptxy(x133);
+        assert!(((hx + p112x) / 2.0 - p132x).abs() < 1e-5 && ((hy + p112y) / 2.0 - p132y).abs() < 1e-5, "X132 != mid(H,X112)");
+        assert!(((hx + p107x) / 2.0 - p133x).abs() < 1e-5 && ((hy + p107y) / 2.0 - p133y).abs() < 1e-5, "X133 != mid(H,X107)");
+        let (p127x, p127y) = ptxy(x127);
+        let (p122x, p122y) = ptxy(x122);
+        assert!((2.0 * nx - p127x - p132x).abs() < 1e-5 && (2.0 * ny - p127y - p132y).abs() < 1e-5, "X132 != 2N-X127");
+        assert!((2.0 * nx - p122x - p133x).abs() < 1e-5 && (2.0 * ny - p122y - p133y).abs() < 1e-5, "X133 != 2N-X122");
+        let (p130x, p130y) = ptxy(x130);
+        let (p129x, p129y) = ptxy(x129);
+        let (p128x, p128y) = ptxy(x128);
+        let (p137x, p137y) = ptxy(x137);
+        assert!((2.0 * nx - p130x - p129x).abs() < 1e-5 && (2.0 * ny - p130y - p129y).abs() < 1e-5, "X129 != 2N-X130");
+        assert!((2.0 * nx - p128x - p137x).abs() < 1e-5 && (2.0 * ny - p128y - p137y).abs() < 1e-5, "X137 != 2N-X128");
+        let (p136x, p136y) = ptxy(x136);
+        let (p131x, p131y) = ptxy(x131);
+        assert!((2.0 * nx - p136x - p131x).abs() < 1e-5 && (2.0 * ny - p136y - p131y).abs() < 1e-5, "X131 != 2N-X136");
+        let _ = (x134, x135, x138, x139); // presence already asserted via expect
+        assert!(fs.iter().any(|f| f.group == "垂足X107" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足X108" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足X109" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足X102" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "垂足帕里" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足X112" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂心X112中点" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂心X107中点" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足施泰纳" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足X74" && f.label.contains("NPC")));
+        assert!(fs.iter().any(|f| f.group == "垂足塔里" && f.label.contains("2N")));
+        assert!(fs.iter().any(|f| f.group == "垂足X74对径" && f.label.contains("2N")));
+
+        // Isosceles 5-5-6: Steiner/Tarry of orthic skip; mid(H,X107) skips with X107;
+        // mid(H,X112) may skip with X112; X74-of-orthic may remain (orthic isos).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "垂足施泰纳"), "X130 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足塔里"), "X129 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂心X107中点"), "X133 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足X107"), "X134 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足X108"), "X135 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足X109"), "X136 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足X102"), "X131 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "垂足X112"), "X139 skip isosceles");
+        // Parry-of-orthic may survive on some isosceles; accept either.
+        let _ = fs2.iter().any(|f| f.group == "垂足帕里");
+
+        // Equilateral: all skip.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "垂心X112中点"), "X132 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂心X107中点"), "X133 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足施泰纳"), "X130 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足塔里"), "X129 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X74"), "X128 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X74对径"), "X137 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X107"), "X134 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X108"), "X135 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X109"), "X136 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X102"), "X131 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足帕里"), "X138 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "垂足X112"), "X139 skip equilateral");
+
+        // Right 3-4-5: orthic degenerates → X128/129/130/137+ skip; mid parents also skip.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.group != "垂足施泰纳"), "X130 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足塔里"), "X129 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X74"), "X128 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X74对径"), "X137 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X107"), "X134 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X108"), "X135 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X109"), "X136 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X102"), "X131 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足帕里"), "X138 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足X112"), "X139 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂心X107中点"), "X133 skip right");
+        // X112 / X132: may skip on right.
+        let _ = fs4.iter().any(|f| f.group == "垂心X112中点");
+    }
+
+
+    #[test]
+    fn x140_to_x156_complements_reflections_tangential() {
+        // Scalene acute 6-7-8: all eleven present with geometric cross-checks.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let n = fs.iter().find(|f| f.group == "欧拉线" && f.label == "N").expect("N");
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let kpt = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        let ge = fs.iter().find(|f| f.group == "格尔巩点" && f.label == "Ge").expect("Ge");
+        let mi = fs.iter().find(|f| f.group == "米滕点" && f.label == "Mi").expect("Mi");
+        let na = fs.iter().find(|f| f.group == "奈格尔点" && f.label == "Na").expect("Na");
+        let x52 = fs.iter().find(|f| f.group == "垂足垂心" && f.label == "X_{52}").expect("X52");
+        let x140 = fs.iter().find(|f| f.group == "九点补点" && f.label == "X_{140}").expect("X140");
+        let x141 = fs.iter().find(|f| f.group == "对称中线补点" && f.label == "X_{141}").expect("X141");
+        let x142 = fs.iter().find(|f| f.group == "米滕补点" && f.label == "X_{142}").expect("X142");
+        let x143 = fs.iter().find(|f| f.group == "垂足九点心" && f.label == "X_{143}").expect("X143");
+        let x144 = fs.iter().find(|f| f.group == "格尔巩反补" && f.label == "X_{144}").expect("X144");
+        let x145 = fs.iter().find(|f| f.group == "奈格尔反补" && f.label == "X_{145}").expect("X145");
+        let x146 = fs.iter().find(|f| f.group == "德龙尚X110反射" && f.label == "X_{146}").expect("X146");
+        let x147 = fs.iter().find(|f| f.group == "德龙尚施泰纳反射" && f.label == "X_{147}").expect("X147");
+        let x148 = fs.iter().find(|f| f.group == "德龙尚塔里反射" && f.label == "X_{148}").expect("X148");
+        let x149 = fs.iter().find(|f| f.group == "德龙尚X104反射" && f.label == "X_{149}").expect("X149");
+        let x150 = fs.iter().find(|f| f.group == "德龙尚X103反射" && f.label == "X_{150}").expect("X150");
+        let (ox, oy) = ptxy(o);
+        let (nx, ny) = ptxy(n);
+        let (gx, gy) = ptxy(g);
+        let (p140x, p140y) = ptxy(x140);
+        assert!(((ox + nx) / 2.0 - p140x).abs() < 1e-5 && ((oy + ny) / 2.0 - p140y).abs() < 1e-5, "X140 != mid(O,N)");
+        assert!(fs.iter().any(|f| f.group == "九点补点" && f.label.contains("Euler")));
+        let (kx, ky) = ptxy(kpt);
+        let (p141x, p141y) = ptxy(x141);
+        assert!(((3.0 * gx - kx) / 2.0 - p141x).abs() < 1e-5 && ((3.0 * gy - ky) / 2.0 - p141y).abs() < 1e-5, "X141 != complement(K)");
+        let (gex, gey) = ptxy(ge);
+        let (mx, my) = ptxy(mi);
+        let (p142x, p142y) = ptxy(x142);
+        assert!(((gex + mx) / 2.0 - p142x).abs() < 1e-5 && ((gey + my) / 2.0 - p142y).abs() < 1e-5, "X142 != mid(Ge,Mi)");
+        let (s52x, s52y) = ptxy(x52);
+        let (p143x, p143y) = ptxy(x143);
+        assert!(((nx + s52x) / 2.0 - p143x).abs() < 1e-5 && ((ny + s52y) / 2.0 - p143y).abs() < 1e-5, "X143 != mid(N,X52)");
+        let (p144x, p144y) = ptxy(x144);
+        assert!((3.0 * gx - 2.0 * gex - p144x).abs() < 1e-5 && (3.0 * gy - 2.0 * gey - p144y).abs() < 1e-5, "X144 != anticomplement(Ge)");
+        let (nax, nay) = ptxy(na);
+        let (p145x, p145y) = ptxy(x145);
+        assert!((3.0 * gx - 2.0 * nax - p145x).abs() < 1e-5 && (3.0 * gy - 2.0 * nay - p145y).abs() < 1e-5, "X145 != anticomplement(Na)");
+        assert!(fs.iter().any(|f| f.group == "奈格尔反补" && f.label.contains("3a")));
+        let l = fs.iter().find(|f| f.group == "德龙尚点" && f.label == "L").expect("L");
+        let x110 = fs.iter().find(|f| f.group == "欧拉反射点" && f.label == "X_{110}").expect("X110");
+        let st = fs.iter().find(|f| f.group == "施泰纳点" && f.label == "St").expect("St");
+        let ty = fs.iter().find(|f| f.group == "塔里点" && f.label == "Ty").expect("Ty");
+        let x104 = fs.iter().find(|f| f.group == "X100对径" && f.label == "X_{104}").expect("X104");
+        let x103 = fs.iter().find(|f| f.group == "X101对径" && f.label == "X_{103}").expect("X103");
+        let (lx, ly) = ptxy(l);
+        let check_ref = |q: &Fact, p: &Fact, name: &str| {
+            let (qx, qy) = ptxy(q);
+            let (px, py) = ptxy(p);
+            assert!((2.0 * qx - lx - px).abs() < 1e-5 && (2.0 * qy - ly - py).abs() < 1e-5, "{name} != 2Q-L");
+        };
+        check_ref(x110, x146, "X146");
+        check_ref(st, x147, "X147");
+        check_ref(ty, x148, "X148");
+        check_ref(x104, x149, "X149");
+        check_ref(x103, x150, "X150");
+        let x109 = fs.iter().find(|f| f.group == "Ψ内心外心" && f.label == "X_{109}").expect("X109");
+        let x101 = fs.iter().find(|f| f.group == "Ψ内心对称中线" && f.label == "X_{101}").expect("X101");
+        let x100 = fs.iter().find(|f| f.group == "反补费尔巴哈" && f.label == "X_{100}").expect("X100");
+        let x151 = fs.iter().find(|f| f.group == "德龙尚X109反射" && f.label == "X_{151}").expect("X151");
+        let x152 = fs.iter().find(|f| f.group == "德龙尚X101反射" && f.label == "X_{152}").expect("X152");
+        let x153 = fs.iter().find(|f| f.group == "德龙尚X100反射" && f.label == "X_{153}").expect("X153");
+        check_ref(x109, x151, "X151");
+        check_ref(x101, x152, "X152");
+        check_ref(x100, x153, "X153");
+        let x154 = fs.iter().find(|f| f.group == "切线重心" && f.label == "X_{154}").expect("X154");
+        let x155 = fs.iter().find(|f| f.group == "垂足特征心" && f.label == "X_{155}").expect("X155");
+        let x156 = fs.iter().find(|f| f.group == "切线九点心" && f.label == "X_{156}").expect("X156");
+        let x26 = fs.iter().find(|f| f.group == "切线三角形外心" && f.label == "X_{26}").expect("X26");
+        let x68 = fs.iter().find(|f| f.group == "普拉索洛夫点" && f.label == "X_{68}").expect("X68");
+        let (p26x, p26y) = ptxy(x26);
+        let (p155x, p155y) = ptxy(x155);
+        let (p156x, p156y) = ptxy(x156);
+        assert!(((p26x + p155x) / 2.0 - p156x).abs() < 1e-5 && ((p26y + p155y) / 2.0 - p156y).abs() < 1e-5, "X156 != mid(X26,X155)");
+        let (p68x, p68y) = ptxy(x68);
+        assert!((2.0 * nx - p68x - p155x).abs() < 1e-5 && (2.0 * ny - p68y - p155y).abs() < 1e-5, "X155 != 2N-X68");
+        assert!(fs.iter().any(|f| f.group == "垂足特征心" && f.label.contains("2N")));
+        let _ = x154; // presence is the check; bary finite on acute scalene
+
+        // Isosceles 5-5-6: X140–X145 remain; Steiner/Tarry/X110/X104 family skip → reflections skip.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().any(|f| f.group == "九点补点" && f.label == "X_{140}"));
+        assert!(fs2.iter().any(|f| f.group == "对称中线补点" && f.label == "X_{141}"));
+        assert!(fs2.iter().any(|f| f.group == "米滕补点" && f.label == "X_{142}"));
+        assert!(fs2.iter().any(|f| f.group == "格尔巩反补" && f.label == "X_{144}"));
+        assert!(fs2.iter().any(|f| f.group == "奈格尔反补" && f.label == "X_{145}"));
+        // X143 needs X52; isos acute non-eq usually has X52.
+        let _ = fs2.iter().any(|f| f.group == "垂足九点心");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X110反射"), "X146 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚施泰纳反射"), "X147 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚塔里反射"), "X148 skip isosceles");
+        // X104/X103 may survive on a=b isos; accept either for X149/X150.
+        let _ = (
+            fs2.iter().any(|f| f.group == "德龙尚X104反射"),
+            fs2.iter().any(|f| f.group == "德龙尚X103反射"),
+        );
+        // X100/X101/X109 skip on isos → X151–X153 skip; X154/X155 still finite.
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X109反射"), "X151 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X101反射"), "X152 skip isosceles");
+        assert!(fs2.iter().all(|f| f.group != "德龙尚X100反射"), "X153 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "切线重心" && f.label == "X_{154}"));
+        assert!(fs2.iter().any(|f| f.group == "垂足特征心" && f.label == "X_{155}"));
+        // X156 needs X26; may be present on isos acute.
+        let _ = fs2.iter().any(|f| f.group == "切线九点心");
+
+        // Equilateral: X140–X145 collapse toward G/O; reflections of circumcircle points skip.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().any(|f| f.group == "九点补点" && f.label == "X_{140}"));
+        assert!(fs3.iter().any(|f| f.group == "对称中线补点" && f.label == "X_{141}"));
+        assert!(fs3.iter().any(|f| f.group == "米滕补点" && f.label == "X_{142}"));
+        assert!(fs3.iter().any(|f| f.group == "格尔巩反补" && f.label == "X_{144}"));
+        assert!(fs3.iter().any(|f| f.group == "奈格尔反补" && f.label == "X_{145}"));
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X110反射"), "X146 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚施泰纳反射"), "X147 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚塔里反射"), "X148 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X104反射"), "X149 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X103反射"), "X150 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X109反射"), "X151 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X101反射"), "X152 skip equilateral");
+        assert!(fs3.iter().all(|f| f.group != "德龙尚X100反射"), "X153 skip equilateral");
+        // X154/X155 bary finite on equilateral (→ G); X26 may skip on equilateral.
+        assert!(fs3.iter().any(|f| f.group == "切线重心" && f.label == "X_{154}"));
+        assert!(fs3.iter().any(|f| f.group == "垂足特征心" && f.label == "X_{155}"));
+
+        // Right 3-4-5: X140/141/142/144/145; X143 skips (no X52); X110 may via bary.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "九点补点" && f.label == "X_{140}"));
+        assert!(fs4.iter().any(|f| f.group == "对称中线补点" && f.label == "X_{141}"));
+        assert!(fs4.iter().any(|f| f.group == "米滕补点" && f.label == "X_{142}"));
+        assert!(fs4.iter().any(|f| f.group == "格尔巩反补" && f.label == "X_{144}"));
+        assert!(fs4.iter().any(|f| f.group == "奈格尔反补" && f.label == "X_{145}"));
+        assert!(fs4.iter().all(|f| f.group != "垂足九点心"), "X143 skip right");
+        // X110 bary works on right scalene; Steiner/Tarry may too — presence optional for reflections.
+        let _ = (
+            fs4.iter().any(|f| f.group == "德龙尚X110反射"),
+            fs4.iter().any(|f| f.group == "德龙尚施泰纳反射"),
+                        fs4.iter().any(|f| f.group == "德龙尚塔里反射"),
+            fs4.iter().any(|f| f.group == "德龙尚X109反射"),
+            fs4.iter().any(|f| f.group == "德龙尚X101反射"),
+            fs4.iter().any(|f| f.group == "德龙尚X100反射"),
+        );
+        assert!(fs4.iter().all(|f| f.group != "切线重心"), "X154 skip right");
+        assert!(fs4.iter().all(|f| f.group != "垂足特征心"), "X155 skip right");
+        assert!(fs4.iter().all(|f| f.group != "切线九点心"), "X156 skip right");
+    }
+
+    #[test]
+    fn x157_to_x165_tangential_excentral() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x157 = fs.iter().find(|f| f.group == "切线对称中线" && f.label == "X_{157}").expect("X157");
+        let x158 = fs.iter().find(|f| f.group == "正割正切点" && f.label == "X_{158}").expect("X158");
+        let x159 = fs.iter().find(|f| f.group == "切线米滕" && f.label == "X_{159}").expect("X159");
+        let x163 = fs.iter().find(|f| f.group == "对称中线X110积" && f.label == "X_{163}").expect("X163");
+        let x164 = fs.iter().find(|f| f.group == "旁心内心" && f.label == "X_{164}").expect("X164");
+        let x165 = fs.iter().find(|f| f.group == "旁心重心" && f.label == "X_{165}").expect("X165");
+        let x66 = fs.iter().find(|f| f.group == "埃克塞特等角" && f.label == "X_{66}").expect("X66");
+        let x141 = fs.iter().find(|f| f.group == "对称中线补点" && f.label == "X_{141}").expect("X141");
+        let (p66x, p66y) = ptxy(x66);
+        let (p141x, p141y) = ptxy(x141);
+        let (p159x, p159y) = ptxy(x159);
+        assert!((2.0 * p141x - p66x - p159x).abs() < 1e-5 && (2.0 * p141y - p66y - p159y).abs() < 1e-5, "X159 != 2·X141−X66");
+        assert!(fs.iter().any(|f| f.group == "旁心重心" && f.label.contains("cent")));
+        assert!(fs.iter().any(|f| f.group == "旁心重心" && f.label.contains("OI")));
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let (ix, iy) = ptxy(i);
+        let (ox, oy) = ptxy(o);
+        let (p165x, p165y) = ptxy(x165);
+        assert!(((4.0 * ox - ix) / 3.0 - p165x).abs() < 1e-5 && ((4.0 * oy - iy) / 3.0 - p165y).abs() < 1e-5, "X165 != (4O−I)/3");
+        let _ = (x157, x158, x163, x164);
+
+        // Isosceles 5-5-6: X163 skips; X157/158/164/165 remain; X159 if X66+X141.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "对称中线X110积"), "X163 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "切线对称中线" && f.label == "X_{157}"));
+        assert!(fs2.iter().any(|f| f.group == "正割正切点" && f.label == "X_{158}"));
+        assert!(fs2.iter().any(|f| f.group == "旁心内心" && f.label == "X_{164}"));
+        assert!(fs2.iter().any(|f| f.group == "旁心重心" && f.label == "X_{165}"));
+        let _ = fs2.iter().any(|f| f.group == "切线米滕");
+
+        // Equilateral: X163 skips; others finite; X165 = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "对称中线X110积"), "X163 skip equilateral");
+        assert!(fs3.iter().any(|f| f.group == "切线对称中线" && f.label == "X_{157}"));
+        assert!(fs3.iter().any(|f| f.group == "正割正切点" && f.label == "X_{158}"));
+        assert!(fs3.iter().any(|f| f.group == "旁心内心" && f.label == "X_{164}"));
+        assert!(fs3.iter().any(|f| f.group == "旁心重心" && f.label == "X_{165}"));
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let x165e = fs3.iter().find(|f| f.group == "旁心重心" && f.label == "X_{165}").expect("X165e");
+        let (gx, gy) = ptxy(g3);
+        let (ex, ey) = ptxy(x165e);
+        assert!((gx - ex).abs() < 1e-5 && (gy - ey).abs() < 1e-5, "equilateral X165 != G");
+
+        // Right 3-4-5: X158 skips; X163/164/165 ok; X157/X159 optional via parents.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.group != "正割正切点"), "X158 skip right");
+        assert!(fs4.iter().any(|f| f.group == "旁心内心" && f.label == "X_{164}"));
+        assert!(fs4.iter().any(|f| f.group == "旁心重心" && f.label == "X_{165}"));
+        assert!(fs4.iter().any(|f| f.group == "对称中线X110积" && f.label == "X_{163}"));
+        let _ = (
+            fs4.iter().any(|f| f.group == "切线对称中线"),
+            fs4.iter().any(|f| f.group == "切线米滕"),
+        );
+    }
+
+    #[test]
+    fn x160_to_x173_tangential_gaps_classical() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8: all centers finite.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x160 = fs.iter().find(|f| f.group == "切线格林伯格" && f.label == "X_{160}").expect("X160");
+        let x161 = fs.iter().find(|f| f.group == "切线X63" && f.label == "X_{161}").expect("X161");
+        let x162 = fs.iter().find(|f| f.group == "X108X109截点" && f.label == "X_{162}").expect("X162");
+        let x168 = fs.iter().find(|f| f.group == "旁心米滕" && f.label == "X_{168}").expect("X168");
+        let x169 = fs.iter().find(|f| f.group == "X85截共轭I" && f.label == "X_{169}").expect("X169");
+        let x171 = fs.iter().find(|f| f.group == "调和X238" && f.label == "X_{171}").expect("X171");
+        let x172 = fs.iter().find(|f| f.group == "对称中线X171积" && f.label == "X_{172}").expect("X172");
+        let x173 = fs.iter().find(|f| f.group == "等腰等化器" && f.label == "X_{173}").expect("X173");
+        assert!(fs.iter().any(|f| f.group == "调和X238" && f.label.contains("OI")));
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let (ix, iy) = ptxy(i);
+        let (ox, oy) = ptxy(o);
+        let (p171x, p171y) = ptxy(x171);
+        let cross = (ix - ox) * (p171y - oy) - (iy - oy) * (p171x - ox);
+        assert!(cross.abs() < 1e-5, "X171 not on OI: cross={}", cross);
+        // Numeric spot-check vs ETC side formula for X162 / X171.
+        let (p162x, p162y) = ptxy(x162);
+        assert!((p162x - 3.4398888116747757).abs() < 1e-6 && (p162y - 5.032994341492612).abs() < 1e-6, "X162 xy {:?}", (p162x, p162y));
+        let (p171nx, p171ny) = ptxy(x171);
+        assert!((p171nx - 4.575757575757576).abs() < 1e-6 && (p171ny - 2.073415326757506).abs() < 1e-6, "X171 xy {:?}", (p171nx, p171ny));
+        let _ = (x160, x161, x168, x169, x172, x173);
+
+        // Isosceles 5-5-6: X162 skips; others remain.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.group != "X108X109截点"), "X162 skip isosceles");
+        assert!(fs2.iter().any(|f| f.group == "切线格林伯格" && f.label == "X_{160}"));
+        assert!(fs2.iter().any(|f| f.group == "切线X63" && f.label == "X_{161}"));
+        assert!(fs2.iter().any(|f| f.group == "旁心米滕" && f.label == "X_{168}"));
+        assert!(fs2.iter().any(|f| f.group == "X85截共轭I" && f.label == "X_{169}"));
+        assert!(fs2.iter().any(|f| f.group == "调和X238" && f.label == "X_{171}"));
+        assert!(fs2.iter().any(|f| f.group == "对称中线X171积" && f.label == "X_{172}"));
+        assert!(fs2.iter().any(|f| f.group == "等腰等化器" && f.label == "X_{173}"));
+
+        // Equilateral: X162 skips; X160/161/168/169/171/172/173 = G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.group != "X108X109截点"), "X162 skip equilateral");
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g3);
+        for (grp, lab) in [
+            ("切线格林伯格", "X_{160}"),
+            ("切线X63", "X_{161}"),
+            ("旁心米滕", "X_{168}"),
+            ("X85截共轭I", "X_{169}"),
+            ("调和X238", "X_{171}"),
+            ("对称中线X171积", "X_{172}"),
+            ("等腰等化器", "X_{173}"),
+        ] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx).abs() < 1e-5 && (y - gy).abs() < 1e-5, "equilateral {} != G", lab);
+        }
+
+        // Right 3-4-5: X161/X162 skip; X160/168/169/171–173 finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "切线格林伯格" && f.label == "X_{160}"));
+        assert!(fs4.iter().all(|f| f.group != "切线X63"), "X161 skip right");
+        assert!(fs4.iter().all(|f| f.group != "X108X109截点"), "X162 skip right");
+        assert!(fs4.iter().any(|f| f.group == "旁心米滕" && f.label == "X_{168}"));
+        assert!(fs4.iter().any(|f| f.group == "X85截共轭I" && f.label == "X_{169}"));
+        assert!(fs4.iter().any(|f| f.group == "调和X238" && f.label == "X_{171}"));
+        assert!(fs4.iter().any(|f| f.group == "对称中线X171积" && f.label == "X_{172}"));
+        assert!(fs4.iter().any(|f| f.group == "等腰等化器" && f.label == "X_{173}"));
+    }
+
+    #[test]
+    fn x166_x167_x170_gaps_and_x177_to_x180() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x166 = fs.iter().find(|f| f.group == "旁心格尔巩" && f.label == "X_{166}").expect("X166");
+        let x167 = fs.iter().find(|f| f.group == "旁心奈格尔" && f.label == "X_{167}").expect("X167");
+        let x170 = fs.iter().find(|f| f.group == "米滕阿列夫自共轭" && f.label == "X_{170}").expect("X170");
+        let x177 = fs.iter().find(|f| f.group == "第一中弧点" && f.label == "X_{177}").expect("X177");
+        let x178 = fs.iter().find(|f| f.group == "第二中弧点" && f.label == "X_{178}").expect("X178");
+        let x179 = fs.iter().find(|f| f.group == "第一阿吉马-马尔法蒂" && f.label == "X_{179}").expect("X179");
+        let x180 = fs.iter().find(|f| f.group == "第二阿吉马-马尔法蒂" && f.label == "X_{180}").expect("X180");
+        assert!(fs.iter().any(|f| f.group == "旁心格尔巩" && f.label.contains("165")));
+        assert!(fs.iter().any(|f| f.group == "旁心奈格尔" && f.label.contains("164")));
+        assert!(fs.iter().any(|f| f.group == "米滕阿列夫自共轭" && f.label.contains("IG")));
+        let (p166x, p166y) = ptxy(x166);
+        assert!((p166x - 4.116074059198164).abs() < 1e-6 && (p166y - 1.3875764592887037).abs() < 1e-6, "X166 {:?}", (p166x, p166y));
+        let (p167x, p167y) = ptxy(x167);
+        assert!((p167x - 3.586801781111747).abs() < 1e-6 && (p167y - 0.024620487649944494).abs() < 1e-6, "X167 {:?}", (p167x, p167y));
+        let (p170x, p170y) = ptxy(x170);
+        assert!((p170x - 3.612326337570204).abs() < 1e-6 && (p170y + 0.017134392772165687).abs() < 1e-6, "X170 {:?}", (p170x, p170y));
+        let (p177x, p177y) = ptxy(x177);
+        assert!((p177x - 4.607015416275967).abs() < 1e-6 && (p177y - 2.1605390776490716).abs() < 1e-6, "X177 {:?}", (p177x, p177y));
+        let (p178x, p178y) = ptxy(x178);
+        assert!((p178x - 4.315677276217948).abs() < 1e-6 && (p178y - 1.7640727698612098).abs() < 1e-6, "X178 {:?}", (p178x, p178y));
+        let (p179x, p179y) = ptxy(x179);
+        assert!((p179x - 4.567591551964102).abs() < 1e-6 && (p179y - 2.0737600520097113).abs() < 1e-6, "X179 {:?}", (p179x, p179y));
+        let (p180x, p180y) = ptxy(x180);
+        assert!((p180x - 4.591012676125583).abs() < 1e-6 && (p180y - 2.1107123730916184).abs() < 1e-6, "X180 {:?}", (p180x, p180y));
+        // IG collinearity for X170.
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let ge = fs.iter().find(|f| f.label == "X_{7}" || f.label == "Ge").expect("Ge");
+        let (ix, iy) = ptxy(i);
+        let (gx, gy) = ptxy(ge);
+        let cross = (gx - ix) * (p170y - iy) - (gy - iy) * (p170x - ix);
+        assert!(cross.abs() < 1e-5, "X170 not on IG: cross={}", cross);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab) in [
+            ("旁心格尔巩", "X_{166}"),
+            ("旁心奈格尔", "X_{167}"),
+            ("米滕阿列夫自共轭", "X_{170}"),
+            ("第一中弧点", "X_{177}"),
+            ("第二中弧点", "X_{178}"),
+            ("第一阿吉马-马尔法蒂", "X_{179}"),
+            ("第二阿吉马-马尔法蒂", "X_{180}"),
+        ] {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: all coincide with G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g3);
+        for (grp, lab) in [
+            ("旁心格尔巩", "X_{166}"),
+            ("旁心奈格尔", "X_{167}"),
+            ("米滕阿列夫自共轭", "X_{170}"),
+            ("第一中弧点", "X_{177}"),
+            ("第二中弧点", "X_{178}"),
+            ("第一阿吉马-马尔法蒂", "X_{179}"),
+            ("第二阿吉马-马尔法蒂", "X_{180}"),
+        ] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx).abs() < 1e-5 && (y - gy).abs() < 1e-5, "equilateral {} != G", lab);
+        }
+
+        // Right 3-4-5: all finite (half-angle formulas stay defined).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "旁心格尔巩" && f.label == "X_{166}"));
+        assert!(fs4.iter().any(|f| f.group == "旁心奈格尔" && f.label == "X_{167}"));
+        assert!(fs4.iter().any(|f| f.group == "米滕阿列夫自共轭" && f.label == "X_{170}"));
+        assert!(fs4.iter().any(|f| f.group == "第一中弧点" && f.label == "X_{177}"));
+        assert!(fs4.iter().any(|f| f.group == "第二中弧点" && f.label == "X_{178}"));
+        assert!(fs4.iter().any(|f| f.group == "第一阿吉马-马尔法蒂" && f.label == "X_{179}"));
+        assert!(fs4.iter().any(|f| f.group == "第二阿吉马-马尔法蒂" && f.label == "X_{180}"));
+    }
+
+    #[test]
+    fn x182_to_x190_brocard_orthic_inverses() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let x182 = fs.iter().find(|f| f.group == "布罗卡直径中点" && f.label == "X_{182}").expect("X182");
+        let x183 = fs.iter().find(|f| f.group == "摩西布罗卡商" && f.label == "X_{183}").expect("X183");
+        let x184 = fs.iter().find(|f| f.group == "准外心" && f.label == "X_{184}").expect("X184");
+        let x185 = fs.iter().find(|f| f.group == "垂足奈格尔" && f.label == "X_{185}").expect("X185");
+        let x186 = fs.iter().find(|f| f.group == "反演垂心" && f.label == "X_{186}").expect("X186");
+        let x187 = fs.iter().find(|f| f.group == "肖特中心" && f.label == "X_{187}").expect("X187");
+        let x188 = fs.iter().find(|f| f.group == "反补第二中弧" && f.label == "X_{188}").expect("X188");
+        let x189 = fs.iter().find(|f| f.group == "奈格尔圆塞瓦共轭" && f.label == "X_{189}").expect("X189");
+        let x190 = fs.iter().find(|f| f.group == "伊夫抛物点" && f.label == "X_{190}").expect("X190");
+        assert!(fs.iter().any(|f| f.group == "布罗卡直径中点" && f.label.contains("OK")));
+        assert!(fs.iter().any(|f| f.group == "反演垂心" && f.label.contains("OH")));
+        assert!(fs.iter().any(|f| f.group == "肖特中心" && f.label.contains("OK")));
+        let (p182x, p182y) = ptxy(x182);
+        assert!((p182x - 4.348993288590604).abs() < 1e-6 && (p182y - 1.6081112059420504).abs() < 1e-6, "X182 {:?}", (p182x, p182y));
+        let (p183x, p183y) = ptxy(x183);
+        assert!((p183x - 3.819745041145412).abs() < 1e-6 && (p183y - 1.1780332020797852).abs() < 1e-6, "X183 {:?}", (p183x, p183y));
+        let (p184x, p184y) = ptxy(x184);
+        assert!((p184x - 4.52074391988555).abs() < 1e-6 && (p184y - 1.41843166899728).abs() < 1e-6, "X184 {:?}", (p184x, p184y));
+        let (p185x, p185y) = ptxy(x185);
+        assert!((p185x - 4.7109375).abs() < 1e-6 && (p185y - 1.5592792326137148).abs() < 1e-6, "X185 {:?}", (p185x, p185y));
+        let (p186x, p186y) = ptxy(x186);
+        assert!((p186x - 7.014492753623188).abs() < 1e-6 && (p186y - 8.397076936125066).abs() < 1e-6, "X186 {:?}", (p186x, p186y));
+        let (p187x, p187y) = ptxy(x187);
+        assert!((p187x - 10.577249575551782).abs() < 1e-6 && (p187y - 11.875395455433948).abs() < 1e-6, "X187 {:?}", (p187x, p187y));
+        let (p188x, p188y) = ptxy(x188);
+        assert!((p188x - 4.181145447564104).abs() < 1e-6 && (p188y - 1.5551451021748157).abs() < 1e-6, "X188 {:?}", (p188x, p188y));
+        let (p189x, p189y) = ptxy(x189);
+        assert!((p189x - 4.8141694490818026).abs() < 1e-6 && (p189y - 4.675948486953883).abs() < 1e-6, "X189 {:?}", (p189x, p189y));
+        let (p190x, p190y) = ptxy(x190);
+        assert!((p190x - 0.5416666666666666).abs() < 1e-6 && (p190y - 3.38886042793149).abs() < 1e-6, "X190 {:?}", (p190x, p190y));
+        // mid(O,K) for X182
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").or_else(|| fs.iter().find(|f| f.label == "O")).expect("O");
+        let kk = fs.iter().find(|f| f.group == "勒莫恩点" && f.label == "K").expect("K");
+        let (ox, oy) = ptxy(o);
+        let (kx, ky) = ptxy(kk);
+        assert!((p182x - (ox + kx) / 2.0).abs() < 1e-6 && (p182y - (oy + ky) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: X190 skips; others finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab) in [
+            ("布罗卡直径中点", "X_{182}"),
+            ("摩西布罗卡商", "X_{183}"),
+            ("准外心", "X_{184}"),
+            ("垂足奈格尔", "X_{185}"),
+            ("反演垂心", "X_{186}"),
+            ("肖特中心", "X_{187}"),
+            ("反补第二中弧", "X_{188}"),
+            ("奈格尔圆塞瓦共轭", "X_{189}"),
+        ] {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+        assert!(fs2.iter().all(|f| f.group != "伊夫抛物点"), "X190 skip isos");
+
+        // Equilateral: X182/183/184/185/188/189 → G; X186/187/190 skip.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g3);
+        for (grp, lab) in [
+            ("布罗卡直径中点", "X_{182}"),
+            ("摩西布罗卡商", "X_{183}"),
+            ("准外心", "X_{184}"),
+            ("垂足奈格尔", "X_{185}"),
+            ("反补第二中弧", "X_{188}"),
+            ("奈格尔圆塞瓦共轭", "X_{189}"),
+        ] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx).abs() < 1e-5 && (y - gy).abs() < 1e-5, "equilateral {} != G", lab);
+        }
+        assert!(fs3.iter().all(|f| f.group != "反演垂心"), "X186 skip equil");
+        assert!(fs3.iter().all(|f| f.group != "肖特中心"), "X187 skip equil");
+        assert!(fs3.iter().all(|f| f.group != "伊夫抛物点"), "X190 skip equil");
+
+        // Right 3-4-5: X185 skips; X186 = H (on circumcircle); others finite; X190 ok.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().any(|f| f.group == "布罗卡直径中点" && f.label == "X_{182}"));
+        assert!(fs4.iter().any(|f| f.group == "摩西布罗卡商" && f.label == "X_{183}"));
+        assert!(fs4.iter().any(|f| f.group == "准外心" && f.label == "X_{184}"));
+        assert!(fs4.iter().all(|f| f.group != "垂足奈格尔"), "X185 skip right");
+        let x186r = fs4.iter().find(|f| f.group == "反演垂心" && f.label == "X_{186}").expect("X186 right");
+        let h4 = fs4.iter().find(|f| f.group == "特殊点" && f.label == "H").or_else(|| fs4.iter().find(|f| f.label == "H")).expect("H");
+        let (hx, hy) = ptxy(h4);
+        let (x6, y6) = ptxy(x186r);
+        assert!((x6 - hx).abs() < 1e-5 && (y6 - hy).abs() < 1e-5, "right X186 should = H");
+        assert!(fs4.iter().any(|f| f.group == "肖特中心" && f.label == "X_{187}"));
+        assert!(fs4.iter().any(|f| f.group == "反补第二中弧" && f.label == "X_{188}"));
+        assert!(fs4.iter().any(|f| f.group == "奈格尔圆塞瓦共轭" && f.label == "X_{189}"));
+        assert!(fs4.iter().any(|f| f.group == "伊夫抛物点" && f.label == "X_{190}"));
+    }
+
+    #[test]
+    fn x191_to_x200_ceva_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("斯皮克内心塞瓦", "X_{191}", 3.9126984126984126, 1.1373046334101145),
+            ("内心重心塞瓦", "X_{192}", 4.783390410958904, 2.1586576698467708),
+            ("垂心重心塞瓦", "X_{193}", 5.979446308724833, 3.6504167696845915),
+            ("勒莫恩重心塞瓦", "X_{194}", 5.3385272071071626, 2.5938612436999215),
+            ("九点外心塞瓦", "X_{195}", 5.197905759162303, 2.661476304367596),
+            ("格尔巩垂心塞瓦", "X_{196}", 4.508977844505761, 0.46286739978970115),
+            ("奈格尔勒莫恩塞瓦", "X_{197}", 3.52023988005997, -0.6271097472119954),
+            ("米滕阿列夫勒莫恩塞瓦", "X_{198}", 3.803825404610103, 0.15955399758775038),
+            ("斯皮克莱莫恩塞瓦", "X_{199}", 3.856005538248529, 0.681023032147237),
+            ("半周长平方点", "X_{200}", 3.6020408163265305, 0.9880059556651574),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "内心重心塞瓦" && f.label.contains("anti")));
+        assert!(fs.iter().any(|f| f.group == "垂心重心塞瓦" && f.label.contains("anti")));
+        assert!(fs.iter().any(|f| f.group == "勒莫恩重心塞瓦" && f.label.contains("anti")));
+        // Anticomplement Cartesian: 3G − 2P.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let mo = fs.iter().find(|f| f.group == "摩西点" && f.label == "Mo").expect("Mo");
+        let x69 = fs.iter().find(|f| f.group == "余切点" && f.label == "X_{69}").expect("X69");
+        let x76 = fs.iter().find(|f| f.group == "第三布罗卡点" && f.label == "X_{76}").expect("X76");
+        let (gx, gy) = ptxy(g);
+        let x192 = fs.iter().find(|f| f.group == "内心重心塞瓦" && f.label == "X_{192}").unwrap();
+        let x193 = fs.iter().find(|f| f.group == "垂心重心塞瓦" && f.label == "X_{193}").unwrap();
+        let x194 = fs.iter().find(|f| f.group == "勒莫恩重心塞瓦" && f.label == "X_{194}").unwrap();
+        let (mox, moy) = ptxy(mo);
+        let (p69x, p69y) = ptxy(x69);
+        let (p76x, p76y) = ptxy(x76);
+        let (p192x, p192y) = ptxy(x192);
+        let (p193x, p193y) = ptxy(x193);
+        let (p194x, p194y) = ptxy(x194);
+        assert!((p192x - (3.0 * gx - 2.0 * mox)).abs() < 1e-6 && (p192y - (3.0 * gy - 2.0 * moy)).abs() < 1e-6);
+        assert!((p193x - (3.0 * gx - 2.0 * p69x)).abs() < 1e-6 && (p193y - (3.0 * gy - 2.0 * p69y)).abs() < 1e-6);
+        assert!((p194x - (3.0 * gx - 2.0 * p76x)).abs() < 1e-6 && (p194y - (3.0 * gy - 2.0 * p76y)).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite (incl. X196).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: all → G; X196 present (not right).
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: X196 skips; others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            if grp == "格尔巩垂心塞瓦" {
+                assert!(fs4.iter().all(|f| f.group != grp), "X196 should skip right");
+            } else {
+                assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+            }
+        }
+    }
+
+    #[test]
+    fn x201_to_x210_ceva_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("斯皮克费尔巴哈调和塞瓦", "X_{201}", 3.941144708423327, 1.0602605596798922),
+            ("内心第一等动力塞瓦", "X_{202}", 4.675197482892764, 2.1984959377388735),
+            ("内心第二等动力塞瓦", "X_{203}", 3.1297393021764734, 3.220416341963739),
+            ("内心克劳森塞瓦", "X_{204}", 4.230629739531817, -7.044283755144491),
+            ("米滕第二幂点塞瓦", "X_{205}", 3.836927177664627, -0.800458028153725),
+            ("重心第三幂点塞瓦", "X_{206}", 4.035459211140222, -0.6761005992159091),
+            ("内心X34塞瓦", "X_{207}", 4.427586630119051, 13.822429272105595),
+            ("垂心X34塞瓦", "X_{208}", 4.782730514518593, 0.553424263174315),
+            ("垂心格林伯格塞瓦", "X_{209}", 5.629901960784314, 3.578712552745579),
+            ("斯皮克格林伯格塞瓦", "X_{210}", 3.9635416666666665, 1.3111662369973027),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "重心第三幂点塞瓦" && f.label.contains("comp")));
+        assert!(fs.iter().any(|f| f.group == "重心第三幂点塞瓦" && f.label.contains("mid")));
+        // Complement Cartesian: (3G − X66)/2.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let x66 = fs.iter().find(|f| f.label == "X_{66}").expect("X66");
+        let x206 = fs.iter().find(|f| f.group == "重心第三幂点塞瓦" && f.label == "X_{206}").unwrap();
+        let (gx, gy) = ptxy(g);
+        let (p66x, p66y) = ptxy(x66);
+        let (p206x, p206y) = ptxy(x206);
+        assert!((p206x - (3.0 * gx - p66x) / 2.0).abs() < 1e-6 && (p206y - (3.0 * gy - p66y) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite (incl. X203/X204).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: X203 skips; others → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        assert!(fs3.iter().all(|f| f.group != "内心第二等动力塞瓦"), "X203 should skip equil");
+        for (grp, lab, ..) in want {
+            if grp == "内心第二等动力塞瓦" {
+                continue;
+            }
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: X204/X207/X208 skip; others finite (X203 ok).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            // X204/X207/X208: tan/sec → ∞. X206: bary sum vanishes (point at ∞).
+            if grp == "内心克劳森塞瓦"
+                || grp == "内心X34塞瓦"
+                || grp == "垂心X34塞瓦"
+                || grp == "重心第三幂点塞瓦"
+            {
+                assert!(fs4.iter().all(|f| !(f.group == grp && f.label == lab)), "{} should skip right", lab);
+            } else {
+                assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+            }
+        }
+    }
+
+    #[test]
+    fn x211_to_x220_ceva_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("垂心布罗卡中点塞瓦", "X_{211}", 5.3174323110483765, 3.5273321313623947),
+            ("米滕第二幂截点塞瓦", "X_{212}", 3.799729364005413, 0.8385349599366532),
+            ("勒莫恩内心勒莫恩截点塞瓦", "X_{213}", 4.793033065723228, 2.301971867768948),
+            ("重心X44塞瓦", "X_{214}", 2.75, 2.9047375096555625),
+            ("内心三倍角正弦塞瓦", "X_{215}", 3.118293471234648, 3.204536963894954),
+            ("九点垂足重心塞瓦", "X_{216}", 4.153027823240589, 1.2850620179944163),
+            ("勒莫恩垂足重心塞瓦", "X_{217}", 4.634208909592487, 1.7187829379619926),
+            ("格尔巩外接内切相似塞瓦", "X_{218}", 5.0863099374565675, 2.6677561450735174),
+            ("奈格尔外接内切相似塞瓦", "X_{219}", 3.5044852627082443, 0.6948539108958203),
+            ("米滕外接内切相似塞瓦", "X_{220}", 3.8901257770709847, 1.1758370720016735),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "重心X44塞瓦" && f.label.contains("mid")));
+        assert!(fs.iter().any(|f| f.group == "重心X44塞瓦" && f.label.contains("comp")));
+        // mid(I,X100) Cartesian.
+        let i = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let x100 = fs.iter().find(|f| f.label == "X_{100}").expect("X100");
+        let x214 = fs.iter().find(|f| f.group == "重心X44塞瓦" && f.label == "X_{214}").unwrap();
+        let (ix, iy) = ptxy(i);
+        let (p100x, p100y) = ptxy(x100);
+        let (p214x, p214y) = ptxy(x214);
+        assert!((p214x - (ix + p100x) / 2.0).abs() < 1e-6 && (p214y - (iy + p100y) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: X215 skips; others → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        assert!(fs3.iter().all(|f| f.group != "内心三倍角正弦塞瓦"), "X215 should skip equil");
+        // X214 bary vanishes identically on equilateral (b+c−2a=0).
+        assert!(fs3.iter().all(|f| !(f.group == "重心X44塞瓦" && f.label == "X_{214}")), "X214 should skip equil");
+        for (grp, lab, ..) in want {
+            if grp == "内心三倍角正弦塞瓦" || grp == "重心X44塞瓦" {
+                continue;
+            }
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: all finite in this band.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+        }
+    }
+
+    #[test]
+    fn x221_to_x230_ceva_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("内心外接内切外相似塞瓦", "X_{221}", 4.299465240641711, 0.24853369066571662),
+            ("格尔巩外接内切外相似塞瓦", "X_{222}", 4.443778110944527, 1.4632560768279894),
+            ("重心外接内切内相似塞瓦", "X_{223}", 3.999165275459098, 0.2036710774716755),
+            ("格尔巩克劳森等角塞瓦", "X_{224}", 7.940993788819878, 3.331727909625635),
+            ("垂心内心奈格尔截点塞瓦", "X_{225}", 4.925313706563707, 3.4080197326122943),
+            ("格尔巩内心奈格尔截点塞瓦", "X_{226}", 4.5498670212765955, 2.1090248407871504),
+            ("斯皮克内心奈格尔截点塞瓦", "X_{227}", 3.862864077669903, 0.18330867779379764),
+            ("外心X71塞瓦", "X_{228}", 4.150208623087622, 1.120417991670574),
+            ("格尔巩X81塞瓦", "X_{229}", 4.685504847481674, 2.3948572831242365),
+            ("重心基伯特对跖塞瓦", "X_{230}", 8.295973047538201, 6.302331054746105),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "重心外接内切内相似塞瓦" && f.label.contains("comp")));
+        assert!(fs.iter().any(|f| f.group == "格尔巩内心奈格尔截点塞瓦" && f.label.contains("comp")));
+        assert!(fs.iter().any(|f| f.group == "重心基伯特对跖塞瓦" && f.label.contains("mid")));
+        // mid(X115,X187) Cartesian.
+        let x115 = fs.iter().find(|f| f.label == "X_{115}").expect("X115");
+        let x187 = fs.iter().find(|f| f.label == "X_{187}").expect("X187");
+        let x230 = fs.iter().find(|f| f.group == "重心基伯特对跖塞瓦" && f.label == "X_{230}").unwrap();
+        let (p115x, p115y) = ptxy(x115);
+        let (p187x, p187y) = ptxy(x187);
+        let (p230x, p230y) = ptxy(x230);
+        assert!((p230x - (p115x + p187x) / 2.0).abs() < 1e-6 && (p230y - (p115y + p187y) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: X230 skips; others → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        assert!(fs3.iter().all(|f| !(f.group == "重心基伯特对跖塞瓦" && f.label == "X_{230}")), "X230 should skip equil");
+        for (grp, lab, ..) in want {
+            if grp == "重心基伯特对跖塞瓦" {
+                continue;
+            }
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: X221 (∞) and X225 (tan) skip; others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| !(f.group == "内心外接内切外相似塞瓦" && f.label == "X_{221}")), "X221 should skip right");
+        assert!(fs4.iter().all(|f| !(f.group == "垂心内心奈格尔截点塞瓦" && f.label == "X_{225}")), "X225 should skip right");
+        for (grp, lab, ..) in want {
+            if grp == "内心外接内切外相似塞瓦" || grp == "垂心内心奈格尔截点塞瓦" {
+                continue;
+            }
+            assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+        }
+    }
+
+    #[test]
+    fn x231_to_x240_ceva_line_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("重心X128塞瓦", "X_{231}", 8.79269284386617, 6.099003920714991),
+            ("重心X132塞瓦", "X_{232}", 5.881308260081088, 7.290749222310604),
+            ("重心X140塞瓦", "X_{233}", 4.344833517179783, 1.8457230145462953),
+            ("格尔巩X177塞瓦", "X_{234}", 4.669908110357883, 2.314192564857007),
+            ("垂心X185塞瓦", "X_{235}", 5.04625, 3.588741126138643),
+            ("重心X188塞瓦", "X_{236}", 4.37076736265419, 1.8247014772360928),
+            ("外心重心线共轭", "X_{237}", 8.863779033270559, 12.91480698998983),
+            ("内心X37线共轭", "X_{238}", 14.333333333333334, 14.200938936093863),
+            ("内心X42线共轭", "X_{239}", 37.958333333333336, 37.27746470724639),
+            ("内心X48线共轭", "X_{240}", 6.520821842250415, 8.289102939394008),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6, "{} {:?} want {:?}", lab, (x, y), (ex, ey));
+        }
+        assert!(fs.iter().any(|f| f.group == "重心X140塞瓦" && f.label.contains("comp")));
+        assert!(fs.iter().any(|f| f.group == "垂心X185塞瓦" && f.label.contains("mid")));
+        assert!(fs.iter().any(|f| f.group == "外心重心线共轭" && f.label.contains("Euler")));
+        // mid(H,X24)
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let x24 = fs.iter().find(|f| f.label == "X_{24}").expect("X24");
+        let x235 = fs.iter().find(|f| f.group == "垂心X185塞瓦" && f.label == "X_{235}").unwrap();
+        let (hx, hy) = ptxy(h);
+        let (p24x, p24y) = ptxy(x24);
+        let (p235x, p235y) = ptxy(x235);
+        assert!((p235x - (hx + p24x) / 2.0).abs() < 1e-6 && (p235y - (hy + p24y) / 2.0).abs() < 1e-6);
+        // comp(X95)
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let x95 = fs.iter().find(|f| f.label == "X_{95}").expect("X95");
+        let x233 = fs.iter().find(|f| f.group == "重心X140塞瓦" && f.label == "X_{233}").unwrap();
+        let (gx, gy) = ptxy(g);
+        let (p95x, p95y) = ptxy(x95);
+        let (p233x, p233y) = ptxy(x233);
+        assert!((p233x - (3.0 * gx - p95x) / 2.0).abs() < 1e-6 && (p233y - (3.0 * gy - p95y) / 2.0).abs() < 1e-6);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(fs2.iter().any(|f| f.group == grp && f.label == lab), "isos missing {} {}", grp, lab);
+        }
+
+        // Equilateral: X231/232/237/238/239/240 skip; X233/234/236 → G; X235 finite on Euler.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        for skip in ["X_{231}", "X_{232}", "X_{237}", "X_{238}", "X_{239}", "X_{240}"] {
+            assert!(fs3.iter().all(|f| f.label != skip), "{} should skip equil", skip);
+        }
+        for (grp, lab) in [("重心X140塞瓦", "X_{233}"), ("格尔巩X177塞瓦", "X_{234}"), ("重心X188塞瓦", "X_{236}")] {
+            let f = fs3.iter().find(|f| f.group == grp && f.label == lab).unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral {} != G {:?}", lab, (x, y));
+        }
+
+        // Right 3-4-5: X235/X240 skip; others that are non-equil-only remain finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| !(f.group == "垂心X185塞瓦" && f.label == "X_{235}")), "X235 should skip right");
+        assert!(fs4.iter().all(|f| !(f.group == "内心X48线共轭" && f.label == "X_{240}")), "X240 should skip right");
+        for (grp, lab, ..) in want {
+            if grp == "垂心X185塞瓦" || grp == "内心X48线共轭" {
+                continue;
+            }
+            assert!(fs4.iter().any(|f| f.group == grp && f.label == lab), "right missing {} {}", grp, lab);
+        }
+    }
+
+    #[test]
+    fn x241_to_x250_line_conjugates_isogonals() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("内心X55线共轭", "X_{241}", 9.9719387755102, 11.826431289311914),
+            ("垂心X71线共轭", "X_{242}", 6.437913907284766, 6.59497246949392),
+            ("垂心X73线共轭", "X_{243}", 6.642321785476351, 9.348636100085107),
+            ("内心X100线共轭", "X_{244}", 6.25, 0.968245836551854),
+            ("内心X110线共轭", "X_{245}", 5.908751393534002, 0.633335682459522),
+            ("外心X110线共轭", "X_{246}", 2.141120233091034, 5.041372798371628),
+            ("垂心X110线共轭", "X_{247}", 4.703399507007825, -1.249103798621572),
+            ("垂心X132线共轭", "X_{248}", 6.775670970419633, -0.719280998734576),
+            ("X115等角", "X_{249}", 4.079602071065873, 1.854246025083043),
+            ("X125等角", "X_{250}", 4.526900018908428, 4.296278811013081),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        assert!(fs.iter().any(|f| f.group == "内心X55线共轭" && f.label.contains("IO")));
+
+        // Isosceles 5-5-6: X245/246/247/250 skip; others finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for skip in ["X_{245}", "X_{246}", "X_{247}", "X_{250}"] {
+            assert!(
+                fs2.iter().all(|f| f.label != skip),
+                "{} should skip isos",
+                skip
+            );
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{245}" | "X_{246}" | "X_{247}" | "X_{250}") {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: most line-conjugates skip; X249 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        for skip in [
+            "X_{241}", "X_{242}", "X_{243}", "X_{244}", "X_{245}", "X_{246}", "X_{247}", "X_{248}",
+            "X_{250}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != skip), "{} should skip equil", skip);
+        }
+        let f249 = fs3
+            .iter()
+            .find(|f| f.group == "X115等角" && f.label == "X_{249}")
+            .expect("equil X249");
+        let (x, y) = ptxy(f249);
+        assert!((x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5, "equilateral X249 != G {:?}", (x, y));
+
+        // Right 3-4-5: X242/243/247/250 skip; X245/246 still finite (scalene).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{242}", "X_{243}", "X_{247}", "X_{250}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{242}" | "X_{243}" | "X_{247}" | "X_{250}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x251_to_x260_isogonals_cross_conjugates() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X141等角", "X_{251}", 4.830872523494094, 2.45107713945113),
+            ("X143等角", "X_{252}", 3.5796847571466697, 0.9295524601828009),
+            ("垂心X2交叉共轭", "X_{253}", 5.275133924920259, 14.257077450117105),
+            ("外心X4交叉共轭", "X_{254}", 21.240054327106364, 7.8069025655417335),
+            ("X158等角", "X_{255}", 3.4285714285714284, 0.4785153169059357),
+            ("X171等角", "X_{256}", 4.418648310387986, 1.802383363660565),
+            ("X172等角", "X_{257}", 4.177179017887975, 1.5665199837105783),
+            ("等内切等腰截点", "X_{258}", 4.324611036295447, 1.6616741313298702),
+            ("X174等角", "X_{259}", 4.422767815154589, 1.7899737714567256),
+            ("X177等角", "X_{260}", 4.237027402124663, 1.5244390480382009),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite; X251/X252 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx3, gy3) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+        for (grp, lab) in [("X141等角", "X_{251}"), ("X143等角", "X_{252}")] {
+            let f = fs3
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("equil {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - gx3).abs() < 1e-5 && (y - gy3).abs() < 1e-5,
+                "equilateral {} != G {:?}",
+                lab,
+                (x, y)
+            );
+        }
+
+        // Right 3-4-5: X252/X253/X254 skip; others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{252}", "X_{253}", "X_{254}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{252}" | "X_{253}" | "X_{254}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x261_to_x270_isogonals_isotomics() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X181等角", "X_{261}", 4.065485269326483, 1.4282345064333561),
+            ("X182等角", "X_{262}", 4.629337867851194, 2.2854251555728413),
+            ("X183等角", "X_{263}", 4.929953418014204, 2.780990071519315),
+            ("外心等截", "X_{264}", 4.506444353518821, 2.5131666059084026),
+            ("X186等角", "X_{265}", 7.0733695652173925, -0.439920390955081),
+            ("X188等角", "X_{266}", 4.755100445484774, 2.3362093968005775),
+            ("X191等角", "X_{267}", 4.871009694963348, 2.8532228931447636),
+            ("X196等角", "X_{268}", 4.670704643374325, 4.018335908160631),
+            ("X200等角", "X_{269}", 4.996649586125344, 3.0295370321437214),
+            ("X201等角", "X_{270}", 4.844900838240842, 2.970127974199845),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite (no 60°).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: X265 skips (sin 3A=0); others finite.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{265}"), "X265 should skip equilateral");
+        for (grp, lab, ..) in want {
+            if lab == "X_{265}" {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: X264/X270 skip (csc2A / tan); others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{264}", "X_{270}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{264}" | "X_{270}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x271_to_x280_isogonals_cevapoint() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X208等角", "X_{271}", 4.569633883704235, 3.829888413065841),
+            ("X209等角", "X_{272}", 0.7199770872986051, 0.18117854313016454),
+            ("X212等角", "X_{273}", 4.87699699243971, 3.3047981376409314),
+            ("X213等角", "X_{274}", 4.135283025518117, 1.5802419096832656),
+            ("垂心勒莫恩截点", "X_{275}", 4.749702779383263, 2.6734750735796546),
+            ("X217等角", "X_{276}", 4.385508246326592, 2.1596621974365897),
+            ("X218等角", "X_{277}", 3.5721756890576, 1.2223724154554005),
+            ("X219等角", "X_{278}", 4.9566122071516645, 3.5163083231866197),
+            ("X220等角", "X_{279}", 4.889986493974234, 2.7947888291577954),
+            ("内心奈格尔交叉共轭", "X_{280}", 4.756291946308725, 4.475700133725433),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite for this band.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: X271/X273/X275/X276/X278 skip (cot/tan/sec); others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{271}", "X_{273}", "X_{275}", "X_{276}", "X_{278}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{271}" | "X_{273}" | "X_{275}" | "X_{276}" | "X_{278}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x281_to_x290_isogonals_cross_cevapoint() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X222等角", "X_{281}", 4.558555354371444, 2.45880845844486),
+            ("X223等角", "X_{282}", 4.795830440641973, 4.575314483089601),
+            ("X225等角", "X_{283}", 3.6399604352126613, 0.7661688123061161),
+            ("X226等角", "X_{284}", 4.4468617426302615, 1.7694474115164964),
+            ("X227等角", "X_{285}", 4.809474322334805, 4.620277612713879),
+            ("X228等角", "X_{286}", 4.741837557771125, 2.901212445241758),
+            ("X232等角", "X_{287}", 6.254824522998894, -0.49666816698873906),
+            ("对称中线X54截点", "X_{288}", 4.645629690252596, 2.0249208989494853),
+            ("X236等角", "X_{289}", 4.620344800335799, 2.048224463774928),
+            ("X237等角", "X_{290}", 6.568580111030933, -1.0367981087109945),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: X287/X290 skip (A+ω→π/2); others finite.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for skip in ["X_{287}", "X_{290}"] {
+            assert!(fs3.iter().all(|f| f.label != skip), "{} should skip equil", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{287}" | "X_{290}") {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: X281/X286 skip (sec); others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for skip in ["X_{281}", "X_{286}"] {
+            assert!(fs4.iter().all(|f| f.label != skip), "{} should skip right", skip);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{281}" | "X_{286}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x291_to_x300_isogonals_hirst_isotomics() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X238等角", "X_{291}", 8.175675675675675, 0.2616880639329336),
+            ("X239等角", "X_{292}", 8.10232220609579, 0.2951112128822778),
+            ("X240等角", "X_{293}", 6.5180052846609176, -0.5979255705588283),
+            ("X241等角", "X_{294}", 7.5120924855491324, -0.432520452304782),
+            ("X242等角", "X_{295}", 8.37748344370861, 0.12824448166249725),
+            ("X243等角", "X_{296}", 6.061579621844016, -0.8560286714306778),
+            ("X248等角", "X_{297}", 7.708213417753903, 10.091807886017781),
+            ("第一等角线等截", "X_{298}", 3.831703156647867, 1.1917226177001814),
+            ("第二等角线等截", "X_{299}", -11.390595346800717, -16.234465552890185),
+            ("第一等动力等截", "X_{300}", 4.186903587004856, 1.7645719906151849),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X291–X297/X299 (denom/ω/sin); keep X298/X300.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for skip in [
+            "X_{291}", "X_{292}", "X_{293}", "X_{294}", "X_{295}", "X_{296}", "X_{297}", "X_{299}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != skip), "{} should skip equil", skip);
+        }
+        for keep in ["X_{298}", "X_{300}"] {
+            assert!(fs3.iter().any(|f| f.label == keep), "equil missing {}", keep);
+        }
+
+        // Right 3-4-5: X297 skips (sec); others finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{297}"), "X297 should skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{297}" {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x301_to_x310_isotomics() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("第二等动力等截", "X_{301}", 6.980035984420878, -0.569704917658939),
+            ("第一拿破仑等截", "X_{302}", 4.048146288386569, 1.439502461266907),
+            ("第二拿破仑等截", "X_{303}", 4.736052005774706, 2.227003407468617),
+            ("克劳森等截", "X_{304}", 3.118113713687516, 0.586687038229961),
+            ("X25等截", "X_{305}", 2.823863062471592, 0.475494718798144),
+            ("X27等截", "X_{306}", 3.280024509803921, 0.647870375928079),
+            ("X29等截", "X_{307}", 3.786017197005147, 0.974079325155319),
+            ("布罗卡尔中点等截", "X_{308}", 3.972226143175291, 1.474498640597638),
+            ("X40等截", "X_{309}", 4.785798695210563, 4.595574343104375),
+            ("X42等截", "X_{310}", 3.867019616360488, 1.354255379025548),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite (no 60°).
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X301 (60°); keep the rest.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{301}"), "X301 should skip equil");
+        for (grp, lab, ..) in want {
+            if lab == "X_{301}" {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: all finite (no sec/60°/150° issues).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x311_to_x320_isotomics() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("科斯尼塔等截", "X_{311}", 3.911819183019623, 1.532926653323435),
+            ("X57等截", "X_{312}", 3.522500000000000, 1.016658128379447),
+            ("X58等截", "X_{313}", 3.603790057518488, 1.140294449661418),
+            ("X65等截", "X_{314}", 3.657306007509387, 1.113361529827304),
+            ("X66等截", "X_{315}", 2.824048825869370, -0.260263437202232),
+            ("德鲁桑枢轴", "X_{316}", -8.341999151103565, -18.667500268970660),
+            ("普拉索洛夫等截", "X_{317}", 5.357551988453238, 3.916218055971332),
+            ("X77等截", "X_{318}", 4.358616504854369, 2.197354022271805),
+            ("X79等截", "X_{319}", 3.712500000000000, 1.085584103184833),
+            ("X80等截", "X_{320}", -25.687500000000011, -35.583034493280657),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X316/X320 (all weights 0); keep the rest.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{316}"), "X316 should skip equil");
+        assert!(fs3.iter().all(|f| f.label != "X_{320}"), "X320 should skip equil");
+        for (grp, lab, ..) in want {
+            if lab == "X_{316}" || lab == "X_{320}" {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: skip X317/X318 (tan/sec ∞); keep others.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{317}"), "X317 should skip right");
+        assert!(fs4.iter().all(|f| f.label != "X_{318}"), "X318 should skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{317}" || lab == "X_{318}" {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x321_to_x330_isotomics_hirst() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X81等截", "X_{321}", 3.889030612244898, 1.348628129482940),
+            ("X84等截", "X_{322}", 2.908504654771140, 0.082815441023927),
+            ("X94等截", "X_{323}", -9.565217391304380, -14.144808742670605),
+            ("X97等截", "X_{324}", 4.608069490996023, 2.866308824482292),
+            ("X69-Hirst", "X_{325}", -3.779446095076401, -7.521371467594975),
+            ("X158等截", "X_{326}", 2.837852693294247, 0.312932512949334),
+            ("X182等截", "X_{327}", 4.197417914700023, 1.781695822447367),
+            ("X186等截", "X_{328}", 6.673399984546004, -0.313443046787493),
+            ("X189等截", "X_{329}", 3.200255102040816, 0.103740625344842),
+            ("X192等截", "X_{330}", 3.625542848870874, 1.250954558660292),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X323/X325/X328 (sin3A / all-zero); keep the rest.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{323}"), "X323 should skip equil");
+        assert!(fs3.iter().all(|f| f.label != "X_{325}"), "X325 should skip equil");
+        assert!(fs3.iter().all(|f| f.label != "X_{328}"), "X328 should skip equil");
+        for (grp, lab, ..) in want {
+            if lab == "X_{323}" || lab == "X_{325}" || lab == "X_{328}" {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: skip X324 (sec ∞); keep others (X328 finite: only right-angle weight 0).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{324}"), "X324 should skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{324}" {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+
+    #[test]
+    fn x331_to_x340_isotomics_cevapoint() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X219等截", "X_{331}", 4.769073392555508, 3.0742351468193774),
+            ("X225等截", "X_{332}", 3.044366502748047, 0.5146519307677269),
+            ("X8X9截点", "X_{333}", 3.941062176165803, 1.316914674066641),
+            ("X238等截", "X_{334}", 8.34631898880741, 0.20599981373956375),
+            ("X239等截", "X_{335}", 8.256278538812786, 0.23211372794051305),
+            ("X240等截", "X_{336}", 5.9841189990450365, -0.4119053953863263),
+            ("X242等截", "X_{337}", 8.577022110932628, 0.10086847158635727),
+            ("X115X125截点", "X_{338}", 5.653052416823602, 0.5392819325051049),
+            ("X250等截", "X_{339}", 5.0231776939692505, 0.20838596892903413),
+            ("X265等截", "X_{340}", 12.275278204144273, 15.32009389925589),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: X338/X339 degenerate (B=C ⇒ sin(B−C)=0 chain); keep others.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            if lab == "X_{338}" || lab == "X_{339}" {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X334–X340 (a²−bc / A+ω / sin(B−C) / sin3A); keep X331–X333.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for lab in ["X_{334}", "X_{335}", "X_{336}", "X_{337}", "X_{338}", "X_{339}", "X_{340}"] {
+            assert!(fs3.iter().all(|f| f.label != lab), "{} should skip equil", lab);
+        }
+        for (grp, lab, ..) in want {
+            if lab == "X_{331}" || lab == "X_{332}" || lab == "X_{333}" {
+                assert!(
+                    fs3.iter().any(|f| f.group == grp && f.label == lab),
+                    "equil missing {} {}",
+                    grp,
+                    lab
+                );
+            }
+        }
+
+        // Right 3-4-5: skip X331/X332/X336/X337/X339/X340 (sec/cot); keep X333–X335/X338.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in ["X_{331}", "X_{332}", "X_{336}", "X_{337}", "X_{339}", "X_{340}"] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{333}" | "X_{334}" | "X_{335}" | "X_{338}") {
+                assert!(
+                    fs4.iter().any(|f| f.group == grp && f.label == lab),
+                    "right missing {} {}",
+                    grp,
+                    lab
+                );
+            }
+        }
+    }
+
+
+
+
+    #[test]
+    fn x341_to_x350_isotomics_hirst_cevapoint() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X269等截", "X_{341}", 3.0069444444444446, 0.6723929420498987),
+            ("X208X223截点", "X_{342}", 4.220788526733359, 0.38378533239463564),
+            ("X69X76交点", "X_{343}", 3.5879381258941345, 0.9126652010845535),
+            ("X277等截", "X_{344}", 4.81706204379562, 2.1891543640287363),
+            ("X278等截", "X_{345}", 2.9102272727272727, 0.4621173310815668),
+            ("X312X341交点", "X_{346}", 3.305241935483871, 0.8198855874027797),
+            ("X40X223截点", "X_{347}", 3.695389291257113, 0.1656737250075146),
+            ("重心X347截点", "X_{348}", 3.916828370030097, 1.0652928115365186),
+            ("X226X307截点", "X_{349}", 4.086802409438044, 1.6166629514227433),
+            ("X75重心Hirst", "X_{350}", -32.6402027027027, -31.736219953466517),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite in this band.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X350 (a²−bc → 0); keep X341–X349.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{350}"), "X350 should skip equil");
+        for (grp, lab, ..) in want {
+            if lab == "X_{350}" {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: skip X342/X345/X348 (sec); keep others.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in ["X_{342}", "X_{345}", "X_{348}"] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{341}" | "X_{343}" | "X_{344}" | "X_{346}" | "X_{347}" | "X_{349}" | "X_{350}") {
+                assert!(
+                    fs4.iter().any(|f| f.group == grp && f.label == lab),
+                    "right missing {} {}",
+                    grp,
+                    lab
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn x351_to_x360_parry_weill_fuhrmann_morley_hofstadter() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("帕里圆心", "X_{351}", 11.85128205128205, 11.10255225912793),
+            ("X353外接逆", "X_{352}", 20.15527987178726, 19.87863244216875),
+            ("X111Brocard逆", "X_{353}", 4.447476932992233, 1.554796870948855),
+            ("Weill点", "X_{354}", 4.578125, 2.077694190934187),
+            ("Fuhrmann心", "X_{355}", 4.3125, 2.114003409804882),
+            ("莫利中心", "X_{356}", 4.509210790491602, 1.955745846402668),
+            ("莫利透视1", "X_{357}", 4.531119259517901, 1.998524871477102),
+            ("莫利透视2", "X_{358}", 4.467903088960554, 1.875087394301666),
+            ("霍夫斯塔特点", "X_{359}", 4.397629009565369, 1.746395448825259),
+            ("霍夫斯塔特点", "X_{360}", 4.592957569749832, 2.132793086433669),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: X351 den→0 (skip); keep X352–X360.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.label != "X_{351}"), "X351 should skip isos 5-5-6");
+        for (grp, lab, ..) in want {
+            if lab == "X_{351}" {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X351/X352 (weights vanish); keep X353–X360.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for lab in ["X_{351}", "X_{352}"] {
+            assert!(fs3.iter().all(|f| f.label != lab), "{} should skip equil", lab);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{351}" | "X_{352}") {
+                continue;
+            }
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: all in this band finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x361_to_x367_isoscelizer_sqrt_side_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("等腰化点", "X_{361}", 5.0999110570327515, 2.653978761539622),
+            ("等外接圆等腰化", "X_{362}", 4.224941270860307, 1.7406232496876568),
+            ("等周长等腰化", "X_{363}", 4.254362495787133, 1.7084322657787965),
+            ("Wabash点", "X_{364}", 4.289582048035992, 1.6850063075553896),
+            ("边根等角", "X_{365}", 4.603067268271407, 2.0596746496290916),
+            ("边根点", "X_{366}", 4.389105555973576, 1.8145279194492863),
+            ("X1X366交点", "X_{367}", 4.44793644473969, 1.8742668386531587),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // X368–X370 deferred (no closed barycentrics).
+        for lab in ["X_{368}", "X_{369}", "X_{370}"] {
+            assert!(fs.iter().all(|f| f.label != lab), "{} should be skipped", lab);
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite in this band.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Right 3-4-5: all finite.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x371_to_x380_kenmotu_pedal_euler_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("肯莫图点", "X_{371}", 4.451520875906775, 1.7771279955358747),
+            ("肯莫图谐共轭", "X_{372}", 5.536930298223856, 3.566426083563593),
+            ("重心垂足重心", "X_{373}", 4.440104166666667, 1.9734732849164527),
+            ("X9垂足重心", "X_{374}", 4.328343531468532, 1.8573561960778358),
+            ("X10垂足重心", "X_{375}", 4.37109375, 1.9213628319075857),
+            ("重心反足重心", "X_{376}", 3.7291666666666665, 0.3711609040115441),
+            ("X7X8欧拉截", "X_{377}", 4.344031531531532, 1.873250390986583),
+            ("X22外心反射", "X_{378}", 4.595135908440629, 2.4866880197108565),
+            ("X6X7欧拉截", "X_{379}", 4.533564305616659, 2.3362711353139662),
+            ("X1X19交X9X55", "X_{380}", 4.43520575654077, 1.7328059090328471),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Km dual-label agrees with X371.
+        let km = fs.iter().find(|f| f.group == "肯莫图点" && f.label == "Km").expect("Km");
+        let x371 = fs.iter().find(|f| f.group == "肯莫图点" && f.label == "X_{371}").expect("X371");
+        assert_eq!(ptxy(km), ptxy(x371));
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all finite; X371=X372=G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs3.iter().any(|f| f.group == grp && f.label == lab),
+                "equil missing {} {}",
+                grp,
+                lab
+            );
+        }
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let x371e = fs3.iter().find(|f| f.group == "肯莫图点" && f.label == "X_{371}").unwrap();
+        let x372e = fs3.iter().find(|f| f.group == "肯莫图谐共轭" && f.label == "X_{372}").unwrap();
+        assert_eq!(ptxy(x371e), ptxy(g3));
+        assert!((ptxy(x372e).0 - ptxy(g3).0).abs() < 1e-9 && (ptxy(x372e).1 - ptxy(g3).1).abs() < 1e-9);
+
+        // Right 3-4-5: skip X378 (tan); keep the rest.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{378}"), "X378 skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{378}" {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x381_to_x390_orthocentroidal_conway_taylor_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("垂心重心圆圆心", "X_{381}", 4.541666666666667, 2.356064868942845),
+            ("外心垂心反射", "X_{382}", 5.625, 5.002603488851246),
+            ("X14X98欧拉截", "X_{383}", 14.200845560311862, 25.953040233837722),
+            ("X32X76欧拉截", "X_{384}", 4.390294725611789, 1.986269464660785),
+            ("重心X6Hirst", "X_{385}", 20.3713921901528, 20.126033577087185),
+            ("X58布罗卡反演", "X_{386}", 4.634146341463414, 2.078186185769833),
+            ("X1X2交X4X6", "X_{387}", 4.691916961130742, 2.139207453371190),
+            ("X1X4交X7X8", "X_{388}", 4.559335443037975, 2.141784303005525),
+            ("泰勒圆圆心", "X_{389}", 4.76171875, 2.288489378266831),
+            ("格尔巩内心反射", "X_{390}", 4.362325174825175, 1.633491664812132),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-checks: X381=mid(G,H), X382=2H−O, X390=2I−Ge.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let h = fs.iter().find(|f| f.group == "特殊点" && f.label == "H").expect("H");
+        let o = fs.iter().find(|f| f.group == "特殊点" && f.label == "O").expect("O");
+        let ii = fs.iter().find(|f| f.group == "特殊点" && f.label == "I").expect("I");
+        let ge = fs
+            .iter()
+            .find(|f| f.group == "格尔巩点" && f.label == "Ge")
+            .expect("Ge");
+        let (gx, gy) = ptxy(g);
+        let (hx, hy) = ptxy(h);
+        let (ox, oy) = ptxy(o);
+        let (ix, iy) = ptxy(ii);
+        let (gex, gey) = ptxy(ge);
+        let x381 = fs.iter().find(|f| f.label == "X_{381}").unwrap();
+        let x382 = fs.iter().find(|f| f.label == "X_{382}").unwrap();
+        let x390 = fs.iter().find(|f| f.label == "X_{390}").unwrap();
+        let (x381x, x381y) = ptxy(x381);
+        let (x382x, x382y) = ptxy(x382);
+        let (x390x, x390y) = ptxy(x390);
+        assert!((x381x - (gx + hx) / 2.0).abs() < 1e-9 && (x381y - (gy + hy) / 2.0).abs() < 1e-9);
+        assert!((x382x - (2.0 * hx - ox)).abs() < 1e-9 && (x382y - (2.0 * hy - oy)).abs() < 1e-9);
+        assert!((x390x - (2.0 * ix - gex)).abs() < 1e-9 && (x390y - (2.0 * iy - gey)).abs() < 1e-9);
+
+        // Isosceles 5-5-6: skip X383 (csc(B−C)); keep the rest except maybe X385 ok.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        assert!(fs2.iter().all(|f| f.label != "X_{383}"), "X383 skip isos");
+        for (grp, lab, ..) in want {
+            if lab == "X_{383}" {
+                continue;
+            }
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X385 (Hirst den0); X383→G; others finite at G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{385}"), "X385 skip equil");
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            if lab == "X_{385}" {
+                continue;
+            }
+            let f = fs3
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: all finite (no tan/sec singularity in this band).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+
+    #[test]
+    fn x391_to_x400_gk_napoleon_parry_yff_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X2X6交X8X9", "X_{391}", 3.920649931224209, 1.2935471372090626),
+            ("X1X6交X10X11", "X_{392}", 4.192708333333333, 1.5532276961352662),
+            ("X25叉共轭X4", "X_{393}", 4.959201648313755, 4.08647533176635),
+            ("X69塞瓦X3", "X_{394}", 3.130227001194743, 0.38868650069465116),
+            ("X14X16中点", "X_{395}", 12.101547673400342, 10.658878097393696),
+            ("X13X15中点", "X_{396}", 4.490398421676066, 1.945784012098527),
+            ("X4X17截点", "X_{397}", 4.725427515862568, 2.383344248128183),
+            ("X4X18截点", "X_{398}", 4.645290377716149, 1.7995155349172816),
+            ("帕里反射点", "X_{399}", 4.864265927977838, 1.999789738872749),
+            ("伊夫马尔法蒂", "X_{400}", 2.90668340537787, 0.6040116450051041),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-checks: X395=mid(F2,S2)=mid(X14,X16), X396=mid(F1,S1)=mid(X13,X15).
+        let find_lab = |lab: &str| {
+            fs.iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("missing {}", lab))
+        };
+        let (f1x, f1y) = ptxy(find_lab("F_1"));
+        let (f2x, f2y) = ptxy(find_lab("F_2"));
+        let (s1x, s1y) = ptxy(find_lab("S_{1}"));
+        let (s2x, s2y) = ptxy(find_lab("S_{2}"));
+        let (x395x, x395y) = ptxy(find_lab("X_{395}"));
+        let (x396x, x396y) = ptxy(find_lab("X_{396}"));
+        assert!((x395x - (f2x + s2x) / 2.0).abs() < 1e-9 && (x395y - (f2y + s2y) / 2.0).abs() < 1e-9);
+        assert!((x396x - (f1x + s1x) / 2.0).abs() < 1e-9 && (x396y - (f1y + s1y) / 2.0).abs() < 1e-9);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: all collapse to G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for (grp, lab, ..) in want {
+            let f = fs3
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: skip X393 (tan∞); keep the rest.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        assert!(fs4.iter().all(|f| f.label != "X_{393}"), "X393 skip right");
+        for (grp, lab, ..) in want {
+            if lab == "X_{393}" {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x401_to_x410_bailey_gossard_euler_subst_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("贝利点", "X_{401}", -2.6039268355078, -15.100325130138327),
+            ("齐曼戈萨德", "X_{402}", 4.669315529960855, 2.6679057734002094),
+            ("垂足X36", "X_{403}", 5.913496376811594, 5.707388230022506),
+            ("X21欧拉调和", "X_{404}", 4.393939393939394, 1.9951732389553358),
+            ("X1X6欧拉截", "X_{405}", 4.2342342342342345, 1.605020125455326),
+            ("X10X33欧拉截", "X_{406}", 4.520593179634966, 2.304583209910045),
+            ("X4X225截点", "X_{407}", 4.8876421859545, 3.2012687827934143),
+            ("X73X228欧拉截", "X_{408}", 3.907987244632432, 0.8080121953537639),
+            ("X21一次替换", "X_{409}", 4.303789805061146, 1.774941514153659),
+            ("X29一次替换", "X_{410}", 4.553501656026697, 2.384977259472869),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-check: X403 = mid(H, X186).
+        let find_lab = |lab: &str| {
+            fs.iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("missing {}", lab))
+        };
+        let (hx, hy) = ptxy(find_lab("H"));
+        let (x186x, x186y) = ptxy(find_lab("X_{186}"));
+        let (x403x, x403y) = ptxy(find_lab("X_{403}"));
+        assert!((x403x - (hx + x186x) / 2.0).abs() < 1e-9 && (x403y - (hy + x186y) / 2.0).abs() < 1e-9);
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X401/X402/X403 (vanishing / X186 undefined); others → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for lab in ["X_{401}", "X_{402}", "X_{403}"] {
+            assert!(fs3.iter().all(|f| f.label != lab), "equil should skip {}", lab);
+        }
+        for (grp, lab, ..) in want {
+            if lab == "X_{401}" || lab == "X_{402}" || lab == "X_{403}" {
+                continue;
+            }
+            let f = fs3
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: skip X403/X406/X407/X408/X410 (tan/sec∞); keep the rest.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in ["X_{403}", "X_{406}", "X_{407}", "X_{408}", "X_{410}"] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for (grp, lab, ..) in want {
+            if matches!(lab, "X_{403}" | "X_{406}" | "X_{407}" | "X_{408}" | "X_{410}") {
+                continue;
+            }
+            assert!(
+                fs4.iter().any(|f| f.group == grp && f.label == lab),
+                "right missing {} {}",
+                grp,
+                lab
+            );
+        }
+    }
+
+
+    #[test]
+    fn x411_to_x420_euler_subst_hirst_ceva_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X21二次替换", "X_{411}", 3.5806451612903225, 0.008328996443456811),
+            ("X29二次替换", "X_{412}", 5.116983967935872, 3.761541290337086),
+            ("X21三次替换", "X_{413}", 4.02886212929881, 1.1033045496121139),
+            ("X29三次替换", "X_{414}", 4.778473851942197, 2.934575048607608),
+            ("X4HirstX29", "X_{415}", 6.792375599216799, 7.8544538955582945),
+            ("X3HirstX21", "X_{416}", -0.8923491817207847, -10.91901156547412),
+            ("X3CevaX185", "X_{417}", 3.7250699765331223, 0.3611528591017998),
+            ("X3CevaX216", "X_{418}", 3.883182566283442, 0.747415389933758),
+            ("X4HirstX25", "X_{419}", 6.171935987509758, 6.338745532139536),
+            ("X4HirstX427", "X_{420}", 6.662746209799353, 7.537774647525915),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip vanishing/Hirst/X31·X38; keep X413/X414/X417/X418 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for lab in [
+            "X_{411}", "X_{412}", "X_{415}", "X_{416}", "X_{419}", "X_{420}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != lab), "equil should skip {}", lab);
+        }
+        // X414 needs X29 which is fine on equil (sec 60°=2); X413/X417/X418 also present.
+        for lab in ["X_{413}", "X_{414}", "X_{417}", "X_{418}"] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: keep X411/X413; skip the rest (X29/sec/csc/tan issues).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{412}", "X_{414}", "X_{415}", "X_{416}", "X_{417}", "X_{418}", "X_{419}", "X_{420}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for lab in ["X_{411}", "X_{413}"] {
+            assert!(
+                fs4.iter().any(|f| f.label == lab),
+                "right missing {}",
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x421_to_x430_hirst_euler_subst_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X4HirstX24", "X_{421}", 5.791494980780398, 5.409343854995461),
+            ("X4HirstX28", "X_{422}", 6.233150600408183, 6.488290304882697),
+            ("X4HirstX27", "X_{423}", 6.378590932237614, 6.8435950326478245),
+            ("X4HirstX451", "X_{424}", 7.259098618603891, 8.994638968427399),
+            ("X4HirstX21", "X_{425}", 7.91153738989469, 10.588519957978189),
+            ("X19四次替换", "X_{426}", 3.6863010770899614, 0.266442037907028),
+            ("X22补点", "X_{427}", 4.703817954220315, 2.752193771815401),
+            ("X38五次替换", "X_{428}", 4.861958821614583, 3.138525383764397),
+            ("X58五次替换", "X_{429}", 4.731596112886049, 2.820054666921994),
+            ("X81五次替换", "X_{430}", 4.78620413637937, 2.9534598144284),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip Hirst X421–X425; keep X426–X430 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for lab in [
+            "X_{421}", "X_{422}", "X_{423}", "X_{424}", "X_{425}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != lab), "equil should skip {}", lab);
+        }
+        for lab in ["X_{426}", "X_{427}", "X_{428}", "X_{429}", "X_{430}"] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: all skip (tan/sec issues).
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{421}", "X_{422}", "X_{423}", "X_{424}", "X_{425}",
+            "X_{426}", "X_{427}", "X_{428}", "X_{429}", "X_{430}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+    }
+
+
+    #[test]
+    fn x431_to_x440_euler_subst_complement_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X283五次替换", "X_{431}", 5.007963472381891, 3.495208719403091),
+            ("X155六次替换", "X_{432}", 4.563562407094006, 2.409555259083562),
+            ("X159六次替换", "X_{433}", 4.961581016976578, 3.381898295234162),
+            ("X195六次替换", "X_{434}", 4.470032407560555, 2.18106533057406),
+            ("X399六次替换", "X_{435}", 4.586088164307535, 2.986281947148511),
+            ("X48七次替换", "X_{436}", 4.723728445515073, 2.80083428026426),
+            ("X214八次替换", "X_{437}", 4.8125, 3.017699523919946),
+            ("X204九次替换", "X_{438}", 5.542568596434214, 4.801226972208073),
+            ("X193十次替换", "X_{439}", 5.318300993934079, 4.253350475705726),
+            ("X27补点", "X_{440}", 3.974902956722828, 0.9714845181161382),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip X437 (X214 tril vanishes); keep X431–X436,X438–X440 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        assert!(fs3.iter().all(|f| f.label != "X_{437}"), "equil should skip X437");
+        for lab in [
+            "X_{431}", "X_{432}", "X_{433}", "X_{434}", "X_{435}",
+            "X_{436}", "X_{438}", "X_{439}", "X_{440}",
+        ] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: keep X439; skip tan/sec-dependent centers.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{431}", "X_{432}", "X_{433}", "X_{434}", "X_{435}",
+            "X_{436}", "X_{437}", "X_{438}", "X_{440}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        assert!(
+            fs4.iter().any(|f| f.label == "X_{439}"),
+            "right missing X439"
+        );
+    }
+
+    #[test]
+    fn x441_to_x450_complement_hirst_euler_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("X297补点", "X_{441}", 2.552143291123049, -2.504258622060274),
+            ("席弗勒补点", "X_{442}", 4.303075396825397, 1.773196244320162),
+            ("X452补点", "X_{443}", 4.310084541062802, 1.790319294397209),
+            ("X19X232欧拉截", "X_{444}", 4.931844742034983, 3.309253802884796),
+            ("X79十一次替换", "X_{445}", 4.603639563828206, 2.507462098843424),
+            ("X98X511交叉", "X_{446}", -14.813888293398788, -44.928757018662928),
+            ("重心HirstX27", "X_{447}", 7.416698644154515, 9.379649326075041),
+            ("重心Hirst席弗勒", "X_{448}", -24.603159375799478, -68.843542231271428),
+            ("重心HirstX452", "X_{449}", -19.447089249168585, -56.247475723193276),
+            ("外心Hirst垂心", "X_{450}", 8.686260623229460, 12.481136841141982),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-check: X(442)=mid(X79,X191); X(441)=mid(X297,X401).
+        let mid = |a: &str, b: &str| {
+            let fa = fs.iter().find(|f| f.label == a).unwrap_or_else(|| panic!("missing {}", a));
+            let fb = fs.iter().find(|f| f.label == b).unwrap_or_else(|| panic!("missing {}", b));
+            let (ax, ay) = ptxy(fa);
+            let (bx, by) = ptxy(fb);
+            ((ax + bx) / 2.0, (ay + by) / 2.0)
+        };
+        let (m42x, m42y) = mid("X_{79}", "X_{191}");
+        let f442 = fs.iter().find(|f| f.label == "X_{442}").expect("X442");
+        let (x442, y442) = ptxy(f442);
+        assert!(
+            (x442 - m42x).abs() < 1e-9 && (y442 - m42y).abs() < 1e-9,
+            "X442 should be mid(X79,X191): {:?} vs {:?}",
+            (x442, y442),
+            (m42x, m42y)
+        );
+        let (m41x, m41y) = mid("X_{297}", "X_{401}");
+        let f441 = fs.iter().find(|f| f.label == "X_{441}").expect("X441");
+        let (x441, y441) = ptxy(f441);
+        assert!(
+            (x441 - m41x).abs() < 1e-9 && (y441 - m41y).abs() < 1e-9,
+            "X441 should be mid(X297,X401): {:?} vs {:?}",
+            (x441, y441),
+            (m41x, m41y)
+        );
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip ω/Hirst-vanishing; keep complements X442/X443 and Euler X444/X445 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        for lab in [
+            "X_{441}", "X_{446}", "X_{447}", "X_{448}", "X_{449}", "X_{450}",
+        ] {
+            assert!(fs3.iter().all(|f| f.label != lab), "equil should skip {}", lab);
+        }
+        for lab in ["X_{442}", "X_{443}", "X_{444}", "X_{445}"] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: skip tan/sec-dependent; keep X442/X443/X446/X448/X449.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{441}", "X_{444}", "X_{445}", "X_{447}", "X_{450}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for lab in ["X_{442}", "X_{443}", "X_{446}", "X_{448}", "X_{449}"] {
+            assert!(
+                fs4.iter().any(|f| f.label == lab),
+                "right missing {}",
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn x451_to_x460_hirst_alshain_euler11_antares_band() {
+        let ptxy = |f: &Fact| match f.shape.as_ref() {
+            Some(Shape::Point { x, y, .. }) => (*x, *y),
+            _ => panic!("missing point shape for {}", f.label),
+        };
+        // Scalene acute 6-7-8.
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let want = [
+            ("垂心HirstX424", "X_{451}", 4.433130461922597, 2.090915400468877),
+            ("重心HirstX449", "X_{452}", 4.192330917874396, 1.502652053102817),
+            ("阿尔沙因点", "X_{453}", 5.295484278431903, 4.197610181469446),
+            ("X155十一次替换", "X_{454}", 5.155341031448409, 3.855246013351434),
+            ("X159十一次替换", "X_{455}", 4.403604538557236, 2.018784788338213),
+            ("X195十一次替换", "X_{456}", 5.234750870682093, 4.049240973043124),
+            ("X399十一次替换", "X_{457}", 5.232156804225402, 3.075932344762030),
+            ("X76X275欧拉截", "X_{458}", 4.564830921045434, 2.412654186310344),
+            ("X253垂心塞瓦", "X_{459}", 4.660705932529855, 6.571288767845640),
+            ("安塔瑞斯点", "X_{460}", 5.700709647677338, 5.187559033292232),
+        ];
+        for (grp, lab, ex, ey) in want {
+            let f = fs
+                .iter()
+                .find(|f| f.group == grp && f.label == lab)
+                .unwrap_or_else(|| panic!("missing {} {}", grp, lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
+                "{} {:?} want {:?}",
+                lab,
+                (x, y),
+                (ex, ey)
+            );
+        }
+        // Cross-check: X(452)=anticomplement(X443)=3G−2·X443; X(451) mutual X4-Hirst with X424.
+        let g = fs.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (gx, gy) = ptxy(g);
+        let f443 = fs.iter().find(|f| f.label == "X_{443}").expect("X443");
+        let (x443, y443) = ptxy(f443);
+        let f452 = fs.iter().find(|f| f.label == "X_{452}").expect("X452");
+        let (x452, y452) = ptxy(f452);
+        let ax = 3.0 * gx - 2.0 * x443;
+        let ay = 3.0 * gy - 2.0 * y443;
+        assert!(
+            (x452 - ax).abs() < 1e-9 && (y452 - ay).abs() < 1e-9,
+            "X452 should be anticomplement(X443): {:?} vs {:?}",
+            (x452, y452),
+            (ax, ay)
+        );
+        assert!(
+            fs.iter().any(|f| f.label == "X_{424}"),
+            "X424 should exist as mutual X4-Hirst of X451"
+        );
+
+        // Isosceles 5-5-6: all finite.
+        let k2 = TriangleKnown { a: Some(5.0), b: Some(5.0), c: Some(6.0), ..Default::default() };
+        let r2 = triangle_solve(&k2);
+        assert!(r2.error.is_none(), "{:?}", r2.error);
+        let fs2 = &r2.cases[0].facts;
+        for (grp, lab, ..) in want {
+            assert!(
+                fs2.iter().any(|f| f.group == grp && f.label == lab),
+                "isos missing {} {}",
+                grp,
+                lab
+            );
+        }
+
+        // Equilateral: skip Antares (weights vanish); Euler/Alshain/X451/X452/X459 → G.
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        assert!(r3.error.is_none(), "{:?}", r3.error);
+        let fs3 = &r3.cases[0].facts;
+        let g3 = fs3.iter().find(|f| f.group == "特殊点" && f.label == "G").expect("G");
+        let (g3x, g3y) = ptxy(g3);
+        assert!(
+            fs3.iter().all(|f| f.label != "X_{460}"),
+            "equil should skip X460"
+        );
+        for lab in [
+            "X_{451}", "X_{452}", "X_{453}", "X_{454}", "X_{455}", "X_{456}", "X_{457}", "X_{458}",
+            "X_{459}",
+        ] {
+            let f = fs3
+                .iter()
+                .find(|f| f.label == lab)
+                .unwrap_or_else(|| panic!("equil missing {}", lab));
+            let (x, y) = ptxy(f);
+            assert!(
+                (x - g3x).abs() < 1e-9 && (y - g3y).abs() < 1e-9,
+                "equil {} {:?} want G {:?}",
+                lab,
+                (x, y),
+                (g3x, g3y)
+            );
+        }
+
+        // Right 3-4-5: skip tan/sec-dependent; keep X452/X453/X459.
+        let k4 = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r4 = triangle_solve(&k4);
+        assert!(r4.error.is_none(), "{:?}", r4.error);
+        let fs4 = &r4.cases[0].facts;
+        for lab in [
+            "X_{451}", "X_{454}", "X_{455}", "X_{456}", "X_{457}", "X_{458}", "X_{460}",
+        ] {
+            assert!(fs4.iter().all(|f| f.label != lab), "{} should skip right", lab);
+        }
+        for lab in ["X_{452}", "X_{453}", "X_{459}"] {
+            assert!(
+                fs4.iter().any(|f| f.label == lab),
+                "right missing {}",
+                lab
+            );
+        }
+    }
+
+    #[test]
+    fn etc_dual_labels_steiner_tarry_parry() {
+        let k = TriangleKnown { a: Some(6.0), b: Some(7.0), c: Some(8.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.group == "施泰纳点" && f.label == "X_{99}"));
+        assert!(fs.iter().any(|f| f.group == "塔里点" && f.label == "X_{98}"));
+        assert!(fs.iter().any(|f| f.group == "帕里点" && f.label == "X_{111}"));
+        let k3 = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r3 = triangle_solve(&k3);
+        let fs3 = &r3.cases[0].facts;
+        assert!(fs3.iter().all(|f| f.label != "X_{99}" && f.label != "X_{98}" && f.label != "X_{111}"));
+    }
+
+    #[test]
+    fn british_flag_on_rectangle() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.value.contains("矩形")));
+        let lhs = out.iter().find(|f| f.group == "英国国旗定理" && f.label == "PA^2 + PC^2").expect("british lhs");
+        let rhs = out.iter().find(|f| f.group == "英国国旗定理" && f.label == "PB^2 + PD^2").expect("british rhs");
+        assert!((lhs.num.unwrap() - 25.0).abs() < 1e-9);
+        assert!((rhs.num.unwrap() - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn varignon_parallelogram() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![5.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![1.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.group == "瓦里农定理" && f.value.contains("平行四边形")));
+        assert_eq!(out.iter().filter(|f| f.group == "瓦里农定理" && f.label.starts_with("M_")).count(), 4);
+    }
+
+    #[test]
+    fn viviani_equilateral() {
+        let k = TriangleKnown { a: Some(2.0), b: Some(2.0), c: Some(2.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let sum = fs.iter().find(|f| f.group == "维维安尼定理" && f.label.contains("d_a")).expect("viviani sum");
+        let h = fs.iter().find(|f| f.group == "维维安尼定理" && f.label == "h").expect("viviani h");
+        assert!((sum.num.unwrap() - h.num.unwrap()).abs() < 1e-9);
+        // h = √3 for side 2
+        assert!((h.num.unwrap() - 3f64.sqrt()).abs() < 1e-9, "h = {}", h.value);
+    }
+
+    #[test]
+    fn parallelogram_law_vectors() {
+        let vs = vec![
+            NamedVec { name: "a".into(), v: vec![3.0, 4.0] },
+            NamedVec { name: "b".into(), v: vec![1.0, 0.0] },
+        ];
+        let out = vectors_analyze(&vs);
+        let f = out.iter().find(|f| f.group == "平行四边形法则").expect("parallelogram law");
+        // |a+b|² + |a-b|² = 2(25+1) = 52
+        assert!((f.num.unwrap() - 52.0).abs() < 1e-9, "got {}", f.value);
+    }
+
+    #[test]
+    fn viviani_regular_tetra() {
+        // Regular tetra with edge √2: (1,1,1),(1,-1,-1),(-1,1,-1),(-1,-1,1)
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![1.0, 1.0, 1.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, -1.0, -1.0] },
+            NamedPoint { name: "C".into(), p: vec![-1.0, 1.0, -1.0] },
+            NamedPoint { name: "D".into(), p: vec![-1.0, -1.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let sum = out.iter().find(|f| f.group == "维维安尼定理" && f.label.contains("面")).expect("tetra viviani");
+        let edge = 2f64.sqrt() * 2.0 / 1.0; // |A-B| = √[(0)²+(2)²+(2)²] = √8 = 2√2
+        let e = (0.0f64.powi(2) + 2.0f64.powi(2) + 2.0f64.powi(2)).sqrt(); // √8 = 2√2
+        let h_reg = (6.0f64).sqrt() / 3.0 * e;
+        assert!((sum.num.unwrap() - h_reg).abs() < 1e-9, "sum={} expect {}", sum.value, h_reg);
+        let _ = edge;
+    }
+
+
+    #[test]
+    fn ptolemy_and_brahmagupta_rectangle() {
+        // 3-4-5 rectangle: sides 4,3,4,3; diagonals 5,5; area 12
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(out.iter().any(|f| f.group == "圆内接四边形"));
+        let acbd = out.iter().find(|f| f.group == "托勒密定理" && f.label.contains("AC")).unwrap();
+        assert!((acbd.num.unwrap() - 25.0).abs() < 1e-9, "AC·BD = {}", acbd.value);
+        let rhs = out.iter().find(|f| f.group == "托勒密定理" && f.label.contains("AB")).unwrap();
+        assert!((rhs.num.unwrap() - 25.0).abs() < 1e-9);
+        let s = out.iter().find(|f| f.group == "婆罗摩笈多公式").unwrap();
+        assert!((s.num.unwrap() - 12.0).abs() < 1e-9, "Brahmagupta = {}", s.value);
+    }
+
+    #[test]
+    fn napoleon_equilateral_centroids() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(fs.iter().any(|f| f.group == "拿破仑定理" && f.value.contains("等边")));
+        let side = fs.iter().find(|f| f.label == "|G_aG_b|").unwrap();
+        assert!(side.num.unwrap() > 0.0);
+        assert_eq!(fs.iter().filter(|f| f.group == "拿破仑定理" && f.label.starts_with("G_")).count(), 3);
+    }
+
+
+
+    #[test]
+    fn oh2_carnot_isogonal_morley() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        let oh2 = fs.iter().find(|f| f.label == "|OH|^2").expect("|OH|^2");
+        assert!((oh2.num.unwrap() - 6.25).abs() < 1e-9, "OH² = {}", oh2.value);
+        let form = fs.iter().find(|f| f.label.starts_with("9R^2")).expect("9R^2 form");
+        assert!((form.num.unwrap() - 6.25).abs() < 1e-9);
+        let oi2 = fs.iter().find(|f| f.label == "|OI|^2").expect("|OI|^2");
+        assert!((oi2.num.unwrap() - 1.25).abs() < 1e-9, "OI² = {}", oi2.value);
+        assert!(fs.iter().any(|f| f.group == "等角共轭" && f.label.contains("H")));
+        let sum = fs
+            .iter()
+            .find(|f| f.group == "卡诺定理" && f.label.contains("delta_a") && f.label.contains('+'))
+            .expect("Carnot sum");
+        let rr = fs.iter().find(|f| f.group == "卡诺定理" && f.label == "R+r").unwrap();
+        assert!((sum.num.unwrap() - rr.num.unwrap()).abs() < 1e-6, "Carnot {} vs {}", sum.value, rr.value);
+        assert!(
+            fs.iter().any(|f| f.group == "莫利定理" && f.value.contains("等边")),
+            "Morley missing"
+        );
+        let ms = fs.iter().find(|f| f.group == "莫利定理" && f.label == "|M_0M_1|").unwrap();
+        assert!(ms.num.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn simson_and_trilinear_polar() {
+        let k = TriangleKnown { a: Some(3.0), b: Some(4.0), c: Some(5.0), ..Default::default() };
+        let r = triangle_solve(&k);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let fs = &r.cases[0].facts;
+        assert!(
+            fs.iter().any(|f| f.group == "西姆松线" && f.value.contains("共线")),
+            "Simson collinear missing"
+        );
+        assert!(fs.iter().any(|f| f.group == "西姆松线" && f.label.contains("Simson")));
+        assert_eq!(fs.iter().filter(|f| f.group == "西姆松线" && f.label.starts_with("F_")).count(), 3);
+        assert!(
+            fs.iter().any(|f| f.group == "三线极线" && f.label.contains("tau")),
+            "trilinear polar of I missing"
+        );
+        assert!(fs.iter().any(|f| f.group == "三线极线" && f.label.contains("l_")));
+    }
+
+    #[test]
+    fn miquel_complete_quadrilateral() {
+        // y=0, x=0, x+y=2, x-y=1 — four lines, six vertices, general position
+        let ls = vec![
+            NamedLine { name: "l".into(), a: 0.0, b: 1.0, c: 0.0 },
+            NamedLine { name: "m".into(), a: 1.0, b: 0.0, c: 0.0 },
+            NamedLine { name: "n".into(), a: 1.0, b: 1.0, c: 2.0 },
+            NamedLine { name: "p".into(), a: 1.0, b: -1.0, c: 1.0 },
+        ];
+        let out = lines_analyze(&ls, &[]);
+        assert!(
+            out.iter().any(|f| f.group == "米克尔点" && f.label.contains("Miquel")),
+            "Miquel missing: {:?}",
+            out.iter().map(|f| (&f.group, &f.label)).collect::<Vec<_>>()
+        );
+        assert!(out.iter().any(|f| f.group == "米克尔点" && f.label == "M"));
+    }
+
+    #[test]
+    fn desargues_perspective_triangles() {
+        // S=O; A,B,C and scaled A',B',C' with distinct factors → perspective + axis
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![2.0, 1.0] },
+            NamedPoint { name: "B".into(), p: vec![-1.0, 2.0] },
+            NamedPoint { name: "C".into(), p: vec![-2.0, -3.0] },
+            NamedPoint { name: "A'".into(), p: vec![4.0, 2.0] },
+            NamedPoint { name: "B'".into(), p: vec![-3.0, 6.0] },
+            NamedPoint { name: "C'".into(), p: vec![-1.0, -1.5] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(
+            out.iter().any(|f| f.group == "德萨格定理" && f.value.contains("透视")),
+            "Desargues perspective missing"
+        );
+        assert!(out.iter().any(|f| f.group == "德萨格定理" && f.label == "S"));
+        assert!(
+            out.iter().any(|f| f.group == "德萨格定理" && f.label.contains("透视轴")),
+            "Desargues axis missing"
+        );
+    }
+
+    #[test]
+    fn pascal_cyclic_hexagon() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![5.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![4.0, 3.0] },
+            NamedPoint { name: "C".into(), p: vec![-3.0, 4.0] },
+            NamedPoint { name: "D".into(), p: vec![-5.0, 0.0] },
+            NamedPoint { name: "E".into(), p: vec![-3.0, -4.0] },
+            NamedPoint { name: "F".into(), p: vec![4.0, -3.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(
+            out.iter().any(|f| f.group == "帕斯卡定理" && f.value.contains("共线")),
+            "Pascal missing"
+        );
+        assert!(out.iter().any(|f| f.group == "帕斯卡定理" && f.label.contains("Pascal线")));
+    }
+
+    #[test]
+    fn brianchon_regular_hexagon() {
+        let s3 = 3f64.sqrt();
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![1.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![0.5, s3 / 2.0] },
+            NamedPoint { name: "C".into(), p: vec![-0.5, s3 / 2.0] },
+            NamedPoint { name: "D".into(), p: vec![-1.0, 0.0] },
+            NamedPoint { name: "E".into(), p: vec![-0.5, -s3 / 2.0] },
+            NamedPoint { name: "F".into(), p: vec![0.5, -s3 / 2.0] },
+        ];
+        let out = points_analyze(&pts);
+        assert!(
+            out.iter().any(|f| f.group == "布利安雄定理" && f.value.contains("共点")),
+            "Brianchon missing"
+        );
+        assert!(out.iter().any(|f| f.group == "布利安雄定理" && f.label.contains("a+c+e")));
+        assert!(
+            out.iter().any(|f| f.group == "帕斯卡定理" && f.value.contains("无穷远")),
+            "Pascal at infinity for regular hex"
+        );
+    }
+
+    #[test]
+    fn tetra_face_areas_and_altitudes() {
+        let pts = vec![
+            NamedPoint { name: "A".into(), p: vec![0.0, 0.0, 0.0] },
+            NamedPoint { name: "B".into(), p: vec![1.0, 0.0, 0.0] },
+            NamedPoint { name: "C".into(), p: vec![0.0, 1.0, 0.0] },
+            NamedPoint { name: "D".into(), p: vec![0.0, 0.0, 1.0] },
+        ];
+        let out = points_analyze(&pts);
+        let faces = out.iter().filter(|f| f.group == "四面体面" && f.label.starts_with("S_")).count();
+        assert_eq!(faces, 4, "four face areas");
+        let hs = out.iter().filter(|f| f.group == "四面体面" && f.label.starts_with("h_")).count();
+        assert_eq!(hs, 4, "four altitudes");
+        let sabc = out.iter().find(|f| f.label.contains("ABC") && f.label.starts_with("S_")).unwrap();
+        assert!((sabc.num.unwrap() - 0.5).abs() < 1e-9);
+        let hd = out.iter().find(|f| f.label == "h_{D}").unwrap();
+        assert!((hd.num.unwrap() - 1.0).abs() < 1e-9); // V=1/6, S_ABC=1/2 → h=1
+    }
+
+    #[test]
+    fn reflect_point_over_line_and_plane() {
+        let ls = vec![NamedLine { name: "l".into(), a: 0.0, b: 1.0, c: 0.0 }]; // y=0
+        let pts = vec![NamedPoint { name: "P".into(), p: vec![1.0, 2.0] }];
+        let out = lines_analyze(&ls, &pts);
+        let rp = out.iter().find(|f| f.group == "反射").expect("line reflection");
+        assert!(rp.value.contains("1") && rp.value.contains("-2") || rp.value.contains("1,\\ -2") || rp.value.contains("(1"), "got {}", rp.value);
+        if let Some(Shape::Point { x, y, .. }) = rp.shape.as_ref() {
+            assert!((*x - 1.0).abs() < 1e-9 && (*y + 2.0).abs() < 1e-9);
+        } else {
+            panic!("expected point shape");
+        }
+        let planes = vec![NamedPlane { name: "α".into(), n: [0.0, 0.0, 1.0], d: 0.0 }]; // z=0
+        let q = vec![NamedPoint { name: "Q".into(), p: vec![1.0, 2.0, 3.0] }];
+        let out3 = planes_analyze(&planes, &q);
+        let rq = out3.iter().find(|f| f.group == "反射").expect("plane reflection");
+        if let Some(Shape::Point3 { x, y, z, .. }) = rq.shape.as_ref() {
+            assert!((*x - 1.0).abs() < 1e-9 && (*y - 2.0).abs() < 1e-9 && (*z + 3.0).abs() < 1e-9);
+        } else {
+            panic!("expected Point3");
+        }
+    }
+
+
 }

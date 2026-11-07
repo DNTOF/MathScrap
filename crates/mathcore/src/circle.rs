@@ -3,7 +3,8 @@
 //! chord lengths, centre-to-chord distances, central angles, and a canonical picture of
 //! the whole configuration. Plus cross inference between circles and named points.
 
-use crate::geometry::{deg, dist2, near, nice, Fact, NamedPoint, Shape};
+use crate::geometry::{deg, dist2, line_eq_latex, near, nice, Fact, NamedPoint, Shape};
+use crate::numeric::solve_linear_pub;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -473,6 +474,159 @@ pub fn circles_analyze(circles: &[NamedCircle], points: &[NamedPoint]) -> Vec<Fa
             }
         }
     }
+    // Radical axis of each pair: subtract the two circle equations.
+    for i in 0..circles.len() {
+        for j in i + 1..circles.len() {
+            let (a, b) = (&circles[i], &circles[j]);
+            if a.r <= 0.0 || b.r <= 0.0 {
+                continue;
+            }
+            let g = "两圆根轴";
+            let (c1, c2) = ([a.cx, a.cy], [b.cx, b.cy]);
+            let (nx, ny) = (c2[0] - c1[0], c2[1] - c1[1]);
+            let ln = nx.hypot(ny);
+            if ln < 1e-12 {
+                let same = (a.r - b.r).abs() < 1e-9;
+                out.push(fact(g, &format!("\\odot {},\\ \\odot {}", a.name, b.name), format!("\\text{{{}}}", if same { "同心等半径（重合）" } else { "同心不等半径（无根轴）" }), None, "O_1 = O_2", "两圆圆心重合"));
+                continue;
+            }
+            let rhs = (c2[0] * c2[0] + c2[1] * c2[1] - c1[0] * c1[0] - c1[1] * c1[1] + a.r * a.r - b.r * b.r) / 2.0;
+            out.push(fact(
+                g,
+                &format!("l_{{{}{}}}", a.name, b.name),
+                line_eq_latex(nx, ny, rhs),
+                None,
+                "(O_2 - O_1)\\cdot X = \\frac{|O_2|^2 - |O_1|^2 + r_1^2 - r_2^2}{2}",
+                "两圆方程相减得根轴",
+            ));
+            out.push(seg_fact(g, &format!("|O_{}O_{}|", a.name, b.name), ln, "\\sqrt{(a_2-a_1)^2 + (b_2-b_1)^2}", "圆心距"));
+            let signed = (nx * c1[0] + ny * c1[1] - rhs) / ln;
+            let h = signed.abs();
+            let rho2 = a.r * a.r - h * h;
+            let (sum, diff) = (a.r + b.r, (a.r - b.r).abs());
+            let rel = if near(ln, sum) {
+                "外切"
+            } else if near(ln, diff) {
+                "内切"
+            } else if ln > sum {
+                "外离"
+            } else if ln + 1e-9 < diff {
+                "内含"
+            } else {
+                "相交"
+            };
+            out.push(fact(g, &format!("\\odot {} ,\\ \\odot {}", a.name, b.name), format!("\\text{{{rel}}}"), None, "|O_1O_2| \\text{ 与 } r_1\\pm r_2", "两圆位置关系"));
+            if rho2 > 1e-9 {
+                let chord = 2.0 * rho2.sqrt();
+                out.push(seg_fact(g, &format!("|\\text{{公共弦}}_{{{}{}}}|", a.name, b.name), chord, "2\\sqrt{r_1^2 - d^2}", "公共弦长（落在根轴上）"));
+            }
+        }
+    }
+
+    // Radical center of every triple (pair axes already emitted above as 两圆根轴).
+    {
+        let n = circles.len().min(6);
+        // Radical center: intersection of two radical axes for each triple
+        for i in 0..n {
+            for j in i + 1..n {
+                for k in j + 1..n {
+                    let (c0, c1, c2) = (&circles[i], &circles[j], &circles[k]);
+                    if c0.r <= 1e-12 || c1.r <= 1e-12 || c2.r <= 1e-12 {
+                        continue;
+                    }
+                    let ax = |p: &NamedCircle, q: &NamedCircle| -> Option<(f64, f64, f64)> {
+                        let aa = 2.0 * (q.cx - p.cx);
+                        let bb = 2.0 * (q.cy - p.cy);
+                        let cc = (q.cx * q.cx + q.cy * q.cy - q.r * q.r) - (p.cx * p.cx + p.cy * p.cy - p.r * p.r);
+                        if aa.abs() + bb.abs() < 1e-12 {
+                            None
+                        } else {
+                            Some((aa, bb, cc))
+                        }
+                    };
+                    let (Some((a1, b1, d1)), Some((a2, b2, d2))) = (ax(c0, c1), ax(c0, c2)) else {
+                        continue;
+                    };
+                    let Some(xy) = solve_linear_pub(vec![vec![a1, b1], vec![a2, b2]], vec![d1, d2]) else {
+                        continue;
+                    };
+                    if !xy[0].is_finite() || !xy[1].is_finite() {
+                        continue;
+                    }
+                    let (x, y) = (xy[0], xy[1]);
+                    let tag = format!("{}{}{}", c0.name, c1.name, c2.name);
+                    // common power value
+                    let pow = (x - c0.cx).powi(2) + (y - c0.cy).powi(2) - c0.r * c0.r;
+                    out.push(fact(
+                        "根心",
+                        &format!("R_{{\\odot {}}}", tag),
+                        format!("\\left({},\\ {}\\right)", nice(x), nice(y)),
+                        None,
+                        "\\pi_{12} \\cap \\pi_{13}",
+                        "三圆根心：三根轴交于一点",
+                    ).with(Shape::Point { x, y, label: format!("根心 {}", tag) }));
+                    out.push(fact(
+                        "根心",
+                        &format!("\\text{{幂}}_{{{}}}", tag),
+                        nice(pow),
+                        Some(pow),
+                        "|OR|^2 - r^2",
+                        "根心对三圆有相同的幂",
+                    ));
+                }
+            }
+        }
+    }
+
+    // Descartes: k_4 = k_1+k_2+k_3 ± 2√(Σ k_i k_j) for three mutually tangent circles.
+    {
+        let n = circles.len().min(4);
+        for i in 0..n {
+            for j in i + 1..n {
+                for kidx in j + 1..n {
+                    let (a, b, c) = (&circles[i], &circles[j], &circles[kidx]);
+                    if a.r <= 1e-12 || b.r <= 1e-12 || c.r <= 1e-12 {
+                        continue;
+                    }
+                    let dist = |p: &NamedCircle, q: &NamedCircle| dist2([p.cx, p.cy], [q.cx, q.cy]);
+                    let is_tan = |p: &NamedCircle, q: &NamedCircle| {
+                        let d0 = dist(p, q);
+                        near(d0, (p.r + q.r).abs()) || near(d0, (p.r - q.r).abs())
+                    };
+                    if !(is_tan(a, b) && is_tan(a, c) && is_tan(b, c)) {
+                        continue;
+                    }
+                    let (k1, k2, k3) = (1.0 / a.r, 1.0 / b.r, 1.0 / c.r);
+                    let s = k1 * k2 + k1 * k3 + k2 * k3;
+                    if s < -1e-12 {
+                        continue;
+                    }
+                    let root = 2.0 * s.max(0.0).sqrt();
+                    let g = "笛卡尔圆定理";
+                    let tag = format!("{}{}{}", a.name, b.name, c.name);
+                    for (sign, k4) in [("+", k1 + k2 + k3 + root), ("-", k1 + k2 + k3 - root)] {
+                        if k4.abs() < 1e-12 {
+                            continue;
+                        }
+                        let r4 = 1.0 / k4;
+                        out.push(fact(
+                            g,
+                            &format!("r_{{\\text{{Descartes}}{}}}^{{{}}}", sign, tag),
+                            nice(r4),
+                            Some(r4),
+                            "k_4 = k_1+k_2+k_3 \\pm 2\\sqrt{k_1k_2+k_1k_3+k_2k_3}",
+                            if sign == "+" {
+                                "笛卡尔圆定理（外切／内含解）"
+                            } else {
+                                "笛卡尔圆定理（另一相切解）"
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     out
 }
 
@@ -597,4 +751,74 @@ mod tests {
         // C is on the circle
         assert!(out.iter().any(|x| x.label == "C \\in \\odot O" && x.value.contains("圆上")));
     }
+
+    #[test]
+    fn radical_axis_of_two_circles() {
+        // unit circles at (0,0) and (1,0): radical axis x = 1/2, common chord √3
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 1.0, cy: 0.0, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        let axis = out.iter().find(|f| f.label == "l_{AB}").unwrap();
+        assert!(axis.value.contains("\\frac{1}{2}") || axis.value.contains("0.5"), "axis = {}", axis.value);
+        let chord = out.iter().find(|f| f.label == "|\\text{公共弦}_{AB}|").unwrap();
+        assert!((chord.num.unwrap() - 3f64.sqrt()).abs() < 1e-9, "chord = {}", chord.value);
+        assert!(out.iter().any(|f| f.value.contains("相交")));
+        // separate equal circles: x = 3/2, no chord
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 3.0, cy: 0.0, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        let axis = out.iter().find(|f| f.label == "l_{AB}").unwrap();
+        assert!(axis.value.contains("\\frac{3}{2}"), "axis = {}", axis.value);
+        assert!(out.iter().all(|f| f.label != "|\\text{公共弦}_{AB}|"));
+        assert!(out.iter().any(|f| f.value.contains("外离")));
+    }
+
+    #[test]
+    fn descartes_three_unit_circles() {
+        let sq3 = 3f64.sqrt();
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 2.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "C".into(), cx: 1.0, cy: sq3, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        let ds: Vec<_> = out.iter().filter(|f| f.group == "笛卡尔圆定理").collect();
+        assert_eq!(ds.len(), 2, "expected ± Descartes radii, got {:?}", ds.iter().map(|f| &f.label).collect::<Vec<_>>());
+        let nums: Vec<f64> = ds.iter().map(|f| f.num.unwrap()).collect();
+        let expect = [1.0 / (3.0 + 2.0 * sq3), 1.0 / (3.0 - 2.0 * sq3)];
+        for e in expect {
+            assert!(nums.iter().any(|n| (n - e).abs() < 1e-9), "missing {e}, have {nums:?}");
+        }
+    }
+
+    #[test]
+    fn radical_axis_and_center() {
+        // Unit circles at (0,0) and (2,0): radical axis x = 1.
+        // Third at (1, √3) r=1: radical center = circumcenter of centers = (1, √3/3).
+        let sq3 = 3f64.sqrt();
+        let circles = vec![
+            NamedCircle { name: "A".into(), cx: 0.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "B".into(), cx: 2.0, cy: 0.0, r: 1.0 },
+            NamedCircle { name: "C".into(), cx: 1.0, cy: sq3, r: 1.0 },
+        ];
+        let out = circles_analyze(&circles, &[]);
+        assert!(out.iter().filter(|f| f.group == "两圆根轴" && f.label.starts_with("l_")).count() >= 3);
+        let axis_ab = out.iter().find(|f| f.label == "l_{AB}").expect("axis AB");
+        assert!(axis_ab.value.contains("x = 1") || axis_ab.value == "x = 1", "AB axis = {}", axis_ab.value);
+        let rc = out.iter().find(|f| f.group == "根心" && f.label.starts_with("R_")).expect("radical center");
+        match &rc.shape {
+            Some(Shape::Point { x, y, .. }) => {
+                assert!((x - 1.0).abs() < 1e-9, "x={x}");
+                assert!((y - sq3 / 3.0).abs() < 1e-9, "y={y}");
+            }
+            other => panic!("expected Point shape, got {other:?}"),
+        }
+        let pow = out.iter().find(|f| f.group == "根心" && f.label.contains("幂")).unwrap();
+        assert!((pow.num.unwrap() - 1.0 / 3.0).abs() < 1e-9, "power = {}", pow.value);
+    }
+
 }

@@ -8,13 +8,15 @@
  */
 import { mkdirSync } from 'node:fs'
 import { chromium, type Page } from 'playwright-core'
-import { arrowLetter, inkFixtures, pointPair, proseNote, shiftInk } from '../src/ocr/comer/samples.ts'
+import { resolveBrowser } from './browser-path.ts'
+import { arrowLetter, inkFixtures, pointPair, proseNote, shiftInk, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
 import type { InkStroke } from '../src/ocr/comer/preprocess.ts'
 
 const RAW = process.env.APP_URL ?? 'http://127.0.0.1:47321/'
 /** ?static=1 skips the progressive reveal so trace assertions see the finished figure. */
 const URL = RAW.includes('?') ? RAW : `${RAW}?static=1`
-const CHROME = process.env.CHROME_PATH ?? '/usr/local/bin/google-chrome'
+const BROWSER = resolveBrowser()
+console.log(`browser ${BROWSER.executablePath} (${BROWSER.via})`)
 const SHOTS = process.env.SHOTS ?? '/tmp/mathscrap-e2e'
 mkdirSync(SHOTS, { recursive: true })
 
@@ -53,11 +55,12 @@ async function write(page: Page, text: string) {
 }
 
 async function desktop() {
-  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
+  const browser = await chromium.launch({ executablePath: BROWSER.executablePath, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.addInitScript(() => {
+    localStorage.setItem('mathscrap.lang', 'zh')
     if (!sessionStorage.getItem('seeded')) {
       localStorage.removeItem('mathscrap.doc.v2')
       sessionStorage.setItem('seeded', '1')
@@ -167,9 +170,12 @@ async function desktop() {
 }
 
 async function phone() {
-  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
+  const browser = await chromium.launch({ executablePath: BROWSER.executablePath, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-  await page.addInitScript(() => localStorage.removeItem('mathscrap.doc.v2'))
+  await page.addInitScript(() => {
+    localStorage.setItem('mathscrap.lang', 'zh')
+    localStorage.removeItem('mathscrap.doc.v2')
+  })
   await page.goto(URL, { waitUntil: 'networkidle' })
   await page.waitForFunction(() => !!(window as any).mathscrap)
   await page.screenshot({ path: `${SHOTS}/sheet-phone-blank.png` })
@@ -197,11 +203,14 @@ async function phone() {
  * the progressive reveal of statements, and the automatic handwriting chip.
  */
 async function dockAndLive() {
-  const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
+  const browser = await chromium.launch({ executablePath: BROWSER.executablePath, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
-  await page.addInitScript(() => localStorage.removeItem('mathscrap.doc.v2'))
+  await page.addInitScript(() => {
+    localStorage.setItem('mathscrap.lang', 'zh')
+    localStorage.removeItem('mathscrap.doc.v2')
+  })
   await page.goto(URL, { waitUntil: 'networkidle' })
   await page.waitForFunction(() => !!(window as any).mathscrap)
   await page.evaluate(() => (window as any).mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2' }))
@@ -264,7 +273,10 @@ async function dockAndLive() {
   // 4. progressive reveal: without ?static the figure emerges statement by statement
   const page2 = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'no-preference' })
   page2.on('pageerror', (e) => errors.push(e.message))
-  await page2.addInitScript(() => localStorage.removeItem('mathscrap.doc.v2'))
+  await page2.addInitScript(() => {
+    localStorage.setItem('mathscrap.lang', 'zh')
+    localStorage.removeItem('mathscrap.doc.v2')
+  })
   await page2.goto(RAW, { waitUntil: 'networkidle' })
   await page2.waitForFunction(() => !!(window as any).mathscrap)
   await page2.evaluate(() => (window as any).mathscrap.tools.call('page_add_formula', { text: 'y = x^2 - 2\ny = 0.5x + 1\nx^2 + y^2 = 4' }))
@@ -304,18 +316,25 @@ async function dockAndLive() {
     ...fixtures.map((f, i) => shiftInk(f.strokes, 120, 80 + i * 420)),
     shiftInk(proseNote(), 560, 80),
     shiftInk(arrowLetter(), 560, 520),
+    shiftInk(sumGlyph(), 980, 520),
+    shiftInk(sumBar(), 980, 80),
     shiftInk(pointPair(), 120, 1500),
   ])
-  await page3.addInitScript((saved) => localStorage.setItem('mathscrap.doc.v2', saved), JSON.stringify(doc))
+  await page3.addInitScript((saved) => {
+    localStorage.setItem('mathscrap.lang', 'zh')
+    localStorage.setItem('mathscrap.doc.v2', saved)
+  }, JSON.stringify(doc))
   await page3.goto(RAW, { waitUntil: 'networkidle' })
-  await page3.waitForFunction(() => document.documentElement.dataset.ocr === 'idle', null, { timeout: 40000 })
+  await page3.waitForFunction(() => document.documentElement.dataset.ocr === 'idle', null, { timeout: 60000 })
   const read = await page3.locator('[data-formula]').evaluateAll((els) => els.map((el) => el.getAttribute('data-formula-text') ?? ''))
   const vecs = read.filter((t) => /^\\vec\{[a-z]\} = \(/.test(t))
+  const sums = read.filter((t) => /^\\sum(?![A-Za-z])/.test(t))
   const points = read.filter((t) => /^[A-Z]\([^)]+\)$/.test(t))
-  const math = read.filter((t) => !vecs.includes(t) && !points.includes(t))
+  const math = read.filter((t) => !vecs.includes(t) && !points.includes(t) && !sums.includes(t))
   check(math.length === 3 && fixtures.every((f) => math.filter((t) => f.expect.test(t)).length === 1), `ocr: model writes y = 2, y = x, a^2 = b (${read.join(' | ')})`)
   check(points.some((t) => /^A\(2,\s*2\)$/.test(t)), `ocr: handwritten point lands as A(2, 2) (${points.join(' | ') || 'none'})`)
-  check(vecs.length <= 1 && vecs.every((t) => !/1,\s*2,\s*2/.test(t)), `ocr: over-arrow stays a vector (${vecs.join(' | ') || 'ink left'})`)
+  check(vecs.length === 1 && vecs.every((t) => !/1,\s*2,\s*2/.test(t)), `ocr: over-arrow is written as a vector (${vecs.join(' | ') || 'ink left'})`)
+  check(sums.length === 2, `ocr: summation is written (${sums.join(' | ') || 'none'})`)
   check(!read.some((t) => /1,\s*2,\s*2/.test(t)), 'ocr: model does not invent a component triple')
   check(math.length === 3, `ocr: a line of letters is not written as a formula (${read.join(' | ')})`)
   check((await page3.locator('[data-ink-chip]').count()) === 0, 'ocr: acceptance does not put a chip on the paper')
@@ -343,9 +362,49 @@ function boardDoc(groups: InkStroke[][]) {
   }
 }
 
+async function englishLocale() {
+  const browser = await chromium.launch({ executablePath: BROWSER.executablePath, args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await page.addInitScript(() => {
+    // localStorage is already restored when this runs on reload. Seed English only the first time.
+    if (localStorage.getItem('e2e-lang-ready') === '1') return
+    localStorage.setItem('mathscrap.lang', 'en')
+    localStorage.removeItem('mathscrap.doc.v2')
+  })
+  await page.goto(URL, { waitUntil: 'networkidle' })
+  await page.evaluate(() => localStorage.setItem('e2e-lang-ready', '1'))
+  await page.waitForFunction(() => !!(window as any).mathscrap)
+  await page.getByRole('button', { name: 'Open coordinates' }).waitFor()
+  check((await page.getByRole('button', { name: '打开坐标系' }).count()) === 0, 'en: the corner button is not Chinese')
+  await page.mouse.dblclick(420, 260)
+  const ta = page.getByRole('textbox', { name: 'Write a formula' })
+  await ta.waitFor({ state: 'visible' })
+  await ta.pressSequentially('y = log_2(x)', { delay: 5 })
+  await page.keyboard.press('Enter')
+  await ta.waitFor({ state: 'detached' })
+  const written = await page.locator('[data-formula]').innerText()
+  check(/log_?2|\\log/.test(written) || written.includes('log'), `en: the formula is not translated (${written.replace(/\s+/g, ' ')})`)
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('button', { name: '中文', pressed: false }).click()
+  await page.getByRole('button', { name: '打开坐标系' }).waitFor()
+  const still = await page.locator('[data-formula]').innerText()
+  check(still === written, 'en→zh: the written formula stays the same')
+  await page.waitForFunction(() => (localStorage.getItem('mathscrap.doc.v2') ?? '').includes('log_2'))
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.waitForFunction(() => !!(window as any).mathscrap)
+  await page.getByRole('button', { name: '打开坐标系' }).waitFor()
+  check((await page.locator('[data-formula]').innerText()) === still, 'zh persists across reload and the formula is unchanged')
+  await page.getByRole('button', { name: '更多' }).click()
+  await page.getByRole('button', { name: 'EN', pressed: false }).click()
+  await page.getByRole('button', { name: 'Open coordinates' }).waitFor()
+  check((await page.locator('[data-formula]').innerText()) === still, 'zh→en: the formula is still unchanged')
+  await browser.close()
+}
+
 if (!process.env.SKIP_BASE) {
   await desktop()
   await phone()
+  await englishLocale()
 }
 await dockAndLive()
 console.log(problems.length ? `\n${problems.length} problem(s)` : `\nall sheet checks passed · screenshots in ${SHOTS}`)

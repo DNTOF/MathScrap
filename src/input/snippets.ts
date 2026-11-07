@@ -28,7 +28,9 @@ export const SNIPPETS: Snippet[] = [
   { id: 'sin', label: '\\sin', insert: 'sin(□)', code: 'KeyS', hint: '正弦', group: 'func' },
   { id: 'cos', label: '\\cos', insert: 'cos(□)', code: 'KeyC', hint: '余弦', group: 'func' },
   { id: 'tan', label: '\\tan', insert: 'tan(□)', hint: '正切', group: 'func' },
-  { id: 'ln', label: '\\ln', insert: 'ln(□)', code: 'KeyL', hint: '自然对数', group: 'func' },
+  { id: 'ln', label: '\\ln', insert: 'ln(□)', code: 'KeyL', hint: '自然对数 ln', group: 'func' },
+  { id: 'lg', label: '\\lg', insert: 'lg(□)', hint: '常用对数 lg，底数 10', group: 'func' },
+  { id: 'logb', label: '\\log_{a}', insert: 'log_{□}(□)', hint: '对数：下标是底数，括号里是真数', group: 'func' },
   { id: 'exp', label: 'e^{x}', insert: 'e^(□)', code: 'KeyE', hint: '指数', group: 'func' },
   { id: 'vec3', label: '\\mathbf{v}{=}(a,b,c)', insert: '**□** = (□, □, □)', code: 'KeyV', hint: '空间向量（名字用粗体）', group: 'struct' },
   { id: 'vec2', label: '\\mathbf{v}{=}(a,b)', insert: '**□** = (□, □)', code: 'KeyW', hint: '平面向量（名字用粗体）', group: 'struct' },
@@ -68,6 +70,19 @@ export function applySnippet(value: string, start: number, end: number, s: Snipp
   if (ph >= 0 && ph < start + insert.length) return { value: next, selStart: ph, selEnd: ph + 1 }
   const pos = start + insert.length
   return { value: next, selStart: pos, selEnd: pos }
+}
+
+/** Insert at the textarea selection and put the caret on the next □. */
+export function insertSnippet(el: HTMLTextAreaElement | null, value: string, onChange: (v: string) => void, s: Snippet) {
+  const start = el?.selectionStart ?? value.length
+  const end = el?.selectionEnd ?? value.length
+  const r = applySnippet(value, start, end, s)
+  onChange(r.value)
+  requestAnimationFrame(() => {
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(r.selStart, r.selEnd)
+  })
 }
 
 export function nextPlaceholder(value: string, from: number) {

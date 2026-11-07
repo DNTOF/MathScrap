@@ -127,7 +127,7 @@ for (const [title, text, ex] of cases) {
     if (ex.kinds && JSON.stringify(kinds) !== JSON.stringify(ex.kinds)) problems.push(`kinds ${kinds.join(',')} ≠ ${ex.kinds.join(',')}`)
     if (ex.dim && a.dim !== ex.dim) problems.push(`dim ${a.dim} ≠ ${ex.dim}`)
     if (!a.objects.length) problems.push('nothing to plot')
-    const factText = a.sections.flatMap((s) => s.facts.map((f) => `${f.label}=${f.value}`))
+    const factText = a.sections.flatMap((s) => s.facts.map((f) => `${f.label}=${f.value} ${f.how}`))
     for (const f of ex.facts ?? []) if (!factText.some((t) => t.replace(/\s+/g, ' ').includes(f))) problems.push(`missing fact containing "${f}"`)
     if (ex.minFacts && a.factCount < ex.minFacts) problems.push(`only ${a.factCount} facts`)
     if (ex.solve) {
@@ -229,6 +229,81 @@ if (bare.some((s) => s.kind === 'vector' || s.kind === 'point')) {
   failed++
   console.log('FAIL  bare letter classified as a point or vector', bare)
 } else console.log('ok    bare letter is not a point or vector')
+
+const sumTexts = ['\\sum_{i=1}^{n} i', '\\sum_{i = 1}^{n} i', 'y = \\sum_{k = 1}^{n} k', '∑_{i=1}^{n} i', '\\int_{0}^{1} x', '\\sum']
+for (const text of sumTexts) {
+  const card = analyze([{ id: 'sum', text }])
+  const view = summarizeCard(text)
+  const group = pageGroups([{ id: 'sum', x: 0, y: 0, text }])
+  const bad = card.errors.length > 0 || view.lines.some((l) => l.error) || view.lines[0]?.latex.includes('待修正') || !view.lines[0]?.latex.includes(text.includes('int') || text.includes('\\int') ? '\\int' : '\\sum')
+  if (bad || view.plottable || group.count[2] !== 0 || group.count[3] !== 0) {
+    failed++
+    console.log('FAIL  summation errored or was plotted', text, card.errors, view.lines, group.count)
+  } else console.log('ok    notation', view.lines[0]?.latex)
+}
+const sigma = parseCard('sigma')
+const sigmaView = summarizeCard('sigma')
+const sigmaPage = pageGroups([{ id: 'sg', x: 0, y: 0, text: 'sigma' }])
+const sigmaGlyph = parseCard('σ')
+const ySigma = parseCard('y = sigma')
+const sigmaBad =
+  sigma.length !== 1 ||
+  sigma[0]?.kind !== 'notation' ||
+  sigmaView.lines[0]?.latex !== '\\sigma' ||
+  sigmaView.plottable ||
+  sigmaPage.count[2] !== 0 ||
+  sigmaPage.count[3] !== 0 ||
+  sigmaGlyph[0]?.kind !== 'notation' ||
+  ySigma[0]?.kind !== 'curve'
+if (sigmaBad) {
+  failed++
+  console.log('FAIL  isolated sigma should be the symbol, not a graph', sigma, sigmaView.lines, sigmaPage.count, ySigma[0])
+} else console.log('ok    isolated sigma is \\\\sigma')
+
+function assertLogPlot(title: string, text: string, defined: (x: number) => boolean) {
+  const a = analyze([{ id: 'log', text }])
+  const problems: string[] = []
+  if (a.errors.length) problems.push(a.errors.map((e) => e.message).join(' | '))
+  const r = initialRanges(a)
+  const { data } = buildFigure2d(a, r, [])
+  const curve = a.objects.find((o) => o.type === 'curve')
+  const trace = data.find((d) => curve && d.name === `${curve.type === 'curve' ? curve.name : ''}(x)`)
+  const xs = (trace?.x ?? []) as (number | null)[]
+  const ys = (trace?.y ?? []) as (number | null)[]
+  let finite = 0
+  let crossed = 0
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i]
+    const y = ys[i]
+    if (x == null || y == null) continue
+    finite++
+    if (!defined(x) || !Number.isFinite(y)) problems.push(`plotted (${x}, ${y}) where the log is undefined`)
+    const prev = i > 0 ? xs[i - 1] : null
+    if (prev != null && defined(prev) !== defined(x)) crossed++
+  }
+  if (finite < 40) problems.push(`only ${finite} finite samples`)
+  if (crossed) problems.push(`a segment crosses the domain edge ${crossed} time(s)`)
+  if (problems.length) failed++
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${title}`)
+  problems.forEach((p) => console.log(`        ✗ ${p}`))
+}
+assertLogPlot('对数图不越过渐近线', 'y = ln(x)', (x) => x > 0)
+assertLogPlot('平移对数图', 'y = ln(x-2)', (x) => x > 2)
+assertLogPlot('底数 2 的对数图', 'y = log_2(x)', (x) => x > 0)
+function assertBlankLog(title: string, text: string) {
+  const a = analyze([{ id: 'log', text }])
+  const r = initialRanges(a)
+  const { data } = buildFigure2d(a, r, [])
+  const curve = a.objects.find((o) => o.type === 'curve')
+  const trace = data.find((d) => curve && curve.type === 'curve' && d.name === `${curve.name}(x)`)
+  const ys = (trace?.y ?? []) as (number | null)[]
+  const finite = ys.filter((y) => y != null && Number.isFinite(y)).length
+  const ok = a.errors.length === 0 && finite === 0
+  if (!ok) failed++
+  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${title}${ok ? '' : ` errors=${a.errors.length} finite=${finite}`}`)
+}
+assertBlankLog('底数 = 1 没有实图', 'y = log_1(x)')
+assertBlankLog('底数 < 0 没有实图', 'y = log_(-2)(x)')
 
 console.log(`\n${cases.length - failed}/${cases.length} formula cases · ${pages.length - pageFailed}/${pages.length} shared-sheet cases passed`)
 process.exit(failed + pageFailed ? 1 : 0)

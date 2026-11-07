@@ -9,22 +9,35 @@ import type { InkStroke, StrokePoint } from './preprocess.ts'
 export function bindInk(strokes: InkStroke[], modelText: string): string {
   const text = modelText.replace(/\s+/g, ' ').trim()
   if (!text) return ''
+  const squashed = text.replace(/\s/g, '')
+  // ∑, ∫, π, … are not vectors. A bar across the top of Σ must not erase them.
+  if (squashed.startsWith('\\') && !/^\\(?:vec|overrightarrow)\b/.test(squashed)) return text
   const arrow = findOverArrow(strokes)
-  if (arrow) {
+  // Only a letter (or a letter the model already wrapped) sitting under an arrow is `\vec`.
+  // `y = 2` keeps its equals. A bare letter with no arrow is left unset below.
+  if (arrow && arrowReading(squashed)) {
     const letter = letterOf(text)
     if (!letter) return ''
     const fromInk = tupleOf(text)
     const comps = fromInk && hasParenStroke(strokes) ? fromInk : [fmt(arrow.x), fmt(arrow.y)]
     return `\\vec{${letter}} = (${comps.join(', ')})`
   }
+  if (/^\\(?:vec|overrightarrow)\{[A-Za-z]\}$/.test(squashed)) return ''
   const point = pointOf(text, strokes)
   if (point) return point
-  const compact = text.replace(/\s/g, '')
-  if (/^[A-Za-z]$/.test(compact)) return ''
+  if (/^[A-Za-z]$/.test(squashed)) return ''
   // One number in parentheses is not a coordinate point.
-  if (/^[A-Za-z]\([+\-0-9.]*\)?$/.test(compact)) return ''
+  if (/^[A-Za-z]\([+\-0-9.]*\)?$/.test(squashed)) return ''
   if (/^[a-z]\s*=\s*\(/.test(text) && !hasParenStroke(strokes)) return ''
   return text
+}
+
+/** A letter, `\vec{a}`, or `a = (1, 2)` — not an equation like `y = 2`. */
+function arrowReading(squashed: string): boolean {
+  if (/^[A-Za-z]$/.test(squashed)) return true
+  if (/^\\(?:vec|overrightarrow)\{[A-Za-z]\}$/.test(squashed)) return true
+  if (/^[A-Za-z]\\rightarrow$/.test(squashed)) return true
+  return /^[A-Za-z]=\([+\-0-9.]+(?:,[+\-0-9.]+){1,2}\)$/.test(squashed)
 }
 
 /** A flat stroke sitting above the rest of the ink, wider than the letter. */

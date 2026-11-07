@@ -1,3 +1,4 @@
+import { t } from '../src/i18n/locale.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson } from './http.ts'
 
@@ -12,18 +13,18 @@ const ALLOWED_HEADERS = new Set(['authorization', 'content-type', 'accept', 'x-a
  */
 export async function forwardAi(payload: { url?: unknown; method?: unknown; headers?: unknown; body?: unknown }, fetchImpl: typeof fetch = fetch, signal?: AbortSignal) {
   const method = typeof payload.method === 'string' ? payload.method.toUpperCase() : 'GET'
-  if (method !== 'GET' && method !== 'POST') throw new Error('只允许 GET 或 POST')
-  if (typeof payload.url !== 'string' || !payload.url) throw new Error('缺少目标地址')
+  if (method !== 'GET' && method !== 'POST') throw new Error(t('proxyMethod'))
+  if (typeof payload.url !== 'string' || !payload.url) throw new Error(t('proxyTarget'))
   let target: URL
   try {
     target = new URL(payload.url)
   } catch {
-    throw new Error('目标地址不合法')
+    throw new Error(t('proxyBadTarget'))
   }
-  if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new Error('只允许 http 或 https')
-  if (target.username || target.password) throw new Error('地址里不能带账号')
-  if (isBlockedHost(target.hostname)) throw new Error('拒绝访问该地址')
-  if (!allowedPath(target.pathname)) throw new Error('只转发模型列表、对话补全或 Messages 接口')
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new Error(t('proxyHttp'))
+  if (target.username || target.password) throw new Error(t('proxyUserinfo'))
+  if (isBlockedHost(target.hostname)) throw new Error(t('proxyBlocked'))
+  if (!allowedPath(target.pathname)) throw new Error(t('proxyPath'))
   const headers: Record<string, string> = { accept: 'application/json' }
   if (payload.headers && typeof payload.headers === 'object') {
     for (const [key, value] of Object.entries(payload.headers as Record<string, unknown>)) {
