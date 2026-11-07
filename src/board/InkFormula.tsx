@@ -18,23 +18,28 @@ interface Props {
   onDragStart: (id: string) => void
   onDrag: (id: string, dx: number, dy: number) => void
   onDragEnd: (id: string) => void
+  onDragCancel: (id: string) => void
   onPlot: (id: string) => void
   onEdit: (id: string) => void
   onDelete: (id: string) => void
 }
 
 /** A formula written straight onto the kraft sheet — no card, just ink. */
-export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, movable, selected, hidden, onSelect, onDragStart, onDrag, onDragEnd, onPlot, onEdit, onDelete }: Props) {
+export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, movable, selected, hidden, onSelect, onDragStart, onDrag, onDragEnd, onDragCancel, onPlot, onEdit, onDelete }: Props) {
   const { t } = useI18n()
   const summary = summarizeCard(card.text)
-  const drag = useRef<{ x: number; y: number; moved: boolean; id: number } | null>(null)
+  const drag = useRef<{ x: number; y: number; x0: number; y0: number; moved: boolean; id: number } | null>(null)
 
   const down = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return
     if (inkFirst(e)) return
     e.stopPropagation()
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    drag.current = { x: e.clientX, y: e.clientY, moved: false, id: e.pointerId }
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {
+      /* synthetic events and a pointer the browser already took */
+    }
+    drag.current = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false, id: e.pointerId }
     onSelect(card.id)
   }
   const move = (e: React.PointerEvent) => {
@@ -49,11 +54,21 @@ export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, mova
     d.y = e.clientY
     onDrag(card.id, dx, dy)
   }
-  const up = (e: React.PointerEvent) => {
+  const finish = (e: React.PointerEvent, commit: boolean) => {
     const d = drag.current
     if (!d || d.id !== e.pointerId) return
-    if (d.moved) onDragEnd(card.id)
     drag.current = null
+    if (!d.moved) return
+    // Releasing inside the same dead-zone that starts a drag puts the formula back and records nothing.
+    const restored = Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 4
+    if (commit && !restored) onDragEnd(card.id)
+    else onDragCancel(card.id)
+  }
+  const up = (e: React.PointerEvent) => finish(e, true)
+  const cancel = (e: React.PointerEvent) => finish(e, false)
+  const lost = (e: React.PointerEvent) => {
+    if (e.buttons === 0) return
+    finish(e, false)
   }
 
   const action = 'grid size-8 place-items-center rounded-full text-kraft-800 transition hover:bg-kraft-800/10'
@@ -67,7 +82,8 @@ export const InkFormula = memo(function InkFormula({ card, scale, inkFirst, mova
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
-      onPointerCancel={up}
+      onPointerCancel={cancel}
+      onLostPointerCapture={lost}
     >
       <div
         className={cn(

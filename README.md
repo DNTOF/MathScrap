@@ -60,7 +60,8 @@ The dev server is `http://127.0.0.1:47321`. `npm run preview` serves the product
 | `npm run ocr:live` | 本机用仓库里的 CoMER INT8 读几笔样例。 / Run the bundled CoMER INT8 on a few sample strokes. |
 | `npm run smoke:ai` | 本地假接口上的连接测试、工具和 MCP。 / Connection test, tools, and MCP against a local fake endpoint. |
 | `npm run test:rust` | `crates/mathcore` 的 Rust 测试。 / Rust tests for `crates/mathcore`. |
-| `npm run e2e` / `npm run e2e:sheet` | 需要先开着 dev。浏览器按 `CHROME_PATH`、Playwright 缓存、PATH，再按常见安装路径查找。 / Need a running dev server. The browser is `CHROME_PATH`, then the Playwright cache, then PATH, then common install paths. |
+| `npm run smoke:ink` | 笔迹命中、缩放坐标和撤销栈。 / Ink hit testing, zoom coordinates, and the undo stack. |
+| `npm run e2e` / `npm run e2e:sheet` / `npm run e2e:ink` | 需要先开着 dev。浏览器按 `CHROME_PATH`、Playwright 缓存、PATH，再按常见安装路径查找。`e2e:ink` 覆盖书写、擦除、撤销和中断。 / Need a running dev server. The browser is `CHROME_PATH`, then the Playwright cache, then PATH, then common install paths. `e2e:ink` covers writing, erasing, undo, and interrupted pointers. |
 | `npm run build:wasm` | 把 Rust 重新编成 `src/wasm/pkg`。 / Rebuild Rust into `src/wasm/pkg`. |
 
 ## 纸面、公式和坐标系
@@ -102,9 +103,9 @@ Switching language changes buttons, menus, dialogs, placeholders, hints, status 
 
 ## Handwriting
 
-默认识别是开的：笔迹停大约一秒，先判断像不像算式。普通句子留在纸上，不送进公式模型。像算式才走本机 CoMER。置信度够就写成公式并更新角落的图，纸上没有确认条。按 R 会对最近的笔迹再认一次。设置里可以关掉自动识别。
+手写识别要点一下才开始：按 R，或点工具条上的识别。抬笔不会自动识别。先判断像不像算式。普通句子留在纸上，不送进公式模型。像算式才走本机 CoMER。置信度够就写成公式并更新角落的图，纸上没有确认条。设置里可以打开“写完稍停再认”。
 
-Recognition is on by default. About a second after the ink settles, a text gate decides whether it looks like a formula. Ordinary writing stays on the paper and is not sent to the formula model. Formula-like ink goes to the local CoMER model. A confident reading is written as a formula and the corner plot updates. There is no confirmation strip. R recognizes the latest ink again. Automatic recognition can be turned off in Settings.
+Handwriting is recognized only when you ask: press R, or use the recognize button. Lifting the pen does not recognize it. A text gate decides whether it looks like a formula. Ordinary writing stays on the paper and is not sent to the formula model. Formula-like ink goes to the local CoMER model. A confident reading is written as a formula and the corner plot updates. There is no confirmation strip. Settings can turn on recognition after a short pause.
 
 模型是 CoMER（ECCV 2022）的 INT8 ONNX，权重由 [ink-on](https://github.com/kimseungdae/ink-on) 以 Apache-2.0 分发。它能读一些清楚的短式，不能当作任意手写的完整识别器：认不出就保持笔迹，不会用 `y = x` 充数。单独的 `sigma` 是符号，求和与积分留在纸上，不因此打开坐标系。
 
@@ -176,9 +177,9 @@ iOS 最低系统是 16.4。能装到别人手机上的 IPA 需要 Apple Develope
 
 The iOS minimum is 16.4. An IPA that installs on someone else's phone needs an Apple Developer certificate and profile: `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD`, `IOS_MOBILE_PROVISION`, or `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_PATH`. This repository does not enroll a developer account, does not upload to TestFlight or the App Store, and has not been installed on an iPhone.
 
-`.github/workflows/package.yml` 在推送到 `main` 或 `cursor/mathscrap-packaging-*` 时，以及指向 `main` 的 pull request 上运行。`test` 作业没有额外的跳过条件：这三种情况都会在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`，然后拉起 dev 服务器，依次跑 `npm run e2e:sheet` 和 `npm run e2e`（逐条作图）。失败时上传 `e2e-shots`、`e2e-plots` 和 `dev-server.log`。这些步骤不需要密钥。网页、debug APK 和未签名 Windows 安装程序仍只在 push 上、并且 `test` 通过之后构建；pull request 不打安装包。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
+`.github/workflows/package.yml` 在推送到 `main` 或 `cursor/mathscrap-packaging-*` 时，以及指向 `main` 的 pull request 上运行。`test` 作业没有额外的跳过条件：这三种情况都会在 `ubuntu-latest` 上跑 `npm run lint`、`npm run test:rust`、`npm run smoke`、`npm run smoke:ocr`、`npm run smoke:ai`、`npm run test:pack`、`npm run smoke:ink`，然后拉起 dev 服务器，依次跑 `npm run e2e:sheet`、`npm run e2e:ink` 和 `npm run e2e`（逐条作图）。失败时上传 `e2e-shots`、`e2e-plots` 和 `dev-server.log`。这些步骤不需要密钥。网页、debug APK 和未签名 Windows 安装程序仍只在 push 上、并且 `test` 通过之后构建；pull request 不打安装包。`.github/workflows/package-ios.yml` 只在手动启动时使用 macOS runner。这些 workflow 不创建 GitHub Release。本文件不提供下载地址。
 
-`.github/workflows/package.yml` runs on a push to `main` or `cursor/mathscrap-packaging-*`, and on a pull request into `main`. The `test` job has no extra skip condition, so all three of those runs execute it on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, then a dev server, then `npm run e2e:sheet` and `npm run e2e` (one plot per formula). On failure it uploads `e2e-shots`, `e2e-plots`, and `dev-server.log`. Those steps need no secrets. The web bundle, debug APK, and unsigned Windows installer still build only on a push, and only after `test` passes. A pull request does not build installers. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
+`.github/workflows/package.yml` runs on a push to `main` or `cursor/mathscrap-packaging-*`, and on a pull request into `main`. The `test` job has no extra skip condition, so all three of those runs execute it on `ubuntu-latest`: `npm run lint`, `npm run test:rust`, `npm run smoke`, `npm run smoke:ocr`, `npm run smoke:ai`, `npm run test:pack`, `npm run smoke:ink`, then a dev server, then `npm run e2e:sheet`, `npm run e2e:ink`, and `npm run e2e` (one plot per formula). On failure it uploads `e2e-shots`, `e2e-plots`, and `dev-server.log`. Those steps need no secrets. The web bundle, debug APK, and unsigned Windows installer still build only on a push, and only after `test` passes. A pull request does not build installers. `.github/workflows/package-ios.yml` uses a macOS runner only when started by hand. These workflows do not create a GitHub Release. This file does not publish a download URL.
 
 ## 许可和作者
 
