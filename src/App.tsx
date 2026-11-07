@@ -30,7 +30,7 @@ import { PlotPanel } from '@/plot/PlotPanel'
 import { PlotPane } from '@/plot/PlotPane'
 
 const PREFS_KEY = 'mathscrap.prefs.v2'
-const DEFAULT_PREFS: Prefs = { penOnly: false, showGrid: false, showHints: true, autoOcr: true }
+const DEFAULT_PREFS: Prefs = { penOnly: false, showGrid: false, showHints: true, autoOcr: false }
 /** vertical rhythm of formulas written one under another, like lines in a notebook */
 const LINE = 60
 
@@ -120,12 +120,11 @@ interface ComposerState {
 export default function App() {
   const { t } = useI18n()
   const compact = useMediaQuery('(max-width: 767px)')
-  const { doc, docRef, commit, preview, undo, redo, canUndo, canRedo } = useDocument()
+  const { doc, docRef, commit, preview, undo, redo, canUndo, canRedo, selected, setSelected } = useDocument()
   const [view, setView] = useState<View>(() => fitView(doc, window.innerWidth < 768))
   const [tool, setTool] = useState<Tool>('pen')
   const [pen, setPen] = useState<PenSettings>({ color: '#2b2118', width: 3, style: 'ink' })
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
-  const [selected, setSelected] = useState<string | null>(null)
   /** `open` shows the corner plot. `details` expands the readouts. `full` is the large dialog. */
   const [plot, setPlot] = useState<{ open: boolean; details: boolean; full: boolean; focusId: string | null }>({ open: false, details: false, full: false, focusId: null })
   const [composerText, setComposerText] = useState('')
@@ -208,7 +207,7 @@ export default function App() {
       setSelected(null)
       toast(t('clearedOne'), { action: { label: t('undo'), onClick: undo } })
     },
-    [commit, t, undo],
+    [commit, setSelected, t, undo],
   )
 
   const closeComposer = () => {
@@ -237,7 +236,7 @@ export default function App() {
       setComposerText('')
       setComposer({ open: true, at: { x, y }, editingId: null })
     },
-    [],
+    [setSelected],
   )
 
   const editCard = useCallback(
@@ -288,12 +287,14 @@ export default function App() {
   )
 
   const recognize = useCallback(() => {
-    const pool = unmarkedInk(docRef).slice(-24)
+    const pool = unmarkedInk(docRef)
     if (!pool.length) {
       toast(t('writeFirst'))
       return
     }
     const clusters = clusterStrokes(pool)
+    if (!clusters.length) return
+    document.documentElement.dataset.ocr = 'run'
     let pending = clusters.length
     let wrote = 0
     for (const cl of clusters) {
@@ -303,7 +304,10 @@ export default function App() {
         const best = cands[0]
         if (best && best.confidence >= OCR_ACCEPT && acceptInk(best.text, cl)) wrote += 1
         pending -= 1
-        if (pending === 0 && wrote === 0) toast(t('notRecognized'))
+        if (pending === 0) {
+          document.documentElement.dataset.ocr = 'idle'
+          if (wrote === 0) toast(t('notRecognized'))
+        }
       })
     }
   }, [acceptInk, docRef, t])
@@ -394,7 +398,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo, plot.open, plot.full, recognize, selected, deleteCard, openPlot, closePlot, togglePlot, placeComposer, writingSpot])
+  }, [undo, redo, plot.open, plot.full, recognize, selected, setSelected, deleteCard, openPlot, closePlot, togglePlot, placeComposer, writingSpot])
 
   // MCP-ready local tool bridge for experimentation from devtools.
   // getDoc reads the React state captured for this render, so the bridge is rebuilt when the sheet changes.
@@ -449,7 +453,7 @@ export default function App() {
         toast(e instanceof Error ? e.message : t('importFailed'))
       }
     },
-    [commit, t, undo],
+    [commit, setSelected, t, undo],
   )
 
   const anchor = composer.at ? { left: composer.at.x * view.scale + view.x, top: composer.at.y * view.scale + view.y } : null
@@ -473,16 +477,26 @@ export default function App() {
           editingCard={composer.editingId}
           onSelectCard={setSelected}
           onPlace={placeComposer}
-          onAddStroke={(s) => commit((d) => ({ ...d, strokes: [...d.strokes, s] }))}
+          onAddStroke={(s) => {
+            commit((d) => ({ ...d, strokes: [...d.strokes, s] }))
+            setSelected(null)
+          }}
           onErase={(ids) => {
-            const set = new Set(ids)
-            commit((d) => ({ ...d, strokes: d.strokes.filter((s) => !set.has(s.id)) }))
+            const gone = new Set(ids)
+            const prev = docRef.current
+            commit((d) => ({ ...d, strokes: d.strokes.filter((s) => !gone.has(s.id)) }))
+            if (docRef.current !== prev) setSelected(null)
           }}
           onCardDragStart={() => (dragBase.current = docRef.current)}
           onCardDrag={(id, dx, dy) => preview((d) => ({ ...d, cards: d.cards.map((c) => (c.id === id ? { ...c, x: c.x + dx, y: c.y + dy } : c)) }))}
           onCardDragEnd={() => {
             if (dragBase.current) commit(docRef.current, dragBase.current)
             dragBase.current = null
+          }}
+          onCardDragCancel={() => {
+            const base = dragBase.current
+            dragBase.current = null
+            if (base) preview(() => base)
           }}
           onPlot={openPlot}
           onEdit={editCard}
@@ -595,6 +609,7 @@ export default function App() {
             <button
               onClick={() => {
                 commit(blankDoc())
+                setSelected(null)
                 setConfirmClear(false)
                 toast(t('cleared'), { action: { label: t('undo'), onClick: undo } })
               }}

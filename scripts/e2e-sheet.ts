@@ -290,7 +290,8 @@ async function dockAndLive() {
   }
   check(seen.length >= 3 && seen[seen.length - 1] >= 3, `reveal: statements emerge one by one (${seen.join(' → ')})`)
 
-  // 5. stray ink is not turned into a formula and nothing is painted over the paper
+  // 5. stray ink is not turned into a formula and nothing is painted over the paper.
+  // Recognition starts only from the button or R, not when the pen lifts.
   await page2.keyboard.press('p')
   await page2.mouse.move(320, 320)
   await page2.mouse.down()
@@ -301,13 +302,15 @@ async function dockAndLive() {
   await page2.mouse.down()
   await page2.mouse.move(540, 355, { steps: 8 })
   await page2.mouse.up()
-  await page2.waitForFunction(() => document.documentElement.dataset.ocr === 'run', null, { timeout: 5000 })
+  await page2.waitForTimeout(1200)
+  check((await page2.evaluate(() => document.documentElement.dataset.ocr ?? 'idle')) !== 'run', 'ocr: lifting the pen does not start recognition')
+  await page2.keyboard.press('r')
   await page2.waitForFunction(() => document.documentElement.dataset.ocr === 'idle', null, { timeout: 25000 })
   check((await page2.locator('[data-ink-chip]').count()) === 0 && (await page2.getByText('手写 → 公式').count()) === 0, 'ocr: no confirm chip or dialog covers the paper')
   check((await page2.locator('[data-formula]').count()) === 1, 'ocr: unrecognized ink is not written onto the sheet')
   await page2.screenshot({ path: `${SHOTS}/dock-ocr-chip.png` })
 
-  // 6. confident handwriting is written by itself and the corner plot opens
+  // 6. an explicit recognize click writes confident handwriting and opens the corner plot
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page3 = await ctx.newPage()
   page3.on('pageerror', (e) => errors.push(e.message))
@@ -325,6 +328,10 @@ async function dockAndLive() {
     localStorage.setItem('mathscrap.doc.v2', saved)
   }, JSON.stringify(doc))
   await page3.goto(RAW, { waitUntil: 'networkidle' })
+  await page3.waitForFunction(() => !!(window as unknown as { mathscrap?: unknown }).mathscrap)
+  await page3.waitForTimeout(400)
+  check((await page3.evaluate(() => document.documentElement.dataset.ocr ?? 'idle')) !== 'run', 'ocr: saved ink is not recognized on load')
+  await page3.keyboard.press('r')
   await page3.waitForFunction(() => document.documentElement.dataset.ocr === 'idle', null, { timeout: 60000 })
   const read = await page3.locator('[data-formula]').evaluateAll((els) => els.map((el) => el.getAttribute('data-formula-text') ?? ''))
   const vecs = read.filter((t) => /^\\vec\{[a-z]\} = \(/.test(t))
