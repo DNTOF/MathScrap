@@ -52,11 +52,11 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
+    host: process.env.MATHSCRAP_BIND === 'lan' ? '0.0.0.0' : '127.0.0.1',
     port: 47321,
   },
   preview: {
-    host: '0.0.0.0',
+    host: process.env.MATHSCRAP_BIND === 'lan' ? '0.0.0.0' : '127.0.0.1',
     port: 47322,
   },
   build: {

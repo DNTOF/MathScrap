@@ -211,6 +211,11 @@ try {
   assert.match(fallback.text, /y 轴/)
 
   assert.equal(isBlockedHost('169.254.169.254'), true)
+  assert.equal(isBlockedHost('[::ffff:a9fe:a9fe]'), true)
+  assert.equal(isBlockedHost('::ffff:169.254.169.254'), true)
+  assert.equal(isBlockedHost('2852039166'), true)
+  assert.equal(isBlockedHost('127.0.0.1'), true)
+  assert.equal(isBlockedHost('10.1.1.1'), true)
   let forwarded = false
   await assert.rejects(
     () =>
@@ -220,12 +225,40 @@ try {
       }),
     /refused/i,
   )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://127.0.0.1/v1/models', method: 'GET' }, async () => {
+        forwarded = true
+        return new Response('no')
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: 'http://models.example/v1/models', method: 'GET' },
+        async () => {
+          forwarded = true
+          return new Response('no')
+        },
+        undefined,
+        { lookup: async () => [{ address: '10.1.1.1', family: 4 }] },
+      ),
+    /refused/i,
+  )
   assert.equal(forwarded, false)
 
   const proxy = createServer((req, res) => {
     void handleAiProxy(req, res)
   })
   const proxyPort = await listen(proxy)
+  const evil = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+    body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET' }),
+  })
+  assert.equal(evil.status, 403)
+  process.env.MATHSCRAP_AI_ALLOW_PRIVATE = '1'
   const proxied = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -235,6 +268,7 @@ try {
   assert.equal(proxied.status, 401)
   const proxiedBody = await proxied.text()
   assert.ok(proxiedBody.includes('SHOULD-NOT-LEAK'), 'upstream body may echo a key; the proxy must not be the thing that logs it')
+  delete process.env.MATHSCRAP_AI_ALLOW_PRIVATE
   proxy.close()
 
   assert.ok(!logs.logs.some((line) => line.includes('SHOULD-NOT-LEAK') || line.includes('DO-NOT-LOG')), `API key leaked to console:\n${logs.logs.join('\n')}`)

@@ -4,12 +4,15 @@ export function loadAiConfig(): AiConfig {
   try {
     const raw = localStorage.getItem(AI_STORAGE_KEY)
     if (!raw) return emptyAiConfig()
-    return normalizeAiConfig(JSON.parse(raw))
+    const cfg = normalizeAiConfig(JSON.parse(raw))
+    if (cfg.apiKey) localStorage.setItem(AI_STORAGE_KEY, JSON.stringify({ ...cfg, apiKey: '' }))
+    return { ...cfg, apiKey: '' }
   } catch {
     return emptyAiConfig()
   }
 }
 
 export function saveAiConfig(cfg: AiConfig) {
-  localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(normalizeAiConfig(cfg)))
+  const stored = normalizeAiConfig(cfg)
+  localStorage.setItem(AI_STORAGE_KEY, JSON.stringify({ ...stored, apiKey: '' }))
 }

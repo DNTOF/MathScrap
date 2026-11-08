@@ -81,6 +81,9 @@ jobs:
         if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke:ocr
         if: steps.scope.outputs.mode == 'full'
+      - name: Real CoMER smoke
+        if: steps.scope.outputs.mode == 'full'
+        run: npx tsx scripts/ocr-real-smoke.ts
       - run: npm run smoke:ai
         if: steps.scope.outputs.mode == 'full'
       - run: npm run test:pack
