@@ -17,11 +17,25 @@ use std::path::Path;
 pub(crate) struct SecretError {
     pub code: &'static str,
     pub message: &'static str,
+    status: u32,
+    detail: &'static str,
 }
 
 impl SecretError {
     const fn new(code: &'static str, message: &'static str) -> Self {
-        Self { code, message }
+        Self { code, message, status: 0, detail: "" }
+    }
+
+    #[cfg_attr(not(windows), allow(dead_code))]
+    const fn with_status(mut self, status: u32) -> Self {
+        self.status = status;
+        self
+    }
+
+    #[cfg_attr(not(windows), allow(dead_code))]
+    const fn with_detail(mut self, detail: &'static str) -> Self {
+        self.detail = detail;
+        self
     }
 
     pub(crate) const fn closed() -> Self {
@@ -43,7 +57,11 @@ impl SecretError {
 
 impl std::fmt::Debug for SecretError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.code, self.message)
+        if self.status == 0 && self.detail.is_empty() {
+            write!(f, "{} ({})", self.code, self.message)
+        } else {
+            write!(f, "{} ({}) {} {:08x}", self.code, self.message, self.detail, self.status)
+        }
     }
 }
 
@@ -291,17 +309,17 @@ mod windows {
     use super::{read_capped, SecretError};
     use std::ffi::c_void;
     use std::fs::File;
-    use std::os::windows::ffi::OsStrExt;
-    use std::path::Path;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use std::path::{Path, PathBuf};
     use std::ptr::null_mut;
     use std::fs;
-    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree, ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT};
     use windows_sys::Win32::Security::{
-        AddAccessAllowedAceEx, AllocateAndInitializeSid, CopySid, CreateWellKnownSid, EqualSid, FreeSid, GetAce, GetAclInformation, GetLengthSid, GetSecurityDescriptorControl, GetTokenInformation, InitializeAcl, InitializeSecurityDescriptor, SetSecurityDescriptorControl, SetSecurityDescriptorDacl, SetSecurityDescriptorOwner, AclSizeInformation, ACL_SIZE_INFORMATION, CONTAINER_INHERIT_ACE, DACL_SECURITY_INFORMATION, INHERITED_ACE, OBJECT_INHERIT_ACE, OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid, ACL, ACL_REVISION, PSECURITY_DESCRIPTOR, PSID, SECURITY_DESCRIPTOR, SE_DACL_PRESENT, SE_DACL_PROTECTED, SID_IDENTIFIER_AUTHORITY, TOKEN_QUERY, TOKEN_USER, WELL_KNOWN_SID_TYPE,
+        AddAccessAllowedAceEx, AllocateAndInitializeSid, CopySid, CreateWellKnownSid, EqualSid, FreeSid, GetAce, GetAclInformation, GetLengthSid, GetSecurityDescriptorControl, GetTokenInformation, InitializeAcl, InitializeSecurityDescriptor, MakeSelfRelativeSD, SetSecurityDescriptorControl, SetSecurityDescriptorDacl, AclSizeInformation, ACL_SIZE_INFORMATION, CONTAINER_INHERIT_ACE, DACL_SECURITY_INFORMATION, INHERITED_ACE, OBJECT_INHERIT_ACE, OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, TokenUser, WinBuiltinAdministratorsSid, WinLocalSystemSid, ACL, ACL_REVISION, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR, SE_DACL_PRESENT, SE_DACL_PROTECTED, SID_IDENTIFIER_AUTHORITY, TOKEN_QUERY, TOKEN_USER, WELL_KNOWN_SID_TYPE,
     };
     use windows_sys::Win32::Storage::FileSystem::{
-        FlushFileBuffers, WriteFile, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, READ_CONTROL, SYNCHRONIZE, WRITE_DAC,
+        CreateDirectoryW, CreateFileW, FlushFileBuffers, GetFileInformationByHandle, GetFileInformationByHandleEx, GetFinalPathNameByHandleW, SetFileInformationByHandle, WriteFile, BY_HANDLE_FILE_INFORMATION, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FileAttributeTagInfo, FileDispositionInfo, OPEN_EXISTING, READ_CONTROL, SYNCHRONIZE, WRITE_DAC,
     };
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -316,58 +334,7 @@ mod windows {
     const FILE_DELETE_CHILD: u32 = 0x0040;
     const DELETE: u32 = 0x00010000;
     const FILE_ALL_ACCESS: u32 = 0x001F01FF;
-    const FILE_DIRECTORY_FILE: u32 = 0x00000001;
-    const FILE_NON_DIRECTORY_FILE: u32 = 0x00000040;
-    const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x00000020;
-    const FILE_OPEN_REPARSE_POINT: u32 = 0x00200000;
-    const FILE_OPEN: u32 = 1;
-    const FILE_CREATE: u32 = 2;
-    const OBJ_CASE_INSENSITIVE: u32 = 0x00000040;
-    const FILE_DISPOSITION_INFORMATION: u32 = 13;
     const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
-
-    #[repr(C)]
-    struct UnicodeString {
-        length: u16,
-        maximum_length: u16,
-        buffer: *mut u16,
-    }
-
-    #[repr(C)]
-    struct ObjectAttributes {
-        length: u32,
-        root_directory: HANDLE,
-        object_name: *mut UnicodeString,
-        attributes: u32,
-        security_descriptor: *mut c_void,
-        security_quality_of_service: *mut c_void,
-    }
-
-    #[repr(C)]
-    struct IoStatus {
-        status: usize,
-        information: usize,
-    }
-
-    #[repr(C)]
-    struct Disposition {
-        delete_file: u8,
-    }
-
-    #[link(name = "ntdll")]
-    extern "system" {
-        fn NtCreateFile(handle: *mut HANDLE, access: u32, attributes: *const ObjectAttributes, io: *mut IoStatus, allocation: *const i64, attributes_file: u32, share: u32, disposition: u32, options: u32, ea: *const c_void, ea_length: u32) -> i32;
-        fn NtSetInformationFile(handle: HANDLE, io: *mut IoStatus, info: *const c_void, length: u32, class: u32) -> i32;
-        fn NtQueryInformationFile(handle: HANDLE, io: *mut IoStatus, info: *mut c_void, length: u32, class: u32) -> i32;
-    }
-
-    const FILE_ATTRIBUTE_TAG_INFORMATION: u32 = 35;
-
-    #[repr(C)]
-    struct AttributeTag {
-        file_attributes: u32,
-        reparse_tag: u32,
-    }
 
     struct Owned(HANDLE);
 
@@ -400,29 +367,37 @@ mod windows {
         admins: Vec<u8>,
     }
 
-    fn nt_ok(status: i32) -> bool {
-        status >= 0
-    }
-
     pub(super) fn create_dir_private(path: &Path) -> Result<(), SecretError> {
         let parent = path.parent().ok_or_else(SecretError::acl)?;
-        let name = path.file_name().and_then(|text| text.to_str()).ok_or_else(SecretError::acl)?;
         let root = open_existing(parent, true)?;
         if is_reparse(root.0)? {
             return Err(SecretError::reparse());
         }
         let id = identity()?;
-        let mut sd = descriptor(&id, true)?;
-            match create_relative(root.0, name, true, FILE_CREATE, Some(&mut sd))? {
-            Some(handle) => {
-                if is_reparse(handle.0)? {
-                    delete_handle(handle.0)?;
-                    return Err(SecretError::reparse());
-                }
-                verify_handle(handle.0, &id, true)
-            }
-            None => Err(SecretError::acl()),
+        let mut sd = relative_sd(&id, true)?;
+        let wide = wide_path(path);
+        let sa = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: sd.as_mut_ptr() as *mut c_void,
+            bInheritHandle: 0,
+        };
+        // CreateDirectory applies the descriptor as the directory is created. CreateFile cannot create a directory.
+        if unsafe { CreateDirectoryW(wide.as_ptr(), &sa) } == 0 {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("create-dir"));
         }
+        let handle = match open_existing(path, true) {
+            Ok(handle) => handle,
+            Err(err) => return Err(err),
+        };
+        if is_reparse(handle.0).unwrap_or(true) || !same_directory(root.0, handle.0).unwrap_or(false) {
+            let _ = delete_handle(handle.0);
+            return Err(SecretError::reparse());
+        }
+        if let Err(err) = verify_handle(handle.0, &id, true) {
+            let _ = delete_handle(handle.0);
+            return Err(err);
+        }
+        Ok(())
     }
 
     pub(super) fn lock_dir(path: &Path) -> Result<(), SecretError> {
@@ -452,21 +427,25 @@ mod windows {
         }
         let id = identity()?;
         verify_handle(dir.0, &id, true)?;
-        if let Some(existing) = create_relative(dir.0, name, false, FILE_OPEN, None)? {
-            if is_reparse(existing.0)? {
-                delete_handle(existing.0)?;
-            } else {
-                delete_handle(existing.0)?;
-            }
+        let child = parent.join(name);
+        match remove_existing(&child) {
+            Ok(()) | Err(SecretError { code: "mcp_closed", .. }) => {}
+            Err(err) => return Err(err),
         }
-        let mut sd = descriptor(&id, false)?;
-        let handle = create_relative(dir.0, name, false, FILE_CREATE, Some(&mut sd))?.ok_or_else(SecretError::acl)?;
-        if is_reparse(handle.0)? {
-            delete_handle(handle.0)?;
+        let sd = relative_sd(&id, false)?;
+        let handle = create_new(&child, false, &sd)?;
+        if is_reparse(handle.0).unwrap_or(true) || !same_directory(dir.0, handle.0).unwrap_or(false) {
+            let _ = delete_handle(handle.0);
             return Err(SecretError::reparse());
         }
-        verify_handle(handle.0, &id, false)?;
-        write_all(handle.0, bytes)?;
+        if let Err(err) = verify_handle(handle.0, &id, false) {
+            let _ = delete_handle(handle.0);
+            return Err(err);
+        }
+        if let Err(err) = write_all(handle.0, bytes) {
+            let _ = delete_handle(handle.0);
+            return Err(err);
+        }
         if let Err(err) = verify_handle(handle.0, &id, false) {
             let _ = delete_handle(handle.0);
             return Err(err);
@@ -483,8 +462,8 @@ mod windows {
         }
         let id = identity()?;
         verify_handle(dir.0, &id, true)?;
-        let handle = create_relative(dir.0, name, false, FILE_OPEN, None)?.ok_or_else(SecretError::closed)?;
-        if is_reparse(handle.0)? {
+        let handle = open_existing(&parent.join(name), false)?;
+        if is_reparse(handle.0)? || !same_directory(dir.0, handle.0)? {
             return Err(SecretError::reparse());
         }
         verify_handle(handle.0, &id, false)?;
@@ -506,96 +485,135 @@ mod windows {
         if is_reparse(dir.0)? {
             return Err(SecretError::reparse());
         }
-        if let Some(handle) = create_relative(dir.0, name, false, FILE_OPEN, None)? {
-            delete_handle(handle.0)?;
+        match remove_existing(&parent.join(name)) {
+            Err(SecretError { code: "mcp_closed", .. }) => Ok(()),
+            other => other,
         }
-        Ok(())
     }
 
     fn open_existing(path: &Path, directory: bool) -> Result<Owned, SecretError> {
-        let mut wide = nt_path(path);
-        let mut uni = UnicodeString {
-            length: ((wide.len() - 1) * 2) as u16,
-            maximum_length: (wide.len() * 2) as u16,
-            buffer: wide.as_mut_ptr(),
-        };
-        let attributes = ObjectAttributes {
-            length: std::mem::size_of::<ObjectAttributes>() as u32,
-            root_directory: null_mut(),
-            object_name: &mut uni,
-            attributes: OBJ_CASE_INSENSITIVE,
-            security_descriptor: null_mut(),
-            security_quality_of_service: null_mut(),
-        };
-        let mut handle: HANDLE = null_mut();
-        let mut io = IoStatus { status: 0, information: 0 };
-        let access = if directory {
-            FILE_LIST_DIRECTORY | FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | READ_CONTROL | WRITE_DAC | DELETE | SYNCHRONIZE
-        } else {
-            FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | READ_CONTROL | WRITE_DAC | DELETE | SYNCHRONIZE
-        };
-        let options = if directory { FILE_DIRECTORY_FILE } else { FILE_NON_DIRECTORY_FILE } | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT;
-        let status = unsafe { NtCreateFile(&mut handle, access, &attributes, &mut io, null_mut(), FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN, options, null_mut(), 0) };
-        if !nt_ok(status) {
-            return Err(if (status as u32) == 0xC0000034 { SecretError::closed() } else { SecretError::acl() });
+        let wide = wide_path(path);
+        let handle = unsafe { CreateFileW(wide.as_ptr(), access_mask(directory), FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, null_mut(), OPEN_EXISTING, open_flags(directory), null_mut()) };
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            let err = unsafe { GetLastError() };
+            return Err(if err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND {
+                SecretError::closed()
+            } else {
+                SecretError::acl().with_status(err).with_detail("open")
+            });
         }
         Ok(Owned(handle))
     }
 
-    fn create_relative(root: HANDLE, name: &str, directory: bool, disposition: u32, sd: Option<&mut Security>) -> Result<Option<Owned>, SecretError> {
-        let mut wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
-        let mut uni = UnicodeString {
-            length: ((wide.len() - 1) * 2) as u16,
-            maximum_length: (wide.len() * 2) as u16,
-            buffer: wide.as_mut_ptr(),
+    fn create_new(path: &Path, directory: bool, sd: &[u8]) -> Result<Owned, SecretError> {
+        let wide = wide_path(path);
+        let mut owned = sd.to_vec();
+        let sa = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: owned.as_mut_ptr() as *mut c_void,
+            bInheritHandle: 0,
         };
-        let mut attributes = ObjectAttributes {
-            length: std::mem::size_of::<ObjectAttributes>() as u32,
-            root_directory: root,
-            object_name: &mut uni,
-            attributes: OBJ_CASE_INSENSITIVE,
-            security_descriptor: null_mut(),
-            security_quality_of_service: null_mut(),
-        };
-        if let Some(sd) = sd {
-            attributes.security_descriptor = &mut sd.descriptor as *mut SECURITY_DESCRIPTOR as *mut c_void;
+        let handle = unsafe { CreateFileW(wide.as_ptr(), access_mask(directory), FILE_SHARE_READ | FILE_SHARE_DELETE, &sa, CREATE_NEW, open_flags(directory), null_mut()) };
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("create"));
         }
-        let mut handle: HANDLE = null_mut();
-        let mut io = IoStatus { status: 0, information: 0 };
-        let access = if directory {
-            FILE_LIST_DIRECTORY | FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | READ_CONTROL | WRITE_DAC | DELETE | SYNCHRONIZE
+        Ok(Owned(handle))
+    }
+
+    fn access_mask(directory: bool) -> u32 {
+        let common = FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | READ_CONTROL | WRITE_DAC | DELETE | SYNCHRONIZE;
+        if directory {
+            FILE_LIST_DIRECTORY | FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD | common
         } else {
-            FILE_READ_DATA | FILE_WRITE_DATA | FILE_APPEND_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | READ_CONTROL | WRITE_DAC | DELETE | SYNCHRONIZE
-        };
-        let options = if directory { FILE_DIRECTORY_FILE } else { FILE_NON_DIRECTORY_FILE } | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT;
-        let status = unsafe { NtCreateFile(&mut handle, access, &attributes, &mut io, null_mut(), FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_DELETE, disposition, options, null_mut(), 0) };
-        if (status as u32) == 0xC0000034 {
-            return Ok(None);
+            FILE_READ_DATA | FILE_WRITE_DATA | FILE_APPEND_DATA | common
         }
-        if !nt_ok(status) {
-            return Err(SecretError::acl());
+    }
+
+    fn open_flags(directory: bool) -> u32 {
+        let kind = if directory { 0x00000010 } else { FILE_ATTRIBUTE_NORMAL };
+        kind | FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT
+    }
+
+    fn wide_path(path: &Path) -> Vec<u16> {
+        let raw: Vec<u16> = path.as_os_str().encode_wide().collect();
+        let mut out = Vec::with_capacity(raw.len() + 5);
+        let prefixed = raw.len() >= 4 && raw[0] == '\\' as u16 && raw[1] == '\\' as u16 && (raw[2] == '?' as u16 || raw[2] == '.' as u16);
+        let drive = raw.len() >= 3 && raw[1] == ':' as u16;
+        if !prefixed && drive {
+            out.extend(['\\' as u16, '\\' as u16, '?' as u16, '\\' as u16]);
         }
-        Ok(Some(Owned(handle)))
+        out.extend(raw);
+        out.push(0);
+        out
     }
 
     fn is_reparse(handle: HANDLE) -> Result<bool, SecretError> {
-        let mut info = AttributeTag { file_attributes: 0, reparse_tag: 0 };
-        let mut io = IoStatus { status: 0, information: 0 };
-        let status = unsafe { NtQueryInformationFile(handle, &mut io, &mut info as *mut _ as *mut c_void, std::mem::size_of::<AttributeTag>() as u32, FILE_ATTRIBUTE_TAG_INFORMATION) };
-        if !nt_ok(status) {
-            return Err(SecretError::acl());
+        let mut info = FILE_ATTRIBUTE_TAG_INFO { FileAttributes: 0, ReparseTag: 0 };
+        let ok = unsafe { GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &mut info as *mut _ as *mut c_void, std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32) };
+        if ok == 0 {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("reparse-query"));
         }
-        Ok(info.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0)
+        Ok(info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0)
     }
 
     fn delete_handle(handle: HANDLE) -> Result<(), SecretError> {
-        let info = Disposition { delete_file: 1 };
-        let mut io = IoStatus { status: 0, information: 0 };
-        let status = unsafe { NtSetInformationFile(handle, &mut io, &info as *const _ as *const c_void, std::mem::size_of::<Disposition>() as u32, FILE_DISPOSITION_INFORMATION) };
-        if !nt_ok(status) {
-            return Err(SecretError::acl());
+        let info = FILE_DISPOSITION_INFO { DeleteFile: 1 };
+        let ok = unsafe { SetFileInformationByHandle(handle, FileDispositionInfo, &info as *const _ as *const c_void, std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32) };
+        if ok == 0 {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("delete"));
         }
         Ok(())
+    }
+
+    fn remove_existing(path: &Path) -> Result<(), SecretError> {
+        if fs::symlink_metadata(path).is_err() {
+            return Ok(());
+        }
+        let wide = wide_path(path);
+        let handle = unsafe { CreateFileW(wide.as_ptr(), DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, null_mut(), OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, null_mut()) };
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            let err = unsafe { GetLastError() };
+            return Err(if err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND { SecretError::closed() } else { SecretError::acl().with_status(err).with_detail("replace") });
+        }
+        let owned = Owned(handle);
+        if is_reparse(owned.0)? {
+            return delete_handle(owned.0);
+        }
+        if fs::symlink_metadata(path).map(|meta| meta.is_dir()).unwrap_or(false) {
+            return Err(SecretError::reparse());
+        }
+        delete_handle(owned.0)
+    }
+
+    fn same_directory(parent: HANDLE, child: HANDLE) -> Result<bool, SecretError> {
+        let expected = file_id(parent)?;
+        let path = final_path(child)?;
+        let Some(parent_path) = path.parent() else {
+            return Ok(false);
+        };
+        let opened = open_existing(parent_path, true)?;
+        if is_reparse(opened.0)? {
+            return Ok(false);
+        }
+        Ok(file_id(opened.0)? == expected)
+    }
+
+    fn file_id(handle: HANDLE) -> Result<(u32, u32, u32), SecretError> {
+        let mut info = unsafe { std::mem::zeroed::<BY_HANDLE_FILE_INFORMATION>() };
+        if unsafe { GetFileInformationByHandle(handle, &mut info) } == 0 {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("file-id"));
+        }
+        Ok((info.dwVolumeSerialNumber, info.nFileIndexHigh, info.nFileIndexLow))
+    }
+
+    fn final_path(handle: HANDLE) -> Result<PathBuf, SecretError> {
+        let mut buf = vec![0u16; 1024];
+        let length = unsafe { GetFinalPathNameByHandleW(handle, buf.as_mut_ptr(), buf.len() as u32, 0) };
+        if length == 0 || length as usize >= buf.len() {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("final-path"));
+        }
+        buf.truncate(length as usize);
+        Ok(PathBuf::from(std::ffi::OsString::from_wide(&buf)))
     }
 
     fn write_all(handle: HANDLE, bytes: &[u8]) -> Result<(), SecretError> {
@@ -617,48 +635,54 @@ mod windows {
         text
     }
 
-    struct Security {
-        descriptor: SECURITY_DESCRIPTOR,
-        _acl: Box<AclBuf>,
-    }
-
-    fn descriptor(id: &Identity, directory: bool) -> Result<Security, SecretError> {
-        let mut acl = Box::new(AclBuf { bytes: [0; 768] });
+    fn fill_acl(acl: &mut AclBuf, id: &Identity, directory: bool) -> Result<(), SecretError> {
         let acl_ptr = acl.bytes.as_mut_ptr() as *mut ACL;
         if unsafe { InitializeAcl(acl_ptr, acl.bytes.len() as u32, ACL_REVISION) } == 0 {
-            return Err(SecretError::acl());
+            return Err(SecretError::acl().with_detail("acl-init"));
         }
         let flags = if directory { OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE } else { 0 };
         for sid in [&id.user, &id.system, &id.admins] {
             if unsafe { AddAccessAllowedAceEx(acl_ptr, ACL_REVISION, flags, FILE_ALL_ACCESS, sid.as_ptr() as PSID) } == 0 {
-                return Err(SecretError::acl());
+                return Err(SecretError::acl().with_detail("acl-ace"));
             }
         }
+        Ok(())
+    }
+
+    fn relative_sd(id: &Identity, directory: bool) -> Result<Vec<u8>, SecretError> {
+        let mut acl = Box::new(AclBuf { bytes: [0; 768] });
+        fill_acl(&mut acl, id, directory)?;
         let mut descriptor = unsafe { std::mem::zeroed::<SECURITY_DESCRIPTOR>() };
         let sd_ptr = &mut descriptor as *mut SECURITY_DESCRIPTOR as PSECURITY_DESCRIPTOR;
         if unsafe { InitializeSecurityDescriptor(sd_ptr, 1) } == 0 {
-            return Err(SecretError::acl());
+            return Err(SecretError::acl().with_detail("sd-init"));
         }
-        if unsafe { SetSecurityDescriptorOwner(sd_ptr, id.user.as_ptr() as PSID, 0) } == 0 {
-            return Err(SecretError::owner());
-        }
-        if unsafe { SetSecurityDescriptorDacl(sd_ptr, 1, acl_ptr, 0) } == 0 {
-            return Err(SecretError::acl());
+        if unsafe { SetSecurityDescriptorDacl(sd_ptr, 1, acl.bytes.as_mut_ptr() as *mut ACL, 0) } == 0 {
+            return Err(SecretError::acl().with_detail("sd-dacl"));
         }
         if unsafe { SetSecurityDescriptorControl(sd_ptr, SE_DACL_PROTECTED, SE_DACL_PROTECTED) } == 0 {
-            return Err(SecretError::acl());
+            return Err(SecretError::acl().with_detail("sd-protect"));
         }
-        Ok(Security { descriptor, _acl: acl })
+        descriptor.Control |= SE_DACL_PROTECTED;
+        let mut bytes = 0u32;
+        unsafe { MakeSelfRelativeSD(sd_ptr, null_mut(), &mut bytes) };
+        if bytes == 0 {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("sd-size"));
+        }
+        let mut buf = vec![0u8; bytes as usize];
+        if unsafe { MakeSelfRelativeSD(sd_ptr, buf.as_mut_ptr() as PSECURITY_DESCRIPTOR, &mut bytes) } == 0 {
+            return Err(SecretError::acl().with_status(unsafe { GetLastError() }).with_detail("sd-relative"));
+        }
+        buf.truncate(bytes as usize);
+        Ok(buf)
     }
 
     fn apply_private(handle: HANDLE, id: &Identity, directory: bool) -> Result<(), SecretError> {
-        let mut sd = descriptor(id, directory)?;
-        let acl = sd._acl.bytes.as_mut_ptr() as *mut ACL;
-        let code = unsafe {
-            SetSecurityInfo(handle, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, id.user.as_ptr() as PSID, null_mut(), acl, null_mut())
-        };
+        let mut acl = AclBuf { bytes: [0; 768] };
+        fill_acl(&mut acl, id, directory)?;
+        let code = unsafe { SetSecurityInfo(handle, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, null_mut(), null_mut(), acl.bytes.as_mut_ptr() as *mut ACL, null_mut()) };
         if code != ERROR_SUCCESS {
-            return Err(SecretError::acl());
+            return Err(SecretError::acl().with_status(code).with_detail("set-dacl"));
         }
         Ok(())
     }
@@ -672,16 +696,17 @@ mod windows {
             return Err(SecretError::acl());
         }
         let _sd = Local(sd as *mut c_void);
-        if owner.is_null() || unsafe { EqualSid(owner, id.user.as_ptr() as PSID) } == 0 {
+        let owners = [&id.user, &id.system, &id.admins];
+        if owner.is_null() || !owners.iter().any(|sid| unsafe { EqualSid(owner, sid.as_ptr() as PSID) } != 0) {
             return Err(SecretError::owner());
         }
         let mut control = 0u16;
         let mut revision = 0u32;
         if unsafe { GetSecurityDescriptorControl(sd, &mut control, &mut revision) } == 0 {
-            return Err(SecretError::acl());
+            return Err(SecretError::acl().with_detail("control"));
         }
         if control & SE_DACL_PRESENT == 0 || control & SE_DACL_PROTECTED == 0 || dacl.is_null() {
-            return Err(SecretError::acl());
+            return Err(SecretError::acl().with_detail("protected"));
         }
         let mut info = ACL_SIZE_INFORMATION { AceCount: 0, AclBytesInUse: 0, AclBytesFree: 0 };
         if unsafe { GetAclInformation(dacl, &mut info as *mut _ as *mut c_void, std::mem::size_of::<ACL_SIZE_INFORMATION>() as u32, AclSizeInformation) } == 0 {
@@ -697,12 +722,12 @@ mod windows {
             }
             let header = unsafe { &*(ace as *const AceHeader) };
             if header.ace_type != ACCESS_ALLOWED_ACE_TYPE || header.ace_flags & INHERITED_ACE as u8 != 0 {
-                return Err(SecretError::acl());
+                return Err(SecretError::acl().with_detail("ace"));
             }
             let sid = unsafe { (ace as *mut u8).add(std::mem::size_of::<AceHeader>() + 4) as PSID };
             let allowed = [&id.user, &id.system, &id.admins];
             if !allowed.iter().any(|want| unsafe { EqualSid(sid, want.as_ptr() as PSID) } != 0) {
-                return Err(SecretError::acl());
+                return Err(SecretError::acl().with_detail("ace"));
             }
         }
         Ok(())
@@ -751,19 +776,6 @@ mod windows {
         }
         sid.truncate(len as usize);
         Ok(sid)
-    }
-
-    fn nt_path(path: &Path) -> Vec<u16> {
-        let raw: Vec<u16> = path.as_os_str().encode_wide().collect();
-        let mut out = Vec::with_capacity(raw.len() + 5);
-        out.extend(['\\' as u16, '?' as u16, '?' as u16, '\\' as u16]);
-        if raw.len() >= 4 && raw[0] == '\\' as u16 && raw[1] == '\\' as u16 && raw[2] == '?' as u16 && raw[3] == '\\' as u16 {
-            out.extend_from_slice(&raw[4..]);
-        } else {
-            out.extend(raw);
-        }
-        out.push(0);
-        out
     }
 
     #[cfg(test)]

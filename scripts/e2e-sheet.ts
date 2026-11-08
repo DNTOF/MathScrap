@@ -180,7 +180,11 @@ async function phone() {
   await page.waitForFunction(() => !!(window as any).mathscrap)
   await page.screenshot({ path: `${SHOTS}/sheet-phone-blank.png` })
 
-  await page.getByRole('button', { name: '写公式 · 点哪儿写哪儿' }).tap()
+  const typeTool = page.getByRole('button', { name: '写公式 · 点哪儿写哪儿' })
+  await typeTool.tap()
+  // The paper tap is a raw touch. It must not run until React has committed the type tool,
+  // or the touch still sees the pen and draws a stroke instead of opening the composer.
+  await page.waitForFunction(() => document.querySelector('[aria-label="写公式 · 点哪儿写哪儿"]')?.getAttribute('aria-pressed') === 'true')
   for (const [y, t] of [[220, 'y = sin(x)'], [300, 'y = x/3']] as const) {
     await page.touchscreen.tap(60, y)
     const ta = page.getByRole('textbox', { name: '在纸上写公式' })
