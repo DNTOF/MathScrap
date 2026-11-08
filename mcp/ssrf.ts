@@ -109,14 +109,21 @@ function portOf(url: URL) {
   return url.protocol === 'https:' ? '443' : '80'
 }
 
+export function sameAddressSet(left: Addr[], right: Addr[]): boolean {
+  const key = (item: Addr) => `${item.family}:${item.address}`
+  const a = [...new Set(left.map(key))].sort()
+  const b = [...new Set(right.map(key))].sort()
+  return a.length === b.length && a.every((item, i) => item === b[i])
+}
+
 export function defaultLookup(hostname: string): Promise<Addr[]> {
   return lookup(hostname, { all: true, verbatim: true })
 }
 
 export function literalAddresses(host: string): Addr[] {
-  const bare = stripBrackets(host).toLowerCase()
+  const bare = stripBrackets(host).toLowerCase().split('%')[0]
   if (isIP(bare) === 4) return [{ address: bare, family: 4 }]
-  if (isIP(bare) === 6) return [{ address: bare, family: 6 }]
+  if (bare.includes(':') && parseIpv6(bare)) return [{ address: bare, family: 6 }]
   const dword = dwordToIpv4(bare)
   if (dword) return [{ address: dword, family: 4 }]
   const dotted = dottedToIpv4(bare)
@@ -125,30 +132,68 @@ export function literalAddresses(host: string): Addr[] {
 }
 
 function expandAddress(address: string): Addr[] {
-  const bare = stripBrackets(address).toLowerCase()
+  const bare = stripBrackets(address).toLowerCase().split('%')[0]
   const out: Addr[] = []
   if (isIP(bare) === 4) out.push({ address: bare, family: 4 })
-  if (isIP(bare) === 6) {
+  const groups = bare.includes(':') ? parseIpv6(bare) : null
+  if (groups) {
     out.push({ address: bare, family: 6 })
-    const mapped = mappedIpv4(bare)
-    if (mapped) out.push({ address: mapped, family: 4 })
+    for (const embedded of embeddedIpv4(groups)) out.push({ address: embedded, family: 4 })
   }
   const dword = dwordToIpv4(bare)
   if (dword) out.push({ address: dword, family: 4 })
   return out.length ? out : [{ address: bare, family: 0 }]
 }
 
-function mappedIpv4(ipv6: string): string | null {
-  const hex = ipv6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
-  if (hex) {
-    const hi = parseInt(hex[1], 16)
-    const lo = parseInt(hex[2], 16)
-    if (hi > 0xffff || lo > 0xffff) return null
-    const n = ((hi << 16) | lo) >>> 0
-    return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.')
+function parseIpv6(input: string): number[] | null {
+  let text = input.toLowerCase()
+  const dotted = text.match(/(\d{1,3}(?:\.\d{1,3}){3})$/)
+  let v4: number[] = []
+  if (dotted && dotted.index != null) {
+    const parsed = ipv4ToGroups(dotted[1])
+    if (!parsed) return null
+    v4 = parsed
+    text = text.slice(0, dotted.index).replace(/:$/, '')
   }
-  const dotted = ipv6.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i)
-  return dotted && isIP(dotted[1]) === 4 ? dotted[1] : null
+  const halves = text.split('::')
+  if (halves.length > 2) return null
+  const side = (part: string) => {
+    if (!part) return [] as number[]
+    const bits = part.split(':')
+    if (bits.some((item) => !/^[0-9a-f]{1,4}$/.test(item))) return null
+    return bits.map((item) => parseInt(item, 16))
+  }
+  const left = side(halves[0] ?? '')
+  const right = halves.length === 2 ? side(halves[1] ?? '') : []
+  if (!left || !right) return null
+  if (halves.length === 1) return left.length + v4.length === 8 ? [...left, ...v4] : null
+  const missing = 8 - (left.length + right.length + v4.length)
+  if (missing < 0) return null
+  return [...left, ...Array<number>(missing).fill(0), ...right, ...v4]
+}
+
+function embeddedIpv4(groups: number[]): string[] {
+  const out: string[] = []
+  const zero = (count: number) => groups.slice(0, count).every((item) => item === 0)
+  if (groups[0] === 0x2002) out.push(groupsToIpv4(groups[1], groups[2]))
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((item) => item === 0)) out.push(groupsToIpv4(groups[6], groups[7]))
+  if (zero(5) && groups[5] === 0xffff) out.push(groupsToIpv4(groups[6], groups[7]))
+  if (zero(6)) out.push(groupsToIpv4(groups[6], groups[7]))
+  return out
+}
+
+function groupsToIpv4(hi: number, lo: number): string {
+  const n = ((hi << 16) | lo) >>> 0
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.')
+}
+
+function ipv4ToGroups(text: string): number[] | null {
+  const parts = text.split('.')
+  if (parts.length !== 4) return null
+  const nums = parts.map(parsePart)
+  if (nums.some((item) => item == null)) return null
+  const [a, b, c, d] = nums as number[]
+  return [((a << 8) | b) & 0xffff, ((c << 8) | d) & 0xffff]
 }
 
 function dwordToIpv4(text: string): string | null {

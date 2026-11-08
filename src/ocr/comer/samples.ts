@@ -123,6 +123,19 @@ export function inkFixtures(width = 3): { name: string; expect: RegExp; strokes:
   ]
 }
 
+/** Three letter-sized marks. A short word, not a formula. Not real handwriting. */
+export function proseWord(width = 3): InkStroke[] {
+  return proseNote(width).slice(0, 3)
+}
+
+/**
+ * Two baselines of letter-sized marks. Still a note. The shapes are not
+ * Chinese or English text, and this is not a reading of either language.
+ */
+export function proseParagraph(width = 3): InkStroke[] {
+  return [...proseNote(width), ...shiftInk(proseNote(width), 8, 48)]
+}
+
 /** Five letter-sized marks on one baseline: a note, not a formula. */
 export function proseNote(width = 3): InkStroke[] {
   const out: InkStroke[] = []

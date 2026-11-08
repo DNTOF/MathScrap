@@ -1,6 +1,8 @@
 /**
  * Gate checks plus a few real CoMER INT8 readings.
  * Strokes are synthetic polylines, not scanned handwriting.
+ * Numbers below are model confidence, not an accuracy rate.
+ * The repo has no redistributable scan of a person's handwriting.
  * Missing model files fail this script. They are not a pass.
  *
  *   npx tsx scripts/ocr-real-smoke.ts
@@ -11,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { classifyInk } from '../src/ocr/gate.ts'
-import { inkFixtures, isolatedSigma, pointPair, proseNote, sumGlyph } from '../src/ocr/comer/samples.ts'
+import { inkFixtures, isolatedSigma, pointPair, proseNote, proseParagraph, proseWord, sumGlyph } from '../src/ocr/comer/samples.ts'
 import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { vocabFromJson } from '../src/ocr/comer/source.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
@@ -27,7 +29,9 @@ for (const [name, want] of Object.entries(pins)) {
 }
 
 const prose = proseNote()
-assert.equal(classifyInk(prose), 'text', 'a baseline of letter-sized marks is prose for both Chinese and English layouts; the gate does not read the language')
+assert.equal(classifyInk(prose), 'text', 'a baseline of letter-sized marks is not sent as a formula; the gate does not read Chinese or English')
+assert.equal(classifyInk(proseWord()), 'text')
+assert.equal(classifyInk(proseParagraph()), 'text')
 assert.equal(classifyInk([]), 'formula', 'blank ink is not classified as prose')
 const fixtures = inkFixtures(3)
 for (const name of ['y-eq-2', 'y-eq-x', 'frac', 'a2-eq-b']) {
@@ -83,7 +87,7 @@ const pointHits = await recognizeStrokes(pointPair(), encoder, decoder, vocab, 2
 console.log('synthetic point', pointHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
 assert.match(pointHits[0]?.text ?? '', /^A\(2, 2\)$/)
 assert.equal(ran, 4)
-console.log('ocr-real-smoke ok (synthetic strokes, not a handwriting accuracy claim)')
+console.log('ocr-real-smoke ok (synthetic strokes; confidence is not accuracy; no handwriting scan in the repo)')
 
 function boom(): ComerSession {
   return { async run() { throw new Error('blank or noise must not call the model') } }

@@ -3,7 +3,7 @@ import http from 'node:http'
 import https from 'node:https'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson } from './http.ts'
-import { isBlockedHostname, localOriginsFromEnv, resolveAndCheck, type LookupFn } from './ssrf.ts'
+import { isBlockedHostname, localOriginsFromEnv, resolveAndCheck, sameAddressSet, type LookupFn } from './ssrf.ts'
 import { peerAllowed } from './peer.ts'
 
 export const PROXY_HEADER = 'x-mathscrap-proxy'
@@ -129,8 +129,7 @@ function requestPinned(
         lookup: (_hostname, _options, callback) => {
           resolveAndCheck(target, deps.lookup, deps.localOrigins ?? localOriginsFromEnv())
             .then((again) => {
-              const same = again.length === addresses.length && again.every((item) => addresses.some((kept) => kept.address === item.address && kept.family === item.family))
-              if (!same) {
+              if (!sameAddressSet(again, addresses)) {
                 callback(new Error('blocked'), '', 4)
                 return
               }

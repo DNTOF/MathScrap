@@ -18,7 +18,8 @@ import { classifyInk, looksLikeIsolatedSigma, mathCues } from '../src/ocr/gate.t
 import { agreeConfidence, recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
 import { isInkMeaningful, preprocessStrokes, resamplePoints, type InkStroke } from '../src/ocr/comer/preprocess.ts'
-import { arrowLetter, bowlU, closedZero, forkY, inkFixtures, isolatedSigma, proseNote, sigmaHook, sigmaLoop, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
+import { arrowLetter, bowlU, closedZero, forkY, inkFixtures, isolatedSigma, proseNote, proseParagraph, proseWord, sigmaHook, sigmaLoop, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
+import { recognizeMath } from '../src/ocr/comer/web.ts'
 import { looksLikeIsolatedSigma as sigmaGlyph, repairIsolatedSigma } from '../src/ocr/comer/sigma.ts'
 import { tokensToSource, vocabFromJson } from '../src/ocr/comer/source.ts'
 import { filterAbsurd, hasParenGeometry, recognizeInk } from '../src/ocr/inkShape.ts'
@@ -569,6 +570,9 @@ function sumLikeSigma(): InkStroke[] {
 assert.equal(classifyInk(y2strokes), 'formula')
 assert.equal(classifyInk(arrowLetter()), 'formula')
 assert.equal(classifyInk(proseNote()), 'text', 'a line of letters is not a formula')
+assert.equal(classifyInk(proseWord()), 'text', 'a short word is not a formula')
+assert.equal(classifyInk(proseParagraph()), 'text', 'two lines of writing are not a formula')
+assert.deepEqual(await recognizeMath(ink(proseNote().map((s) => s.points.map((p) => [p.x, p.y])))), [])
 assert.equal(classifyInk(sigmaLoop()), 'formula', 'an isolated σ still reaches the model')
 assert.equal(classifyInk(closedZero()), 'formula')
 assert.equal(classifyInk(sumLikeSigma()), 'formula', 'Σ with limits is a formula')
@@ -578,6 +582,9 @@ assert.ok(mathCues(sumBar()).includes('sum'), 'barred Σ is a sum, not only an a
 assert.ok(!mathCues(sumBar()).includes('arrow'))
 assert.ok(mathCues(arrowLetter()).includes('arrow'))
 assert.equal(classifyInk(inkFixtures(3).find((s) => s.name === 'frac')!.strokes), 'formula')
+const appSource = readFileSync('src/App.tsx', 'utf8')
+assert.match(appSource, /autoOcr:\s*false/)
+assert.match(appSource, /e\.code === 'KeyR'/)
 console.log('ocr gate ok', { prose: classifyInk(proseNote()), formula: classifyInk(y2strokes) })
 assert.equal(tokensToSource(['\\ln', '(', 'x', ')']).replace(/\s+/g, ''), 'ln(x)')
 assert.equal(tokensToSource(['\\log', '_', '{', '2', '}', '(', 'x', ')']).replace(/\s+/g, ''), 'log_2(x)')
