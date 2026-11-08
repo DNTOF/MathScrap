@@ -4,8 +4,8 @@ import { recognizeStrokes, type OcrCandidate } from './engine.ts'
 import type { ComerSession, ComerTensor } from './decode.ts'
 import { vocabFromJson, type Vocab } from './source.ts'
 import type { InkStroke } from './preprocess.ts'
-import { assetUrl } from '@/lib/asset'
-import { t } from '@/i18n/locale'
+import { assetUrl } from '../../lib/asset.ts'
+import { t } from '../../i18n/locale.ts'
 
 const ENC = assetUrl('models/comer/encoder_int8.onnx')
 const DEC = assetUrl('models/comer/decoder_int8.onnx')

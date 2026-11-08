@@ -1734,12 +1734,22 @@ dependencies = [
 name = "mathscrap"
 version = "0.0.1"
 dependencies = [
+ "mcpserve",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
+]
+
+[[package]]
+name = "mcpserve"
+version = "0.0.1"
+dependencies = [
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

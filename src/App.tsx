@@ -163,8 +163,8 @@ export default function App() {
   const writingSpot = useCallback(() => {
     const sx = compact ? 24 : Math.max(120, sheet.w * 0.3)
     const sy = compact ? 110 : sheet.h * 0.3
-    return freeSpot((sx - view.x) / view.scale, (sy - view.y) / view.scale, doc.cards)
-  }, [compact, doc.cards, sheet, view])
+    return freeSpot((sx - view.x) / view.scale, (sy - view.y) / view.scale, docRef.current.cards)
+  }, [compact, docRef, sheet, view])
 
   const openPlot = useCallback((focusId: string | null = null) => setPlot({ open: true, details: false, full: false, focusId }), [])
   const ensurePlot = useCallback(() => setPlot((p) => (p.open ? p : { open: true, details: false, full: false, focusId: p.focusId })), [])
@@ -188,7 +188,7 @@ export default function App() {
       const placed: Card[] = []
       let y = start.y
       for (const text of blocks) {
-        const spot = freeSpot(start.x, y, [...doc.cards, ...placed])
+        const spot = freeSpot(start.x, y, [...docRef.current.cards, ...placed])
         const card: Card = { id: uid(), text, x: spot.x, y: spot.y }
         placed.push(card)
         y = spot.y + footprint(card).h + 16
@@ -196,7 +196,7 @@ export default function App() {
       commit((d) => ({ ...d, cards: [...d.cards, ...placed] }))
       return placed
     },
-    [commit, doc.cards, writingSpot],
+    [commit, docRef, writingSpot],
   )
 
   const updateCard = useCallback((id: string, text: string) => commit((d) => ({ ...d, cards: d.cards.map((c) => (c.id === id ? { ...c, text } : c)) })), [commit])
@@ -400,37 +400,46 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo, plot.open, plot.full, recognize, selected, setSelected, deleteCard, openPlot, closePlot, togglePlot, placeComposer, writingSpot])
 
-  // MCP-ready local tool bridge for experimentation from devtools.
-  // getDoc reads the React state captured for this render, so the bridge is rebuilt when the sheet changes.
-  const bridge = useMemo(
-    () =>
-      createToolBridge({
-        getDoc: () => doc,
-        addCard: (text, x, y) => addFormula(text, x, y),
-        updateCard,
-        openPlot: (id) => openPlot(id ?? null),
-        setPlotView: (input) => {
-          ensurePlot()
-          return pushPlotView(input)
-        },
-      }),
-    [doc, addFormula, updateCard, openPlot, ensurePlot],
-  )
+  // Tool calls read the committed document, not the last rendered snapshot.
+  // A write is visible to the next call before React paints, and the listener stays up across edits.
+  const toolHost = useRef({ addFormula, updateCard, openPlot, ensurePlot })
   useEffect(() => {
-    ;(window as unknown as { mathscrap: { tools: typeof bridge } }).mathscrap = { tools: bridge }
-    // The dev bridge exists only while Vite is running. The production build drops this import.
-    if (!import.meta.env.DEV) return
+    toolHost.current = { addFormula, updateCard, openPlot, ensurePlot }
+  }, [addFormula, updateCard, openPlot, ensurePlot])
+  const callTool = useCallback((name: string, args: Record<string, unknown>) => {
+    const host = toolHost.current
+    return createToolBridge({
+      getDoc: () => docNow(docRef),
+      addCard: (text, x, y) => host.addFormula(text, x, y),
+      updateCard: host.updateCard,
+      openPlot: (id) => host.openPlot(id ?? null),
+      setPlotView: (input) => {
+        host.ensurePlot()
+        return pushPlotView(input)
+      },
+    }).call(name, args)
+  }, [docRef, toolHost])
+  useEffect(() => {
+    ;(window as unknown as { mathscrap: { tools: { call: typeof callTool } } }).mathscrap = { tools: { call: callTool } }
     let dispose: () => void = () => undefined
     let cancelled = false
-    void import('@/ai/browserBridge').then((mod) => {
-      if (cancelled) return
-      dispose = mod.startBrowserBridge((name, args) => bridge.call(name, args))
-    })
+    if (import.meta.env.DEV) {
+      // The dev bridge exists only while Vite is running. The production build drops this import.
+      void import('@/ai/browserBridge').then((mod) => {
+        if (cancelled) return
+        dispose = mod.startBrowserBridge(callTool)
+      })
+    } else if ('__TAURI_INTERNALS__' in window) {
+      void import('@/ai/packagedBridge').then((mod) => {
+        if (cancelled) return
+        dispose = mod.startPackagedBridge(callTool)
+      })
+    }
     return () => {
       cancelled = true
       dispose()
     }
-  }, [bridge])
+  }, [callTool])
 
   const exportPage = useCallback(() => {
     void exportSheetFile(docNow(docRef))
@@ -589,7 +598,7 @@ export default function App() {
         open={assistOpen}
         onOpenChange={setAssistOpen}
         side={compact ? 'bottom' : 'right'}
-        call={(name, args) => bridge.call(name, args)}
+        call={callTool}
         onOpenSettings={() => {
           setAssistOpen(false)
           setSettingsOpen(true)

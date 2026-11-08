@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-mcp"
+description = "The MathScrap window may answer packaged MCP tool calls. It cannot read the session file."
+commands.allow = ["mcp_ready", "mcp_result", "mcp_idle"]

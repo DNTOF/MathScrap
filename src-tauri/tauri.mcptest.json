@@ -1,0 +1,19 @@
+{
+  "productName": "MathScrap MCP Test",
+  "mainBinaryName": "mathscrap-mcp-test",
+  "version": "0.0.2-dev",
+  "identifier": "app.mathscrap.mcptest",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "MathScrap MCP Test",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 360,
+        "minHeight": 480,
+        "dragDropEnabled": false
+      }
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { TOOL_SPECS } from '../src/ai/specs.ts'
 import { assetUrl } from '../src/lib/asset.ts'
 import { parseSheet, serializeSheet } from '../src/board/sheetFile.ts'
 import { APP_VERSION } from '../src/version.ts'
@@ -56,5 +57,16 @@ for (const sample of junk) {
 
 const withProto = parseSheet('{"strokes":[],"cards":[{"id":"c1","x":1,"y":2,"text":"y = 1"}],"stickers":[],"__proto__":{"admin":true},"eval":"process.exit(1)"}')
 check(withProto.cards.length === 1 && !('eval' in withProto), 'unknown fields are dropped')
+
+function canon(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canon)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canon((value as Record<string, unknown>)[key])]))
+  }
+  return value
+}
+const published = JSON.parse(readFileSync(new URL('../mcp/tools.json', import.meta.url), 'utf8')) as unknown
+const fromSpecs = TOOL_SPECS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
+check(JSON.stringify(canon(fromSpecs)) === JSON.stringify(canon(published)), 'mcp/tools.json does not match the page tool schemas')
 
 console.log(`pack-smoke ok ${APP_VERSION}`)

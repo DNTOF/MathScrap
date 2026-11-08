@@ -25,9 +25,7 @@ dist-ssr
 
 # Rust
 crates/mathcore/target
-
-# Rust
-crates/mathcore/target
+crates/mcpserve/target
 
 # local agent / screenshots
 ASTER_BG_TASK.md
