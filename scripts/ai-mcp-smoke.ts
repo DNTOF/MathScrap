@@ -6,7 +6,7 @@
  * the Vite dev server hosts, then asks the real MCP server to list and call tools.
  */
 import assert from 'node:assert/strict'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -20,6 +20,18 @@ import { forwardAi, handleAiProxy, isBlockedHost } from '../mcp/ai-proxy.ts'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const SECRET = 'sk-testsecretvalue-SHOULD-NOT-LEAK'
 const OK_KEY = 'sk-ok-DO-NOT-LOG'
+
+function rawStatus(port: number, path: string, headers: Record<string, string>, method = 'GET', body?: string) {
+  return new Promise<number>((resolve, reject) => {
+    const req = httpRequest({ hostname: '127.0.0.1', port, path, method, headers }, (res) => {
+      res.resume()
+      resolve(res.statusCode ?? 0)
+    })
+    req.on('error', reject)
+    if (body) req.end(body)
+    else req.end()
+  })
+}
 
 function listen(server: ReturnType<typeof createServer>) {
   return new Promise<number>((resolve) => {
@@ -246,7 +258,60 @@ try {
       ),
     /refused/i,
   )
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: 'http://mixed.example/v1/models', method: 'GET' },
+        async () => {
+          forwarded = true
+          return new Response('no')
+        },
+        undefined,
+        { lookup: async () => [{ address: '1.1.1.1', family: 4 }, { address: '10.1.1.1', family: 4 }] },
+      ),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: 'http://link.example/v1/models', method: 'GET' },
+        async () => {
+          forwarded = true
+          return new Response('no')
+        },
+        undefined,
+        { lookup: async () => [{ address: '8.8.8.8', family: 4 }, { address: '169.254.169.254', family: 4 }] },
+      ),
+    /refused/i,
+  )
   assert.equal(forwarded, false)
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://10.2.2.2/v1/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://127.0.0.1:9')],
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://[fd00::1]/v1/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://127.0.0.1:9')],
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://169.254.169.254/latest/meta-data/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://169.254.169.254')],
+      }),
+    /refused/i,
+  )
+  let ula = false
+  await forwardAi({ url: 'http://[fd00::2]:11434/v1/models', method: 'GET' }, async () => {
+    ula = true
+    return new Response('{}', { status: 200 })
+  }, undefined, { localOrigins: [new URL('http://[fd00::2]:11434')] })
+  assert.equal(ula, true)
 
   const proxy = createServer((req, res) => {
     void handleAiProxy(req, res)
@@ -258,18 +323,52 @@ try {
     body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET' }),
   })
   assert.equal(evil.status, 403)
-  process.env.MATHSCRAP_AI_ALLOW_PRIVATE = '1'
-  const proxied = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
+  const noOrigin = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET' }),
+  })
+  assert.equal(noOrigin.status, 403)
+  process.env.MATHSCRAP_AI_LOCAL_ORIGINS = base
+  const proxied = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${proxyPort}` },
     body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }),
   })
   assert.equal(proxied.headers.get('x-mathscrap-proxy'), '1')
   assert.equal(proxied.status, 401)
   const proxiedBody = await proxied.text()
   assert.ok(proxiedBody.includes('SHOULD-NOT-LEAK'), 'upstream body may echo a key; the proxy must not be the thing that logs it')
-  delete process.env.MATHSCRAP_AI_ALLOW_PRIVATE
+  delete process.env.MATHSCRAP_AI_LOCAL_ORIGINS
   proxy.close()
+
+  const hop = createServer((_req, res) => {
+    res.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data/' })
+    res.end()
+  })
+  const hopPort = await listen(hop)
+  let lookups = 0
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: `http://rebind.example:${hopPort}/v1/models`, method: 'GET' },
+        undefined,
+        AbortSignal.timeout(2000),
+        {
+          localOrigins: [new URL(`http://rebind.example:${hopPort}`)],
+          lookup: async () => [{ address: lookups++ === 0 ? '127.0.0.1' : '10.9.9.9', family: 4 }],
+        },
+      ),
+    /refused|blocked/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: `http://127.0.0.1:${hopPort}/v1/models`, method: 'GET' }, undefined, AbortSignal.timeout(2000), {
+        localOrigins: [new URL(`http://127.0.0.1:${hopPort}`)],
+      }),
+    /refused/i,
+  )
+  hop.close()
 
   assert.ok(!logs.logs.some((line) => line.includes('SHOULD-NOT-LEAK') || line.includes('DO-NOT-LOG')), `API key leaked to console:\n${logs.logs.join('\n')}`)
 } finally {
@@ -283,6 +382,35 @@ const bridgeServer = createServer((req, res) => {
 })
 const bridgePort = await listen(bridgeServer)
 const bridgeUrl = `http://127.0.0.1:${bridgePort}`
+const pageOrigin = { origin: bridgeUrl, host: `127.0.0.1:${bridgePort}` }
+
+const forged = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+  body: JSON.stringify({ name: 'page_add_formula', arguments: { text: 'y = 1' } }),
+})
+assert.equal(forged.status, 403)
+const nullOrigin = await rawStatus(
+  bridgePort,
+  '/__mathscrap/bridge/result',
+  { 'content-type': 'application/json', origin: 'null', host: `127.0.0.1:${bridgePort}` },
+  'POST',
+  JSON.stringify({ id: 'x', ok: true }),
+)
+assert.equal(nullOrigin, 403)
+const rebound = await rawStatus(bridgePort, '/__mathscrap/bridge/wait', {
+  origin: bridgeUrl,
+  host: 'evil.example',
+})
+assert.equal(rebound, 403)
+const upgrade = await rawStatus(
+  bridgePort,
+  '/__mathscrap/bridge/call',
+  { 'content-type': 'application/json', upgrade: 'websocket', connection: 'Upgrade', host: `127.0.0.1:${bridgePort}` },
+  'POST',
+  JSON.stringify({ name: 'page_add_formula', arguments: {} }),
+)
+assert.equal(upgrade, 403)
 
 const offlineAt = Date.now()
 const offline = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {
@@ -294,6 +422,8 @@ const offlineBody = (await offline.json()) as { ok: boolean; error?: string }
 assert.equal(offlineBody.ok, false)
 assert.match(offlineBody.error ?? '', /not connected/)
 assert.ok(Date.now() - offlineAt < 500, 'disconnected tool call hung')
+const pageWait = await fetch(`${bridgeUrl}/__mathscrap/bridge/wait`, { headers: pageOrigin })
+assert.equal(pageWait.status, 204)
 
 const state = {
   formulas: [{ id: 'c1', text: 'y = x^2 - 2', x: 10, y: 20 }],
@@ -303,7 +433,7 @@ const state = {
 const stop = new AbortController()
 const browser = (async () => {
   while (!stop.signal.aborted) {
-    const res = await fetch(`${bridgeUrl}/__mathscrap/bridge/wait`, { signal: stop.signal })
+    const res = await fetch(`${bridgeUrl}/__mathscrap/bridge/wait`, { signal: stop.signal, headers: pageOrigin })
     if (res.status === 204) {
       await new Promise((r) => setTimeout(r, 40))
       continue
@@ -322,7 +452,7 @@ const browser = (async () => {
     else if (job.name === 'solve_analyze') result = { texts: job.arguments.texts }
     await fetch(`${bridgeUrl}/__mathscrap/bridge/result`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...pageOrigin },
       body: JSON.stringify({ id: job.id, ok: true, result }),
       signal: stop.signal,
     })
@@ -334,7 +464,7 @@ const browser = (async () => {
 const healthDeadline = Date.now() + 2000
 let connected = false
 while (Date.now() < healthDeadline) {
-  const health = (await (await fetch(`${bridgeUrl}/__mathscrap/bridge/health`)).json()) as { browser?: boolean }
+  const health = (await (await fetch(`${bridgeUrl}/__mathscrap/bridge/health`, { headers: pageOrigin })).json()) as { browser?: boolean }
   if (health.browser) {
     connected = true
     break

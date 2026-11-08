@@ -63,6 +63,13 @@ check('test script', classifyEntries([
   entry('scripts/ci-scope.mjs', 'export const a = 1\n', 'export const a = 2\n'),
 ]).mode, 'full')
 
+check('ocr path is full', classifyEntries([
+  entry('src/ocr/gate.ts', 'export const a = 1\n', 'export const a = 2\n'),
+]).mode, 'full')
+check('ocr smoke script is full', classifyEntries([
+  entry('scripts/ocr-real-smoke.ts', 'export const a = 1\n', 'export const a = 2\n'),
+]).mode, 'full')
+
 check('unknown', classifyEntries([
   entry('src/new-file.ts', 'a\n', 'b\n'),
 ]).mode, 'full')

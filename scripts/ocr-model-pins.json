@@ -1,0 +1,5 @@
+{
+  "encoder_int8.onnx": "272f17c7b120db61db6cd8d77e695d0139144044abd57d9b23284435a5d916fa",
+  "decoder_int8.onnx": "658901d81ca3aa4b62b0da262e8fe67ebcfdac19cfb52ca2cfd076bebd481088",
+  "vocab.json": "1d75cbbea3bed558683d7e9c3b3c72069ef2143a155d5f8c610f85a281af000c"
+}

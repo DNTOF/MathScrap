@@ -6,31 +6,49 @@
  *   npx tsx scripts/ocr-real-smoke.ts
  */
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { classifyInk } from '../src/ocr/gate.ts'
-import { inkFixtures, proseNote } from '../src/ocr/comer/samples.ts'
+import { inkFixtures, isolatedSigma, pointPair, proseNote, sumGlyph } from '../src/ocr/comer/samples.ts'
 import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { vocabFromJson } from '../src/ocr/comer/source.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
+import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
 
 const modelDir = 'public/models/comer'
-const needed = ['encoder_int8.onnx', 'decoder_int8.onnx', 'vocab.json']
-for (const name of needed) {
-  if (!existsSync(path.join(modelDir, name))) {
-    throw new Error(`real OCR model missing: ${name}`)
-  }
+const pins = JSON.parse(readFileSync('scripts/ocr-model-pins.json', 'utf8')) as Record<string, string>
+for (const [name, want] of Object.entries(pins)) {
+  const file = path.join(modelDir, name)
+  if (!existsSync(file)) throw new Error(`real OCR model missing: ${name}`)
+  const got = createHash('sha256').update(readFileSync(file)).digest('hex')
+  if (got !== want) throw new Error(`OCR model hash mismatch: ${name}`)
 }
 
-assert.equal(classifyInk(proseNote()), 'text', 'synthetic prose stays out of the formula model')
-assert.equal(classifyInk([]), 'formula', 'blank ink is not prose; the caller still sends nothing')
+const prose = proseNote()
+assert.equal(classifyInk(prose), 'text', 'a baseline of letter-sized marks is prose for both Chinese and English layouts; the gate does not read the language')
+assert.equal(classifyInk([]), 'formula', 'blank ink is not classified as prose')
 const fixtures = inkFixtures(3)
-for (const name of ['y-eq-2', 'frac', 'a2-eq-b']) {
+for (const name of ['y-eq-2', 'y-eq-x', 'frac', 'a2-eq-b']) {
   const sample = fixtures.find((item) => item.name === name)
   assert.ok(sample, name)
   assert.equal(classifyInk(sample.strokes), 'formula', `${name} is formula-like`)
 }
+const blank = await recognizeStrokes([], boom(), boom(), vocabPlaceholder(), 1)
+assert.deepEqual(blank, [])
+const noise = await recognizeStrokes(
+  [{ points: [{ x: 1, y: 1, t: 0 }, { x: 1.2, y: 1.1, t: 1 }] }],
+  boom(),
+  boom(),
+  vocabPlaceholder(),
+  1,
+)
+assert.deepEqual(noise, [])
+await assert.rejects(
+  () => recognizeStrokes(fixtures[0]!.strokes, failing('model failed'), failing('model failed'), vocabPlaceholder(), 1),
+  /model failed/,
+)
 
 const ort = await import('onnxruntime-web/wasm')
 ort.env.wasm.numThreads = 1
@@ -44,17 +62,38 @@ const [encoder, decoder] = await Promise.all([
 ])
 
 let ran = 0
-for (const name of ['y-eq-2', 'frac']) {
+for (const name of ['y-eq-2', 'y-eq-x', 'frac', 'a2-eq-b']) {
   const sample = fixtures.find((item) => item.name === name)!
   const hits = await recognizeStrokes(sample.strokes, encoder, decoder, vocab, 1)
   const top = hits[0]?.text ?? ''
-  console.log(`synthetic ${name}: ${top || '(empty)'}`)
-  assert.match(top, sample.expect, `${name} real model`)
+  console.log(`synthetic ${name}: ${top || '(empty)'} conf=${hits[0]?.confidence ?? 0}`)
+  const expect = name === 'y-eq-x' ? /^[yY] = [xX]$/ : sample.expect
+  assert.match(top, expect, `${name} real model`)
+  assert.ok((hits[0]?.confidence ?? 0) >= OCR_ACCEPT, `${name} below ${OCR_ACCEPT}`)
   assert.ok(!/1,\s*2,\s*2/.test(top), `${name} invented a triple`)
   ran += 1
 }
-assert.equal(ran, 2)
+const sumHits = await recognizeStrokes(sumGlyph(), encoder, decoder, vocab, 2)
+console.log('synthetic sum', sumHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
+assert.match(sumHits[0]?.text ?? '', /^\\sum(?![A-Za-z])/)
+const sigmaHits = await recognizeStrokes(isolatedSigma(), encoder, decoder, vocab, 2)
+console.log('synthetic sigma', sigmaHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
+assert.equal(sigmaHits[0]?.text, 'sigma')
+const pointHits = await recognizeStrokes(pointPair(), encoder, decoder, vocab, 2)
+console.log('synthetic point', pointHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
+assert.match(pointHits[0]?.text ?? '', /^A\(2, 2\)$/)
+assert.equal(ran, 4)
 console.log('ocr-real-smoke ok (synthetic strokes, not a handwriting accuracy claim)')
+
+function boom(): ComerSession {
+  return { async run() { throw new Error('blank or noise must not call the model') } }
+}
+function failing(message: string): ComerSession {
+  return { async run() { throw new Error(message) } }
+}
+function vocabPlaceholder() {
+  return vocabFromJson({ idx2word: { '3': 'y' }, special_tokens: { sos: 1, eos: 2, pad: 0 }, vocab_size: 4 })
+}
 
 function copyData(data: ArrayBufferView): Float32Array | Uint8Array | BigInt64Array {
   if (data instanceof Float32Array) return Float32Array.from(data)

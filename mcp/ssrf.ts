@@ -1,8 +1,9 @@
 /**
  * Decide whether an AI proxy target is safe to open.
  * Link-local and metadata addresses are always refused.
- * Loopback and private ranges are refused unless the process opts in
- * with MATHSCRAP_AI_ALLOW_PRIVATE=1. That switch does not allow metadata.
+ * Loopback, private, and IPv6 ULA addresses are refused unless the exact
+ * origin (scheme, host, and port) is listed in MATHSCRAP_AI_LOCAL_ORIGINS.
+ * That list does not open the rest of the private network.
  */
 import { BlockList, isIP } from 'node:net'
 import { lookup } from 'node:dns/promises'
@@ -39,23 +40,46 @@ export type LookupFn = (hostname: string) => Promise<Addr[]>
 
 const METADATA_HOSTS = new Set(['metadata.google.internal', 'metadata.google.com'])
 
-export function allowPrivateAi(): boolean {
-  return process.env.MATHSCRAP_AI_ALLOW_PRIVATE === '1'
+export function localOriginsFromEnv(): URL[] {
+  const raw = process.env.MATHSCRAP_AI_LOCAL_ORIGINS ?? ''
+  const out: URL[] = []
+  for (const part of raw.split(',')) {
+    const text = part.trim()
+    if (!text) continue
+    try {
+      const url = new URL(text)
+      if ((url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password) out.push(url)
+    } catch {
+      continue
+    }
+  }
+  return out
+}
+
+export function matchesLocalOrigin(target: URL, allow: URL[]): boolean {
+  const host = stripBrackets(target.hostname).toLowerCase()
+  return allow.some((item) => item.protocol === target.protocol && stripBrackets(item.hostname).toLowerCase() === host && portOf(item) === portOf(target))
+}
+
+export function isLinkLocalAddress(address: string): boolean {
+  return expandAddress(address).some((form) => {
+    if (form.family === 4) return linkLocal4.check(form.address, 'ipv4')
+    if (form.family === 6 && isIP(form.address) === 6) return linkLocal6.check(form.address, 'ipv6')
+    return form.family === 0
+  })
+}
+
+export function isPrivateOrLoopback(address: string): boolean {
+  return expandAddress(address).some((form) => {
+    if (form.family === 4) return private4.check(form.address, 'ipv4') || linkLocal4.check(form.address, 'ipv4')
+    if (form.family === 6 && isIP(form.address) === 6) return private6.check(form.address, 'ipv6') || linkLocal6.check(form.address, 'ipv6')
+    return true
+  })
 }
 
 export function isBlockedAddress(address: string, allowPrivate = false): boolean {
-  for (const form of expandAddress(address)) {
-    if (form.family === 4) {
-      if (linkLocal4.check(form.address, 'ipv4')) return true
-      if (!allowPrivate && private4.check(form.address, 'ipv4')) return true
-    } else if (isIP(form.address) === 6) {
-      if (linkLocal6.check(form.address, 'ipv6')) return true
-      if (!allowPrivate && private6.check(form.address, 'ipv6')) return true
-    } else {
-      return true
-    }
-  }
-  return false
+  if (isLinkLocalAddress(address)) return true
+  return !allowPrivate && isPrivateOrLoopback(address)
 }
 
 export function isBlockedHostname(hostname: string, allowPrivate = false): boolean {
@@ -67,14 +91,22 @@ export function isBlockedHostname(hostname: string, allowPrivate = false): boole
   return false
 }
 
-export async function resolveAndCheck(hostname: string, lookupFn: LookupFn = defaultLookup, allowPrivate = allowPrivateAi()): Promise<Addr[]> {
-  if (isBlockedHostname(hostname, allowPrivate)) throw new Error('blocked')
-  const host = stripBrackets(hostname).toLowerCase()
+export async function resolveAndCheck(target: URL, lookupFn: LookupFn = defaultLookup, origins: URL[] = localOriginsFromEnv()): Promise<Addr[]> {
+  const host = stripBrackets(target.hostname).toLowerCase().replace(/\.$/, '')
+  if (!host || METADATA_HOSTS.has(host) || (host.endsWith('.internal') && host.includes('metadata'))) throw new Error('blocked')
   const literal = literalAddresses(host)
+  if (literal.some((item) => isLinkLocalAddress(item.address))) throw new Error('blocked')
   const found = literal.length ? literal : await lookupFn(host)
   if (!found.length) throw new Error('blocked')
-  if (found.some((item) => isBlockedAddress(item.address, allowPrivate) || isBlockedHostname(item.address, allowPrivate))) throw new Error('blocked')
+  const permitted = matchesLocalOrigin(target, origins)
+  if (found.some((item) => isLinkLocalAddress(item.address))) throw new Error('blocked')
+  if (found.some((item) => isPrivateOrLoopback(item.address)) && !permitted) throw new Error('blocked')
   return found
+}
+
+function portOf(url: URL) {
+  if (url.port) return url.port
+  return url.protocol === 'https:' ? '443' : '80'
 }
 
 export function defaultLookup(hostname: string): Promise<Addr[]> {

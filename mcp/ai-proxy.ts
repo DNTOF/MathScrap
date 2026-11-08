@@ -3,7 +3,7 @@ import http from 'node:http'
 import https from 'node:https'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson } from './http.ts'
-import { allowPrivateAi, isBlockedHostname, resolveAndCheck, type LookupFn } from './ssrf.ts'
+import { isBlockedHostname, localOriginsFromEnv, resolveAndCheck, type LookupFn } from './ssrf.ts'
 import { peerAllowed } from './peer.ts'
 
 export const PROXY_HEADER = 'x-mathscrap-proxy'
@@ -12,7 +12,7 @@ const ALLOWED_HEADERS = new Set(['authorization', 'content-type', 'accept', 'x-a
 
 export type ForwardDeps = {
   lookup?: LookupFn
-  allowPrivate?: boolean
+  localOrigins?: URL[]
 }
 
 /**
@@ -38,11 +38,10 @@ export async function forwardAi(
   if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new Error(t('proxyHttp'))
   if (target.username || target.password) throw new Error(t('proxyUserinfo'))
   if (!allowedPath(target.pathname)) throw new Error(t('proxyPath'))
-  const allowPrivate = deps.allowPrivate ?? allowPrivateAi()
-  if (isBlockedHostname(target.hostname, allowPrivate)) throw new Error(t('proxyBlocked'))
+  const origins = deps.localOrigins ?? localOriginsFromEnv()
   let addresses
   try {
-    addresses = await resolveAndCheck(target.hostname, deps.lookup, allowPrivate)
+    addresses = await resolveAndCheck(target, deps.lookup, origins)
   } catch {
     throw new Error(t('proxyBlocked'))
   }
@@ -128,9 +127,10 @@ function requestPinned(
         headers: { ...headers, host: target.host },
         servername: target.hostname,
         lookup: (_hostname, _options, callback) => {
-          resolveAndCheck(target.hostname, deps.lookup, deps.allowPrivate ?? allowPrivateAi())
+          resolveAndCheck(target, deps.lookup, deps.localOrigins ?? localOriginsFromEnv())
             .then((again) => {
-              if (again.some((item) => item.address !== pinned.address)) {
+              const same = again.length === addresses.length && again.every((item) => addresses.some((kept) => kept.address === item.address && kept.family === item.family))
+              if (!same) {
                 callback(new Error('blocked'), '', 4)
                 return
               }
