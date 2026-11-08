@@ -411,6 +411,21 @@ const upgrade = await rawStatus(
   JSON.stringify({ name: 'page_add_formula', arguments: {} }),
 )
 assert.equal(upgrade, 403)
+const sameOriginGet = await rawStatus(bridgePort, '/__mathscrap/bridge/health', {
+  host: `127.0.0.1:${bridgePort}`,
+  'sec-fetch-site': 'same-origin',
+})
+assert.equal(sameOriginGet, 200)
+const bareGet = await rawStatus(bridgePort, '/__mathscrap/bridge/wait', { host: `127.0.0.1:${bridgePort}` })
+assert.equal(bareGet, 403)
+const barePost = await rawStatus(
+  bridgePort,
+  '/__mathscrap/bridge/result',
+  { host: `127.0.0.1:${bridgePort}`, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+  'POST',
+  JSON.stringify({ id: 'x', ok: true }),
+)
+assert.equal(barePost, 403)
 
 const offlineAt = Date.now()
 const offline = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {

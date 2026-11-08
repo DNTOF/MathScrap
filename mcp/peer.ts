@@ -2,20 +2,21 @@ import type { IncomingMessage } from 'node:http'
 
 /**
  * The dev bridge is a loopback service. A browser Origin of localhost does not
- * prove which local process is calling. Node's MCP client may omit Origin.
- * Browser routes require a loopback Origin whose host matches Host.
+ * prove which local process is calling. Node's MCP client omits Origin on
+ * POST /call. Chrome's same-origin GET also omits Origin and sends
+ * Sec-Fetch-Site: same-origin, which a page script cannot set.
  * Non-loopback peers are always refused. LAN bind does not extend this.
  */
 export function peerAllowed(req: IncomingMessage, browserRoute: boolean): boolean {
   if (isWebsocket(req)) return false
   if (!hostIsLoopback(header(req, 'host'))) return false
+  if (!isLoopback(req.socket?.remoteAddress)) return false
   const origin = header(req, 'origin')
   if (origin === 'null') return false
   if (origin && !localOrigin(origin)) return false
-  if (browserRoute) {
-    if (!origin || !sameHost(origin, header(req, 'host'))) return false
-  }
-  return isLoopback(req.socket?.remoteAddress)
+  if (origin && !sameHost(origin, header(req, 'host'))) return false
+  if (browserRoute && !origin) return sameOriginGet(req)
+  return true
 }
 
 export function isLoopback(address: string | undefined): boolean {
@@ -54,6 +55,12 @@ function hostName(hostHeader: string): string {
     return end > 1 ? value.slice(1, end) : ''
   }
   return value.split(':')[0] ?? ''
+}
+
+function sameOriginGet(req: IncomingMessage): boolean {
+  const method = (req.method ?? 'GET').toUpperCase()
+  if (method !== 'GET' && method !== 'HEAD') return false
+  return header(req, 'sec-fetch-site').toLowerCase() === 'same-origin'
 }
 
 function isWebsocket(req: IncomingMessage): boolean {
