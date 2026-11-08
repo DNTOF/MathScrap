@@ -132,6 +132,8 @@ jobs:
             src-tauri
             crates/mcpserve
       - run: npm ci
+      - name: Windows session ACL
+        run: cargo test --manifest-path crates/mcpserve/Cargo.toml
       - name: Unsigned test binaries
         shell: bash
         env:

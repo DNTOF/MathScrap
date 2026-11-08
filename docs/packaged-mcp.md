@@ -4,9 +4,9 @@ This is a development build. It is not the signed v0.0.1 release, and it does no
 
 The window listens on `127.0.0.1` only. A small `mathscrap-mcp` program speaks MCP on stdio and forwards to that listener. The page tools run in the window. There is no Vite server, no repository working directory, and no Node runtime.
 
-The bearer token is a file in the test profile. It is not printed, not put in a URL, and not stored in the page. A process running as the same OS user can read the file. Another user, and a machine on the network, cannot. A website cannot: a browser sends `Origin`, and every `Origin` is refused. There is no `Access-Control-Allow-Origin`.
+The bearer token is a file in the test profile. It is not printed, not put in a URL, and not stored in the page. The `mcp` directory is created with a protected ACL before the token is written, so a permission inherited from LocalAppData is not copied onto the file. On Windows the current user, SYSTEM, and Administrators can read it. Another local account is not granted access. On Linux the directory is mode 0700 and the files are mode 0600, owned by the current user. A process running as that same user can read the file. This does not block an administrator or SYSTEM. A website cannot: a browser sends `Origin`, and every `Origin` is refused. There is no `Access-Control-Allow-Origin`.
 
-Closing the window closes the listener. `MATHSCRAP_MCP=off` starts the window without one.
+Closing the window deletes the session and endpoint files and closes the listener. `MATHSCRAP_MCP=off` deletes a leftover session and does not listen. If a private ACL cannot be set, or the `mcp` path is a reparse point that cannot be replaced without following it, MCP stays off and the new token is not written. The stdio helper refuses a session or endpoint that is a reparse point, is owned by someone else, or grants any other account.
 
 ## What the parent runs
 
@@ -58,9 +58,9 @@ Replace the angle-bracket text with the session file. Do not send that value any
 
 会话文件是 `%LOCALAPPDATA%\MathScrap-mcptest\mcp\session`，地址文件是同目录的 `endpoint`。不要把令牌贴到聊天里。先备份 `C:\Users\AllowCache\.zcode\cli\config.json`，再合并 stdio 服务器，命令用 `mathscrap-mcp.exe` 的完整路径。不要用 `zcode -p`，也不要重启已经打开的对话。
 
-令牌在测试配置目录的文件里，不打印，不进网址，不进页面存储。同一系统用户的进程可以读这个文件。其他用户和局域网不行。浏览器带 `Origin` 的请求会被拒绝，响应里没有 `Access-Control-Allow-Origin`。
+令牌在测试配置目录的文件里，不打印，不进网址，不进页面存储。`mcp` 目录在写入令牌之前就带受保护的 ACL，不会继承 LocalAppData 上其他账户的权限。Windows 上当前用户、SYSTEM 和管理员可以读。其他本地账户没有授权。同一用户的进程可以读这个文件，管理员和 SYSTEM 也可以。浏览器带 `Origin` 的请求会被拒绝，响应里没有 `Access-Control-Allow-Origin`。
 
-关掉窗口，监听就停。`MATHSCRAP_MCP=off` 时窗口仍在，但不监听。
+关掉窗口会删除 session 和 endpoint，并停止监听。`MATHSCRAP_MCP=off` 会清掉残留的 session，且不监听。如果建不起私有 ACL，或 `mcp` 路径是无法安全替换的重解析点，MCP 保持关闭，新令牌不会写入。stdio 助手拒绝重解析点、属主不是当前用户、或授权了其他账户的 session 与 endpoint。
 
 `initialize` 的 `serverInfo.version` 是 `0.0.2-dev`。已签名的 v0.0.1 没有这个监听。
 

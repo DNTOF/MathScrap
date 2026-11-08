@@ -1,15 +1,19 @@
 //! Loopback MCP for a running MathScrap window.
 //!
 //! The listener binds `127.0.0.1` only. The bearer token is written to a
-//! user-only file and is never put in a URL, a log line, or the page's
-//! localStorage. A same-user process can read that file. This is not an
-//! OS-account boundary beyond the file mode and the user profile.
+//! private file and is never put in a URL, a log line, or the page's
+//! localStorage. On Windows the file is created with a protected ACL: the
+//! current user, SYSTEM, and Administrators only. On Unix the directory is
+//! mode 0700 and the file is mode 0600, owned by the current user. A
+//! same-user process can read that file. An administrator or SYSTEM can too.
+//! Another account is not granted access.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+
+mod secret;
 
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
-use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -105,6 +109,9 @@ impl Hub {
     /// Bind loopback, write the session file, and serve until dropped.
     pub fn start(dispatch: Dispatch) -> Result<Self, String> {
         if mcp_disabled() {
+            if let Ok(dir) = mcp_dir() {
+                let _ = secret::scrub(&dir);
+            }
             return Err("mcp disabled".into());
         }
         let dir = mcp_dir()?;
@@ -127,6 +134,9 @@ impl Drop for Hub {
         }
         if let Some(thread) = self.thread.lock().ok().and_then(|mut slot| slot.take()) {
             let _ = thread.join();
+        }
+        if !self.inner.dir.as_os_str().is_empty() {
+            let _ = secret::scrub(&self.inner.dir);
         }
     }
 }
@@ -200,7 +210,11 @@ fn start_in(dir: PathBuf, port: u16, tool_timeout: Duration, dispatch: Dispatch)
         return Err("mcp refused a non-loopback bind".into());
     }
     let token = new_token()?;
-    write_private(&dir, &token, bound.port())?;
+    let endpoint = format!("http://127.0.0.1:{}/mcp", bound.port());
+    if let Err(err) = secret::publish(&dir, &token, &endpoint) {
+        let _ = secret::scrub(&dir);
+        return Err(format!("{}: {}", err.code, err.message));
+    }
     let inner = Arc::new(Inner {
         token,
         dir,
@@ -659,42 +673,6 @@ fn new_token() -> Result<String, String> {
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
-fn write_private(dir: &Path, token: &str, port: u16) -> Result<(), String> {
-    if dir.symlink_metadata().map(|meta| meta.file_type().is_symlink()).unwrap_or(false) {
-        return Err("mcp directory is a symlink".into());
-    }
-    fs::create_dir_all(dir).map_err(|_| "mcp directory was not created".to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
-    }
-    write_file(&dir.join("session"), token)?;
-    write_file(&dir.join("endpoint"), &format!("http://127.0.0.1:{port}/mcp"))?;
-    Ok(())
-}
-
-fn write_file(path: &Path, text: &str) -> Result<(), String> {
-    if path.symlink_metadata().map(|meta| meta.file_type().is_symlink()).unwrap_or(false) {
-        return Err("mcp file is a symlink".into());
-    }
-    let mut options = OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(path).map_err(|_| "mcp file was not written".to_string())?;
-    file.write_all(text.as_bytes()).map_err(|_| "mcp file was not written".to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = file.set_permissions(fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
-}
-
 /// Speak MCP on stdio by forwarding to the loopback listener.
 /// The token is read from the session file and is not written to stdout or stderr.
 pub fn stdio_main() {
@@ -721,12 +699,12 @@ pub fn stdio_main() {
                 let _ = write_frame(&mut output, &bytes);
             }
             Ok(_) => {}
-            Err(reason) => {
+            Err(err) => {
                 if notification {
                     continue;
                 }
                 let id = message_id(&message);
-                let _ = write_frame(&mut output, &serde_json::to_vec(&rpc_error(id, "mcp_closed", &reason)).unwrap_or_default());
+                let _ = write_frame(&mut output, &serde_json::to_vec(&rpc_error(id, err.code, err.message)).unwrap_or_default());
             }
         }
     }
@@ -736,13 +714,14 @@ fn message_id(message: &Value) -> Option<Value> {
     message.get("id").cloned()
 }
 
-fn forward(session: &mut Option<String>, message: &Value) -> Result<Option<Vec<u8>>, String> {
-    forward_in(&mcp_dir()?, session, message)
+fn forward(session: &mut Option<String>, message: &Value) -> Result<Option<Vec<u8>>, secret::SecretError> {
+    forward_in(&mcp_dir().map_err(|_| secret::SecretError::closed())?, session, message)
 }
 
-fn forward_in(dir: &Path, session: &mut Option<String>, message: &Value) -> Result<Option<Vec<u8>>, String> {
-    let (port, token) = read_local_endpoint(dir)?;
-    let body = serde_json::to_vec(message).map_err(|_| "The request could not be encoded.".to_string())?;
+fn forward_in(dir: &Path, session: &mut Option<String>, message: &Value) -> Result<Option<Vec<u8>>, secret::SecretError> {
+    let (endpoint, token) = secret::load(dir)?;
+    let port = parse_loopback_endpoint(endpoint.trim()).map_err(|_| secret::SecretError::closed())?;
+    let body = serde_json::to_vec(message).map_err(|_| secret::SecretError::closed())?;
     let mut extra = String::new();
     if let Some(id) = session {
         extra = format!("Mcp-Session-Id: {id}\r\n");
@@ -751,14 +730,14 @@ fn forward_in(dir: &Path, session: &mut Option<String>, message: &Value) -> Resu
         "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n{extra}\r\n",
         body.len()
     );
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|_| "MathScrap is not running.".to_string())?;
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|_| secret::SecretError::closed())?;
     let _ = stream.set_read_timeout(Some(Duration::from_secs(20)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
-    stream.write_all(request.as_bytes()).map_err(|_| "MathScrap is not running.".to_string())?;
-    stream.write_all(&body).map_err(|_| "MathScrap is not running.".to_string())?;
-    let (status, headers, response_body) = read_http_response(&mut stream)?;
+    stream.write_all(request.as_bytes()).map_err(|_| secret::SecretError::closed())?;
+    stream.write_all(&body).map_err(|_| secret::SecretError::closed())?;
+    let (status, headers, response_body) = read_http_response(&mut stream).map_err(|_| secret::SecretError::closed())?;
     if (300..400).contains(&status) {
-        return Err("MathScrap refused a redirect.".into());
+        return Err(secret::SecretError::closed());
     }
     if let Some(id) = headers.get("mcp-session-id") {
         *session = Some(id.clone());
@@ -767,17 +746,6 @@ fn forward_in(dir: &Path, session: &mut Option<String>, message: &Value) -> Resu
         return Ok(None);
     }
     Ok(Some(response_body))
-}
-
-fn read_local_endpoint(dir: &Path) -> Result<(u16, String), String> {
-    let endpoint = fs::read_to_string(dir.join("endpoint")).map_err(|_| "MathScrap is not running.".to_string())?;
-    let token = fs::read_to_string(dir.join("session")).map_err(|_| "MathScrap is not running.".to_string())?;
-    let token = token.trim();
-    if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err("MathScrap is not running.".into());
-    }
-    let port = parse_loopback_endpoint(endpoint.trim())?;
-    Ok((port, token.to_string()))
 }
 
 fn parse_loopback_endpoint(text: &str) -> Result<u16, String> {
@@ -891,6 +859,7 @@ fn read_http_response(stream: &mut TcpStream) -> Result<(u16, HashMap<String, St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn temp_dir() -> PathBuf {
         let mut bytes = [0u8; 8];
@@ -908,7 +877,7 @@ mod tests {
     fn boot(timeout_ms: u64, dispatch: Dispatch) -> (Running, u16, String) {
         let dir = temp_dir();
         let hub = start_in(dir, 0, Duration::from_millis(timeout_ms), dispatch).expect("start");
-        let token = fs::read_to_string(hub.dir().join("session")).unwrap();
+        let (_endpoint, token) = secret::load(hub.dir()).expect("private session");
         let port = hub.port();
         assert!(port != 0);
         (Running { hub }, port, token)
@@ -1101,7 +1070,10 @@ mod tests {
         }
         let old = token.clone();
         let port = running.hub.port();
+        let gone = running.hub.dir().to_path_buf();
         drop(running);
+        assert!(!gone.join("session").exists(), "graceful close left the session file");
+        assert!(!gone.join("endpoint").exists(), "graceful close left the endpoint file");
         let refused = TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(200));
         assert!(refused.is_err() || refused.unwrap().write_all(b"GET / HTTP/1.1\r\n\r\n").is_err());
 
@@ -1120,6 +1092,22 @@ mod tests {
         assert!(parse_loopback_endpoint("http://169.254.169.254/mcp").is_err());
         assert!(parse_loopback_endpoint("https://127.0.0.1:1/mcp").is_err());
         let mode = fs::metadata(running.hub.dir().join("session")).unwrap().permissions();
+        let saved_dir = std::env::var_os("MATHSCRAP_MCP_DIR");
+        let saved_flag = std::env::var_os("MATHSCRAP_MCP");
+        std::env::set_var("MATHSCRAP_MCP_DIR", running.hub.dir());
+        std::env::set_var("MATHSCRAP_MCP", "off");
+        let disabled = Hub::start(Arc::new(|_| false));
+        match saved_flag {
+            Some(value) => std::env::set_var("MATHSCRAP_MCP", value),
+            None => std::env::remove_var("MATHSCRAP_MCP"),
+        }
+        match saved_dir {
+            Some(value) => std::env::set_var("MATHSCRAP_MCP_DIR", value),
+            None => std::env::remove_var("MATHSCRAP_MCP_DIR"),
+        }
+        assert!(disabled.is_err(), "disabled MCP started a listener");
+        assert!(!running.hub.dir().join("session").exists(), "disabled start left the session file");
+        assert!(!running.hub.dir().join("endpoint").exists(), "disabled start left the endpoint file");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
