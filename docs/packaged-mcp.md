@@ -28,11 +28,12 @@ Back up `C:\Users\AllowCache\.zcode\cli\config.json` and merge one server. Do no
 ```json
 "mathscrap-test": {
   "type": "stdio",
-  "command": "C:\\Users\\AllowCache\\AppData\\Local\\MathScrap-mcptest-run\\mathscrap-mcp.exe"
+  "command": "npx.cmd",
+  "args": ["--yes", "--package", "C:\\Users\\AllowCache\\AppData\\Local\\MathScrap-mcptest-run\\mathscrap-mcp-stdio-0.0.2-dev.tgz", "mathscrap-mcp-stdio"]
 }
 ```
 
-The command has no token in it. The program reads the session file. In a new ZCode session, `/mcp list` then `/mcp connect mathscrap-test`. A stdio spawn that fails in ZCode is a client failure even when this server is fine. The HTTP fallback below puts the token in the config file. That file stays on the machine. Do not copy the token out of it.
+Start the test window first. `cwd` can be `C:\Users\AllowCache`. No extra env is required. The command has no token in it. `npx` reads the session file and speaks JSON lines; it does not launch `mathscrap-mcp.exe`. In a new ZCode session, `/mcp list` then `/mcp connect mathscrap-test`. A stdio spawn that fails in ZCode is a client failure even when this server is fine. The HTTP fallback below puts the token in the config file. That file stays on the machine. Do not copy the token out of it.
 
 ```json
 "mathscrap-test-http": {
@@ -56,7 +57,7 @@ Replace the angle-bracket text with the session file. Do not send that value any
 
 这是开发构建，不是已签名的 v0.0.1，也不会替换已经装上的 MathScrap。不要动 `C:\Users\AllowCache\AppData\Local\MathScrap\mathscrap.exe`。把测试程序解到新目录，例如 `C:\Users\AllowCache\AppData\Local\MathScrap-mcptest-run\`。窗口标题是 MathScrap MCP Test。窗口只听 `127.0.0.1`。`mathscrap-mcp` 用 stdio 转发，命令行里没有令牌。工具在窗口里执行。不需要 Vite、仓库目录或 Node。
 
-会话文件是 `%LOCALAPPDATA%\MathScrap-mcptest\mcp\session`，地址文件是同目录的 `endpoint`。不要把令牌贴到聊天里。先备份 `C:\Users\AllowCache\.zcode\cli\config.json`，再合并 stdio 服务器，命令用 `mathscrap-mcp.exe` 的完整路径。不要用 `zcode -p`，也不要重启已经打开的对话。
+会话文件是 `%LOCALAPPDATA%\MathScrap-mcptest\mcp\session`，地址文件是同目录的 `endpoint`。不要把令牌贴到聊天里。先备份 `C:\Users\AllowCache\.zcode\cli\config.json`，再合并 stdio 服务器。先打开测试窗口。`command` 用 `npx.cmd`，`args` 是 `--yes`、`--package`、解压目录里的 `mathscrap-mcp-stdio-0.0.2-dev.tgz`、`mathscrap-mcp-stdio`。`cwd` 可以是 `C:\Users\AllowCache`。这个命令不启动 `mathscrap-mcp.exe`。不要用 `zcode -p`，也不要重启已经打开的对话。
 
 令牌在测试配置目录的文件里，不打印，不进网址，不进页面存储。`mcp` 目录在写入令牌之前就带受保护的 ACL，不会继承 LocalAppData 上其他账户的权限。Windows 上当前用户、SYSTEM 和管理员可以读。其他本地账户没有授权。同一用户的进程可以读这个文件，管理员和 SYSTEM 也可以。浏览器带 `Origin` 的请求会被拒绝，响应里没有 `Access-Control-Allow-Origin`。
 

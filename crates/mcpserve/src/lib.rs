@@ -14,7 +14,7 @@ mod secret;
 
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -121,16 +121,18 @@ impl Hub {
     }
 }
 
-impl Drop for Hub {
-    fn drop(&mut self) {
-        // Only the last owner closes the listener. Clones share `thread`.
-        if Arc::strong_count(&self.thread) > 1 {
-            return;
-        }
+impl Hub {
+    /// Stop the listener and delete the session files.
+    ///
+    /// A normal window close calls this from the event loop. The Windows
+    /// runtime then ends the process with `process::exit`, which does not run
+    /// `Drop`. A forced kill does not reach this function either.
+    pub fn close_session(&self) {
         self.inner.shutdown.store(true, Ordering::SeqCst);
         self.inner.fail_all("mcp_closed", "MathScrap MCP stopped.");
         if self.inner.port != 0 {
-            let _ = TcpStream::connect(("127.0.0.1", self.inner.port));
+            let addr = SocketAddr::from(([127, 0, 0, 1], self.inner.port));
+            let _ = TcpStream::connect_timeout(&addr, Duration::from_millis(200));
         }
         if let Some(thread) = self.thread.lock().ok().and_then(|mut slot| slot.take()) {
             let _ = thread.join();
@@ -138,6 +140,16 @@ impl Drop for Hub {
         if !self.inner.dir.as_os_str().is_empty() {
             let _ = secret::scrub(&self.inner.dir);
         }
+    }
+}
+
+impl Drop for Hub {
+    fn drop(&mut self) {
+        // Only the last owner closes the listener. Clones share `thread`.
+        if Arc::strong_count(&self.thread) > 1 {
+            return;
+        }
+        self.close_session();
     }
 }
 
@@ -675,36 +687,49 @@ fn new_token() -> Result<String, String> {
 
 /// Speak MCP on stdio by forwarding to the loopback listener.
 /// The token is read from the session file and is not written to stdout or stderr.
+///
+/// A request that starts with `{` is one JSON-RPC message ending at the next
+/// newline. That is the stdio transport used by the official MCP SDK. A
+/// `Content-Length` header is still accepted, and the reply uses the same
+/// framing as the request. Every reply is flushed.
 pub fn stdio_main() {
-    let mut session: Option<String> = None;
+    let dir = match mcp_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
     let stdout = std::io::stdout();
     let mut output = stdout.lock();
+    let _ = stdio_exchange(&dir, &mut input, &mut output);
+}
+
+fn stdio_exchange(dir: &Path, input: &mut impl BufRead, output: &mut impl Write) -> std::io::Result<()> {
+    let mut session: Option<String> = None;
     loop {
-        let frame = match read_frame(&mut input) {
-            Ok(frame) => frame,
-            Err(_) => break,
+        let (frame, line) = match read_client_message(input) {
+            Ok(message) => message,
+            Err(_) => return Ok(()),
         };
         let message: Value = match serde_json::from_slice(&frame) {
             Ok(value) => value,
             Err(_) => {
-                let _ = write_frame(&mut output, &serde_json::to_vec(&rpc_error(None, "mcp_bad_json", "The body is not JSON.")).unwrap_or_default());
+                let bytes = serde_json::to_vec(&rpc_error(None, "mcp_bad_json", "The body is not JSON.")).unwrap_or_default();
+                write_client_message(output, &bytes, line)?;
                 continue;
             }
         };
         let notification = message.get("id").is_none();
-        match forward(&mut session, &message) {
-            Ok(Some(bytes)) if !notification => {
-                let _ = write_frame(&mut output, &bytes);
-            }
+        match forward_in(dir, &mut session, &message) {
+            Ok(Some(bytes)) if !notification => write_client_message(output, &bytes, line)?,
             Ok(_) => {}
             Err(err) => {
                 if notification {
                     continue;
                 }
                 let id = message_id(&message);
-                let _ = write_frame(&mut output, &serde_json::to_vec(&rpc_error(id, err.code, err.message)).unwrap_or_default());
+                let bytes = serde_json::to_vec(&rpc_error(id, err.code, err.message)).unwrap_or_default();
+                write_client_message(output, &bytes, line)?;
             }
         }
     }
@@ -712,10 +737,6 @@ pub fn stdio_main() {
 
 fn message_id(message: &Value) -> Option<Value> {
     message.get("id").cloned()
-}
-
-fn forward(session: &mut Option<String>, message: &Value) -> Result<Option<Vec<u8>>, secret::SecretError> {
-    forward_in(&mcp_dir().map_err(|_| secret::SecretError::closed())?, session, message)
 }
 
 fn forward_in(dir: &Path, session: &mut Option<String>, message: &Value) -> Result<Option<Vec<u8>>, secret::SecretError> {
@@ -763,6 +784,65 @@ fn parse_loopback_endpoint(text: &str) -> Result<u16, String> {
         return Err("The endpoint is not loopback HTTP.".into());
     }
     Ok(port)
+}
+
+/// `true` means the client sent one JSON line. `false` means a Content-Length frame.
+fn read_client_message(input: &mut impl BufRead) -> std::io::Result<(Vec<u8>, bool)> {
+    loop {
+        let available = input.fill_buf()?;
+        if available.is_empty() {
+            return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "eof"));
+        }
+        if available[0] == b'\n' || available[0] == b'\r' {
+            input.consume(1);
+            continue;
+        }
+        if available[0] == b'{' {
+            let mut line = Vec::new();
+            loop {
+                let buf = input.fill_buf()?;
+                if buf.is_empty() {
+                    break;
+                }
+                if let Some(pos) = buf.iter().position(|byte| *byte == b'\n') {
+                    if line.len() + pos > MAX_BODY {
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "large"));
+                    }
+                    line.extend_from_slice(&buf[..=pos]);
+                    input.consume(pos + 1);
+                    break;
+                }
+                if line.len() + buf.len() > MAX_BODY {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "large"));
+                }
+                let n = buf.len();
+                line.extend_from_slice(buf);
+                input.consume(n);
+            }
+            if line.last() == Some(&b'\n') {
+                line.pop();
+            }
+            if line.last() == Some(&b'\r') {
+                line.pop();
+            }
+            if line.is_empty() {
+                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "eof"));
+            }
+            return Ok((line, true));
+        }
+        return Ok((read_frame(input)?, false));
+    }
+}
+
+fn write_client_message(output: &mut impl Write, body: &[u8], line: bool) -> std::io::Result<()> {
+    if line {
+        output.write_all(body)?;
+        if !body.ends_with(b"\n") {
+            output.write_all(b"\n")?;
+        }
+        return output.flush();
+    }
+    write_frame(output, body)
 }
 
 fn read_frame(input: &mut impl Read) -> std::io::Result<Vec<u8>> {
@@ -1114,5 +1194,150 @@ mod tests {
             assert_eq!(mode.mode() & 0o077, 0);
         }
         let _ = mode;
+    }
+
+    #[test]
+    fn newline_stdio_answers_and_content_length_still_answers() {
+        let (running, _port, token) = boot(500, Arc::new(|_| true));
+        let line = br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}"#;
+        let mut request = line.to_vec();
+        request.push(b'\n');
+        request.extend_from_slice(br#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+        request.push(b'\n');
+        request.extend_from_slice(br#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
+        request.push(b'\n');
+        let mut output = Vec::new();
+        stdio_exchange(running.hub.dir(), &mut &request[..], &mut output).unwrap();
+        let body = br#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}"#;
+        let mut framed = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        framed.extend_from_slice(body);
+        let mut framed_output = Vec::new();
+        stdio_exchange(running.hub.dir(), &mut &framed[..], &mut framed_output).unwrap();
+        let text = String::from_utf8(output).unwrap();
+        assert!(!text.contains(&token), "stdio printed the session token");
+        assert!(!text.contains("Content-Length"), "a JSON line was answered with a header");
+        let lines: Vec<&str> = text.lines().filter(|line| !line.is_empty()).collect();
+        assert_eq!(lines.len(), 2, "a notification must not add a stdout line");
+        let value: Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(value["id"], 1);
+        assert_eq!(value["result"]["serverInfo"]["name"], "mathscrap");
+        assert_eq!(value["result"]["protocolVersion"], "2024-11-05");
+        let listed: Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(listed["id"], 2);
+        assert_eq!(listed["result"]["tools"].as_array().map(Vec::len), Some(7));
+
+        let text = String::from_utf8(framed_output).unwrap();
+        assert!(text.starts_with("Content-Length:"), "a header request was answered as a line");
+        assert!(!text.contains(&token), "stdio printed the session token");
+        let json = text.split("\r\n\r\n").nth(1).unwrap();
+        let value: Value = serde_json::from_str(json.trim()).unwrap();
+        assert_eq!(value["id"], 7);
+        assert_eq!(value["result"]["protocolVersion"], "2025-06-18");
+    }
+
+    #[test]
+    fn close_session_removes_files_without_drop() {
+        let (running, port, _token) = boot(500, Arc::new(|_| false));
+        let dir = running.hub.dir().to_path_buf();
+        assert!(dir.join("session").is_file(), "the session file was not published");
+        running.hub.close_session();
+        assert!(!dir.join("session").exists(), "close_session left the session file");
+        assert!(!dir.join("endpoint").exists(), "close_session left the endpoint file");
+        let refused = TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(200));
+        assert!(refused.is_err() || refused.unwrap().write_all(b"GET / HTTP/1.1\r\n\r\n").is_err());
+        // `process::exit` skips Drop. The files must already be gone.
+        std::mem::forget(running);
+        assert!(!dir.join("session").exists(), "forgetting the hub restored the session file");
+    }
+
+    #[test]
+    fn stdio_proxy_reads_the_listener() {
+        let sheet = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let slot: Arc<Mutex<Option<Hub>>> = Arc::new(Mutex::new(None));
+        let sheet_call = sheet.clone();
+        let slot_call = slot.clone();
+        let (running, _port, token) = boot(2_000, Arc::new(move |job| {
+            let id = job["id"].as_str().unwrap().to_string();
+            let result = match job["name"].as_str().unwrap_or("") {
+                "page_read" => json!({"formulas": *sheet_call.lock().unwrap(), "strokes": 0}),
+                _ => json!({"ok": true}),
+            };
+            slot_call.lock().unwrap().as_ref().unwrap().complete(&id, true, Some(result), None);
+            true
+        }));
+        *slot.lock().unwrap() = Some(running.hub.clone());
+        running.hub.set_ready(true);
+        let pkg = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mcp/stdio-proxy");
+        let mut command = if cfg!(windows) {
+            let mut command = std::process::Command::new("node");
+            command.arg(pkg.join("bin.js"));
+            command
+        } else {
+            let mut command = std::process::Command::new("npx");
+            command.args(["--yes", "--package", pkg.to_str().unwrap(), "mathscrap-mcp-stdio"]);
+            command.env("NPM_CONFIG_LOGLEVEL", "silent");
+            command.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
+            command
+        };
+        let mut child = command
+            .env("MATHSCRAP_MCP_DIR", running.hub.dir())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("stdio proxy failed to start");
+        let mut stdin = child.stdin.take().unwrap();
+        let mut stdout = child.stdout.take().unwrap();
+        let mut stderr = child.stderr.take().unwrap();
+        let request = concat!(
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}"#,
+            "\n",
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            "\n",
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+            "\n",
+            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"page_read","arguments":{}}}"#,
+            "\n",
+        );
+        let copied = thread::spawn(move || {
+            use std::io::Read;
+            let _ = stdin.write_all(request.as_bytes());
+            drop(stdin);
+            let mut out = Vec::new();
+            let mut err = Vec::new();
+            let _ = stdout.read_to_end(&mut out);
+            let _ = stderr.read_to_end(&mut err);
+            (out, err)
+        });
+        let started = Instant::now();
+        loop {
+            if started.elapsed() > Duration::from_secs(30) {
+                let _ = child.kill();
+                break;
+            }
+            if child.try_wait().ok().flatten().is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        let _ = child.wait();
+        let (out, err) = copied.join().unwrap();
+        let text = String::from_utf8_lossy(&out);
+        let errors = String::from_utf8_lossy(&err);
+        assert!(!text.contains(&token) && !errors.contains(&token), "stdio proxy printed the session token");
+        let lines: Vec<&str> = text.lines().filter(|line| !line.is_empty()).collect();
+        assert!(lines.len() >= 3, "stdio proxy did not answer initialize, tools/list, and page_read");
+        let init: Value = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(init["id"], 1);
+        assert_eq!(init["result"]["serverInfo"]["name"], "mathscrap");
+        let listed: Value = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(listed["id"], 2);
+        assert_eq!(listed["result"]["tools"].as_array().map(Vec::len), Some(7));
+        let read: Value = serde_json::from_str(lines[2]).unwrap();
+        assert_eq!(read["id"], 3);
+        assert_eq!(read["result"]["isError"], false);
+        let body: Value = serde_json::from_str(read["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert!(body["formulas"].as_array().unwrap().is_empty(), "page_read did not return the listener sheet");
+        let _ = sheet;
     }
 }

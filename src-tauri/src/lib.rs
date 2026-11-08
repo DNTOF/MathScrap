@@ -5,6 +5,12 @@ pub fn mcp_stdio() {
 }
 use tauri::{Emitter, Manager};
 
+fn close_mcp(app: &impl Manager<tauri::Wry>) {
+    if let Some(hub) = app.try_state::<Hub>() {
+        hub.close_session();
+    }
+}
+
 #[tauri::command]
 fn mcp_ready(hub: tauri::State<'_, Hub>) {
     hub.set_ready(true);
@@ -39,6 +45,18 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![mcp_ready, mcp_idle, mcp_result])
-        .run(tauri::generate_context!())
-        .expect("MathScrap failed to start");
+        .on_window_event(|window, event| {
+            // CloseMainWindow delivers WM_CLOSE here. The runtime then calls
+            // process::exit, which does not run Hub's Drop.
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                close_mcp(window);
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("MathScrap failed to start")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                close_mcp(app);
+            }
+        });
 }
