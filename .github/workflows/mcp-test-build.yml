@@ -1,0 +1,165 @@
+# Builds an unsigned Windows test pair and uploads it as a workflow artifact.
+# It does not create a GitHub Release, does not sign, and does not run on main.
+name: mcp-test-build
+
+on:
+  push:
+    branches:
+      - cursor/packaged-mcp-*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+      - name: Chrome for sheet end-to-end
+        run: |
+          if ! command -v google-chrome >/dev/null 2>&1 && ! command -v google-chrome-stable >/dev/null 2>&1; then
+            sudo apt-get update
+            wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo apt-get install -y /tmp/chrome.deb
+          fi
+          (google-chrome --version || google-chrome-stable --version)
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:rust
+      - name: Packaged MCP protocol
+        run: cargo test --manifest-path crates/mcpserve/Cargo.toml
+      - run: npm run smoke
+      - run: npm run smoke:ocr
+      - name: Real CoMER smoke
+        run: npx tsx scripts/ocr-real-smoke.ts
+      - run: npm run smoke:ai
+      - run: npm run test:pack
+      - run: npm run smoke:ink
+      - name: Start the dev server
+        run: |
+          npm run dev > dev-server.log 2>&1 &
+          echo $! > dev-server.pid
+          for _ in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:47321/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "dev server did not start"
+          cat dev-server.log
+          exit 1
+      - name: Sheet end-to-end
+        env:
+          SHOTS: e2e-shots
+        run: npm run e2e:sheet
+      - name: Ink gestures
+        env:
+          SHOTS: e2e-shots
+        run: npm run e2e:ink
+      - name: Per-formula plot end-to-end
+        env:
+          SHOTS: e2e-plots
+        run: npm run e2e
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mathscrap-mcp-test-failure
+          path: |
+            e2e-shots
+            e2e-plots
+            dev-server.log
+          if-no-files-found: ignore
+
+  linux-packaged-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri
+            crates/mcpserve
+      - name: WebKit for the release window
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb
+      - run: npm ci
+      - name: Release-mode page roundtrip
+        env:
+          MATHSCRAP_MCP_PROFILE: mcptest
+        run: |
+          npx tauri build --config src-tauri/tauri.mcptest.json --no-bundle --ci
+          cargo build --manifest-path src-tauri/Cargo.toml --release --bin mathscrap-mcp
+          GUI=src-tauri/target/release/mathscrap-mcp-test STDIO=src-tauri/target/release/mathscrap-mcp node scripts/mcp-packaged-smoke.mjs
+
+  # Unsigned CI artifact only. It does not create a Release and it does not wait on the suite.
+  windows-mcp-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri
+            crates/mcpserve
+      - run: npm ci
+      - name: Windows session ACL
+        run: cargo test --manifest-path crates/mcpserve/Cargo.toml
+      - name: Unsigned test binaries
+        shell: bash
+        env:
+          MATHSCRAP_MCP_PROFILE: mcptest
+        run: bash scripts/package-mcp-test.sh
+      - name: Local stdio package
+        shell: bash
+        run: |
+          npm pack --pack-destination packaging/out ./mcp/stdio-proxy
+          cp scripts/mcp-stdio-probe.mjs packaging/out/mcp-stdio-probe.mjs
+          printf 'stdio_client=npx --yes --package mathscrap-mcp-stdio-0.0.2-dev.tgz mathscrap-mcp-stdio\n' >> packaging/out/PROVENANCE.txt
+          node scripts/checksum-artifacts.mjs packaging/out
+      - name: Windows npx handshake
+        shell: bash
+        env:
+          GUI: src-tauri/target/release/mathscrap-mcp-test.exe
+          TGZ: packaging/out/mathscrap-mcp-stdio-0.0.2-dev.tgz
+        run: node scripts/mcp-windows-npx-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mathscrap-mcp-test-windows
+          path: |
+            packaging/out/MathScrap-mcp-test-windows-x64.exe
+            packaging/out/mathscrap-mcp.exe
+            packaging/out/mathscrap-mcp-stdio-0.0.2-dev.tgz
+            packaging/out/mcp-stdio-probe.mjs
+            packaging/out/SHA256SUMS
+            packaging/out/PROVENANCE.txt
+          if-no-files-found: error

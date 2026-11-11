@@ -1,0 +1,11 @@
+{
+  "name": "mathscrap-mcp-stdio",
+  "version": "0.0.2-dev",
+  "private": true,
+  "type": "module",
+  "description": "stdio MCP proxy for a running MathScrap MCP Test window",
+  "bin": {
+    "mathscrap-mcp-stdio": "./bin.js"
+  },
+  "files": ["bin.js"]
+}
