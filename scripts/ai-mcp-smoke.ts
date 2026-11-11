@@ -6,7 +6,7 @@
  * the Vite dev server hosts, then asks the real MCP server to list and call tools.
  */
 import assert from 'node:assert/strict'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -16,10 +16,27 @@ import { emphasizeVectors } from '../src/ai/formulas.ts'
 import { normalizePlotInput } from '../src/plot/remoteView.ts'
 import { createBridge } from '../mcp/bridge.ts'
 import { forwardAi, handleAiProxy, isBlockedHost } from '../mcp/ai-proxy.ts'
+import { lanHostOk, lanJoinAllowed, stampNavigation } from '../mcp/peer.ts'
+import { publishSession, sessionToken, shareTokenUsable } from '../mcp/session.ts'
+
+publishSession()
+const sessionCookie = `mathscrap_session=${sessionToken()}`
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const SECRET = 'sk-testsecretvalue-SHOULD-NOT-LEAK'
 const OK_KEY = 'sk-ok-DO-NOT-LOG'
+
+function rawStatus(port: number, path: string, headers: Record<string, string>, method = 'GET', body?: string) {
+  return new Promise<number>((resolve, reject) => {
+    const req = httpRequest({ hostname: '127.0.0.1', port, path, method, headers }, (res) => {
+      res.resume()
+      resolve(res.statusCode ?? 0)
+    })
+    req.on('error', reject)
+    if (body) req.end(body)
+    else req.end()
+  })
+}
 
 function listen(server: ReturnType<typeof createServer>) {
   return new Promise<number>((resolve) => {
@@ -211,6 +228,16 @@ try {
   assert.match(fallback.text, /y 轴/)
 
   assert.equal(isBlockedHost('169.254.169.254'), true)
+  assert.equal(isBlockedHost('[::ffff:a9fe:a9fe]'), true)
+  assert.equal(isBlockedHost('::ffff:169.254.169.254'), true)
+  assert.equal(isBlockedHost('2852039166'), true)
+  assert.equal(isBlockedHost('127.0.0.1'), true)
+  assert.equal(isBlockedHost('10.1.1.1'), true)
+  assert.equal(isBlockedHost('0:0:0:0:0:ffff:a9fe:a9fe'), true)
+  assert.equal(isBlockedHost('2002:a9fe:a9fe::'), true)
+  assert.equal(isBlockedHost('64:ff9b::a9fe:a9fe'), true)
+  assert.equal(isBlockedHost('fe80:0:0:0:0:0:0:1'), true)
+  assert.equal(isBlockedHost('::ffff:10.1.1.1'), true)
   let forwarded = false
   await assert.rejects(
     () =>
@@ -220,24 +247,154 @@ try {
       }),
     /refused/i,
   )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://127.0.0.1/v1/models', method: 'GET' }, async () => {
+        forwarded = true
+        return new Response('no')
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: 'http://models.example/v1/models', method: 'GET' },
+        async () => {
+          forwarded = true
+          return new Response('no')
+        },
+        undefined,
+        { lookup: async () => [{ address: '10.1.1.1', family: 4 }] },
+      ),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: 'http://mixed.example/v1/models', method: 'GET' },
+        async () => {
+          forwarded = true
+          return new Response('no')
+        },
+        undefined,
+        { lookup: async () => [{ address: '1.1.1.1', family: 4 }, { address: '10.1.1.1', family: 4 }] },
+      ),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: 'http://link.example/v1/models', method: 'GET' },
+        async () => {
+          forwarded = true
+          return new Response('no')
+        },
+        undefined,
+        { lookup: async () => [{ address: '8.8.8.8', family: 4 }, { address: '169.254.169.254', family: 4 }] },
+      ),
+    /refused/i,
+  )
   assert.equal(forwarded, false)
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://10.2.2.2/v1/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://127.0.0.1:9')],
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://[fd00::1]/v1/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://127.0.0.1:9')],
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://169.254.169.254/latest/meta-data/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://169.254.169.254')],
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://[0:0:0:0:0:ffff:a9fe:a9fe]/latest/meta-data/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://[0:0:0:0:0:ffff:a9fe:a9fe]')],
+      }),
+    /refused/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: 'http://[2002:a9fe:a9fe::]/v1/models', method: 'GET' }, async () => new Response('no'), undefined, {
+        localOrigins: [new URL('http://[2002:a9fe:a9fe::]')],
+      }),
+    /refused/i,
+  )
+  let ula = false
+  await forwardAi({ url: 'http://[fd00::2]:11434/v1/models', method: 'GET' }, async () => {
+    ula = true
+    return new Response('{}', { status: 200 })
+  }, undefined, { localOrigins: [new URL('http://[fd00::2]:11434')] })
+  assert.equal(ula, true)
 
   const proxy = createServer((req, res) => {
     void handleAiProxy(req, res)
   })
   const proxyPort = await listen(proxy)
-  const proxied = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
+  const evil = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://evil.example', cookie: sessionCookie, 'sec-fetch-site': 'same-origin' },
+    body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET' }),
+  })
+  assert.equal(evil.status, 403)
+  const noOrigin = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET' }),
+  })
+  assert.equal(noOrigin.status, 403)
+  process.env.MATHSCRAP_AI_LOCAL_ORIGINS = base
+  const proxied = await fetch(`http://127.0.0.1:${proxyPort}/__mathscrap/ai/forward`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${proxyPort}`, cookie: sessionCookie },
     body: JSON.stringify({ url: `${base}/v1/models`, method: 'GET', headers: { authorization: `Bearer ${SECRET}` } }),
   })
   assert.equal(proxied.headers.get('x-mathscrap-proxy'), '1')
   assert.equal(proxied.status, 401)
   const proxiedBody = await proxied.text()
   assert.ok(proxiedBody.includes('SHOULD-NOT-LEAK'), 'upstream body may echo a key; the proxy must not be the thing that logs it')
+  delete process.env.MATHSCRAP_AI_LOCAL_ORIGINS
   proxy.close()
 
-  assert.ok(!logs.logs.some((line) => line.includes('SHOULD-NOT-LEAK') || line.includes('DO-NOT-LOG')), `API key leaked to console:\n${logs.logs.join('\n')}`)
+  const hop = createServer((_req, res) => {
+    res.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data/' })
+    res.end()
+  })
+  const hopPort = await listen(hop)
+  let lookups = 0
+  await assert.rejects(
+    () =>
+      forwardAi(
+        { url: `http://rebind.example:${hopPort}/v1/models`, method: 'GET' },
+        undefined,
+        AbortSignal.timeout(2000),
+        {
+          localOrigins: [new URL(`http://rebind.example:${hopPort}`)],
+          lookup: async () => [{ address: lookups++ === 0 ? '127.0.0.1' : '10.9.9.9', family: 4 }],
+        },
+      ),
+    /refused|blocked/i,
+  )
+  await assert.rejects(
+    () =>
+      forwardAi({ url: `http://127.0.0.1:${hopPort}/v1/models`, method: 'GET' }, undefined, AbortSignal.timeout(2000), {
+        localOrigins: [new URL(`http://127.0.0.1:${hopPort}`)],
+      }),
+    /refused/i,
+  )
+  hop.close()
+
+  assert.ok(!logs.logs.some((line) => line.includes('SHOULD-NOT-LEAK') || line.includes('DO-NOT-LOG') || line.includes(sessionToken())), 'secret leaked to console')
 } finally {
   logs.restore()
   await new Promise<void>((resolve) => ai.close(() => resolve()))
@@ -249,17 +406,74 @@ const bridgeServer = createServer((req, res) => {
 })
 const bridgePort = await listen(bridgeServer)
 const bridgeUrl = `http://127.0.0.1:${bridgePort}`
+const pageOrigin = { origin: bridgeUrl, host: `127.0.0.1:${bridgePort}`, cookie: sessionCookie }
+
+const forged = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', origin: 'https://evil.example', cookie: sessionCookie, 'sec-fetch-site': 'same-origin' },
+  body: JSON.stringify({ name: 'page_add_formula', arguments: { text: 'y = 1' } }),
+})
+assert.equal(forged.status, 403)
+const forgedBody = await forged.text()
+assert.equal(forgedBody.includes(sessionToken()), false)
+const nullOrigin = await rawStatus(
+  bridgePort,
+  '/__mathscrap/bridge/result',
+  { 'content-type': 'application/json', origin: 'null', host: `127.0.0.1:${bridgePort}`, cookie: sessionCookie },
+  'POST',
+  JSON.stringify({ id: 'x', ok: true }),
+)
+assert.equal(nullOrigin, 403)
+const rebound = await rawStatus(bridgePort, '/__mathscrap/bridge/wait', {
+  origin: bridgeUrl,
+  host: 'evil.example',
+  cookie: sessionCookie,
+  'sec-fetch-site': 'same-origin',
+})
+assert.equal(rebound, 403)
+const upgrade = await rawStatus(
+  bridgePort,
+  '/__mathscrap/bridge/call',
+  { 'content-type': 'application/json', upgrade: 'websocket', connection: 'Upgrade', host: `127.0.0.1:${bridgePort}`, cookie: sessionCookie },
+  'POST',
+  JSON.stringify({ name: 'page_add_formula', arguments: {} }),
+)
+assert.equal(upgrade, 403)
+const spoofedGet = await rawStatus(bridgePort, '/__mathscrap/bridge/health', {
+  host: `127.0.0.1:${bridgePort}`,
+  'sec-fetch-site': 'same-origin',
+  origin: bridgeUrl,
+})
+assert.equal(spoofedGet, 403)
+const sameOriginGet = await rawStatus(bridgePort, '/__mathscrap/bridge/health', {
+  host: `127.0.0.1:${bridgePort}`,
+  'sec-fetch-site': 'same-origin',
+  cookie: sessionCookie,
+})
+assert.equal(sameOriginGet, 200)
+const bareGet = await rawStatus(bridgePort, '/__mathscrap/bridge/wait', { host: `127.0.0.1:${bridgePort}` })
+assert.equal(bareGet, 403)
+const barePost = await rawStatus(
+  bridgePort,
+  '/__mathscrap/bridge/result',
+  { host: `127.0.0.1:${bridgePort}`, 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' },
+  'POST',
+  JSON.stringify({ id: 'x', ok: true }),
+)
+assert.equal(barePost, 403)
 
 const offlineAt = Date.now()
 const offline = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', cookie: sessionCookie },
   body: JSON.stringify({ name: 'page_read', arguments: {} }),
 })
 const offlineBody = (await offline.json()) as { ok: boolean; error?: string }
 assert.equal(offlineBody.ok, false)
 assert.match(offlineBody.error ?? '', /not connected/)
 assert.ok(Date.now() - offlineAt < 500, 'disconnected tool call hung')
+const pageWait = await fetch(`${bridgeUrl}/__mathscrap/bridge/wait`, { headers: pageOrigin })
+assert.equal(pageWait.status, 204)
 
 const state = {
   formulas: [{ id: 'c1', text: 'y = x^2 - 2', x: 10, y: 20 }],
@@ -269,7 +483,7 @@ const state = {
 const stop = new AbortController()
 const browser = (async () => {
   while (!stop.signal.aborted) {
-    const res = await fetch(`${bridgeUrl}/__mathscrap/bridge/wait`, { signal: stop.signal })
+    const res = await fetch(`${bridgeUrl}/__mathscrap/bridge/wait`, { signal: stop.signal, headers: pageOrigin })
     if (res.status === 204) {
       await new Promise((r) => setTimeout(r, 40))
       continue
@@ -288,7 +502,7 @@ const browser = (async () => {
     else if (job.name === 'solve_analyze') result = { texts: job.arguments.texts }
     await fetch(`${bridgeUrl}/__mathscrap/bridge/result`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...pageOrigin },
       body: JSON.stringify({ id: job.id, ok: true, result }),
       signal: stop.signal,
     })
@@ -300,7 +514,7 @@ const browser = (async () => {
 const healthDeadline = Date.now() + 2000
 let connected = false
 while (Date.now() < healthDeadline) {
-  const health = (await (await fetch(`${bridgeUrl}/__mathscrap/bridge/health`)).json()) as { browser?: boolean }
+  const health = (await (await fetch(`${bridgeUrl}/__mathscrap/bridge/health`, { headers: pageOrigin })).json()) as { browser?: boolean }
   if (health.browser) {
     connected = true
     break
@@ -369,5 +583,58 @@ function textOf(result: unknown) {
   if (!Array.isArray(content)) return ''
   return content.map((block) => (block && typeof block === 'object' && 'text' in block && typeof block.text === 'string' ? block.text : '')).join('\n')
 }
+
+const nav = createServer((req, res) => {
+  const stamped = stampNavigation(req, res)
+  res.statusCode = stamped ? 200 : 204
+  res.end(stamped ? 'page' : '')
+})
+const navPort = await listen(nav)
+const navRes = await new Promise<{ status: number; cookie: string; body: string }>((resolve, reject) => {
+  const req = httpRequest(
+    {
+      hostname: '127.0.0.1',
+      port: navPort,
+      path: '/',
+      method: 'GET',
+      headers: { host: `127.0.0.1:${navPort}`, 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate', 'sec-fetch-site': 'none' },
+    },
+    (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (chunk: Buffer) => chunks.push(chunk))
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, cookie: String(res.headers['set-cookie'] ?? ''), body: Buffer.concat(chunks).toString('utf8') }))
+    },
+  )
+  req.on('error', reject)
+  req.end()
+})
+assert.equal(navRes.status, 200)
+assert.match(navRes.cookie, /HttpOnly/)
+assert.match(navRes.cookie, /SameSite=Strict/)
+assert.equal(navRes.body.includes(sessionToken()), false)
+const plain = await rawStatus(navPort, '/', { host: `127.0.0.1:${navPort}` })
+assert.equal(plain, 204)
+nav.close()
+
+const share = 'k3-7Qm9_pL2vN8xR4wT6yU1zA0bC5dEf'
+assert.equal(shareTokenUsable('short'), false)
+assert.equal(shareTokenUsable('a'.repeat(40)), false)
+assert.equal(shareTokenUsable('mathscrap-share-token-0123456789'), false)
+process.env.MATHSCRAP_BIND = 'lan'
+process.env.MATHSCRAP_SHARE_TOKEN = share
+assert.equal(shareTokenUsable(), true)
+assert.equal(lanHostOk('evil.example', '192.168.1.5'), false)
+assert.equal(lanHostOk('192.168.1.5', '192.168.1.5'), true)
+const lanReq = {
+  method: 'POST',
+  headers: { host: '192.168.1.5' },
+  socket: { remoteAddress: '192.168.1.20', localAddress: '192.168.1.5' },
+} as IncomingMessage
+assert.equal(lanJoinAllowed(lanReq, share), true)
+assert.equal(lanJoinAllowed(lanReq, 'nope'), false)
+assert.equal(lanJoinAllowed({ ...lanReq, socket: { remoteAddress: '127.0.0.1', localAddress: '127.0.0.1' } } as IncomingMessage, share), false)
+delete process.env.MATHSCRAP_BIND
+delete process.env.MATHSCRAP_SHARE_TOKEN
+assert.equal(stderr.includes(sessionToken()), false)
 
 console.log('ai + mcp smoke ok')

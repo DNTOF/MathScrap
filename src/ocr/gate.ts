@@ -2,9 +2,10 @@ import { findOverArrow, looksLikeSumBars } from './comer/bind.ts'
 import type { InkStroke, StrokePoint } from './comer/preprocess.ts'
 
 /**
- * Round 1, before CoMER. Layout only: does this ink look like a formula,
- * or like a line of ordinary writing? Native code can call this and skip
- * `recognizeStrokes` when the answer is `text`.
+ * Round 1, before CoMER. This is a stroke-structure gate, not a reader of
+ * Chinese or English. A line of letter-sized marks with no math cue stays
+ * text and is not sent to the formula model. Equals, fractions, powers,
+ * roots-as-superscripts, parentheses, sums, sigmas, and arrows stay formulas.
  */
 export type InkRole = 'formula' | 'text'
 
@@ -26,26 +27,34 @@ export function mathCues(strokes: InkStroke[]): string[] {
 }
 
 /**
- * Several letter-sized marks on one baseline, and none of the math cues.
- * Notes and labels stay ink; they are not sent to the formula model.
+ * One or more lines of letter-sized marks, and none of the math cues.
+ * Three marks on a baseline are enough for a short word. A second line
+ * does not turn the note into a formula. This does not read the language.
  */
 export function looksLikeProse(strokes: InkStroke[]): boolean {
   if (mathCues(strokes).length) return false
   const boxes = strokes
     .filter((s) => s.points.length >= 2)
     .map((s) => bounds(s.points))
-    .sort((a, b) => a.x0 - b.x0)
-  if (boxes.length < 4) return false
+    .sort((a, b) => a.y1 - b.y1 || a.x0 - b.x0)
+  if (boxes.length < 3) return false
   const heights = boxes.map((b) => b.h).sort((a, b) => a - b)
   const med = heights[Math.floor(heights.length / 2)]
   if (med < 8) return false
-  const similar = boxes.every((b) => b.h > med * 0.45 && b.h < med * 2.2)
-  const bases = boxes.map((b) => b.y1).sort((a, b) => a - b)
-  const base = bases[Math.floor(bases.length / 2)]
-  const aligned = boxes.every((b) => Math.abs(b.y1 - base) < med * 0.55)
-  const stepped = boxes.every((b, i) => i === 0 || b.cx > boxes[i - 1].cx)
-  const all = bounds(strokes.flatMap((s) => s.points))
-  return similar && aligned && stepped && all.w > all.h * 1.35
+  const lines: ReturnType<typeof bounds>[][] = []
+  for (const box of boxes) {
+    const row = lines.find((items) => Math.abs(items[0].y1 - box.y1) < med * 0.55)
+    if (row) row.push(box)
+    else lines.push([box])
+  }
+  return lines.some((line) => {
+    const row = [...line].sort((a, b) => a.x0 - b.x0)
+    if (row.length < 3) return false
+    const similar = row.every((b) => b.h > med * 0.45 && b.h < med * 2.4 && b.w < med * 2.8)
+    const stepped = row.every((b, i) => i === 0 || b.cx > row[i - 1].cx + med * 0.15)
+    const span = row[row.length - 1].x1 - row[0].x0
+    return similar && stepped && span > med * 2
+  })
 }
 
 /**

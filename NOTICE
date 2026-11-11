@@ -2,3 +2,7 @@ MathScrap
 Copyright 2026 DNTOF
 
 Licensed under the Apache License, Version 2.0.
+
+The bundled handwritten-formula weights are third-party. See public/models/comer/NOTICE.md
+for the CoMER (ECCV 2022) model and the ink-on Apache-2.0 distribution.
+MathScrap does not relicense those files.

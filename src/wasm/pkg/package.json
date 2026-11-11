@@ -3,7 +3,7 @@
   "type": "module",
   "description": "Fast math helpers (parse, sample, solve, geometry inference) for the MathScrap kraft notebook, compiled to WASM.",
   "version": "0.0.1",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "files": [
     "mathcore_bg.wasm",
     "mathcore.js",

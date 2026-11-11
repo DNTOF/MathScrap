@@ -2,6 +2,7 @@ import { t } from '../src/i18n/locale.ts'
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendEmpty, sendJson } from './http.ts'
+import { peerAllowed } from './peer.ts'
 
 export const BRIDGE_HEADER = 'x-mathscrap-bridge'
 const MARK = { [BRIDGE_HEADER]: '1' }
@@ -59,6 +60,11 @@ export function createBridge() {
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const path = (req.url ?? '').split('?')[0] ?? ''
     if (!path.startsWith('/__mathscrap/bridge')) return false
+    const browserRoute = path === '/__mathscrap/bridge/wait' || path === '/__mathscrap/bridge/result' || path === '/__mathscrap/bridge/health'
+    if (!peerAllowed(req, browserRoute)) {
+      sendJson(res, 403, { ok: false, error: 'refused' }, MARK)
+      return true
+    }
     try {
       if (req.method === 'GET' && path === '/__mathscrap/bridge/health') {
         sendJson(res, 200, { ok: true, browser: browserLive() }, MARK)

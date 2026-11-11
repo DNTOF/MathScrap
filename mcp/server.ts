@@ -9,15 +9,22 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { TOOL_SPECS } from '../src/ai/specs.ts'
+import { readPublishedSession } from './session.ts'
 
 const bridgeUrl = (process.env.MATHSCRAP_BRIDGE ?? 'http://127.0.0.1:47321').replace(/\/+$/, '')
 
 async function bridgeCall(name: string, args: Record<string, unknown>) {
+  let session = ''
+  try {
+    session = readPublishedSession()
+  } catch {
+    throw new Error(`连不上 MathScrap（${bridgeUrl}）。先在本机运行 npm run dev，并打开页面。`)
+  }
   let res: Response
   try {
     res = await fetch(`${bridgeUrl}/__mathscrap/bridge/call`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      headers: { 'content-type': 'application/json', accept: 'application/json', cookie: `mathscrap_session=${session}` },
       body: JSON.stringify({ name, arguments: args }),
       signal: AbortSignal.timeout(20_000),
     })
