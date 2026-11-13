@@ -21,6 +21,7 @@ import {
   type IncrementalSmoothState,
 } from '@/ink/smooth'
 import { dragThresholdWorld, hasRealPressure, hitToleranceWorld, isTapStroke, toPointerKind } from '@/ink/tolerance'
+import { blockBoardSelection, ignoreBoardDoubleClick, suppressBoardTouch } from '@/ink/inputGuard'
 import { InkFormula } from './InkFormula'
 import { hitStroke, hitStrokeCapsule } from './strokeGeom'
 import { StrokeDefs, StrokeShape } from './strokes'
@@ -152,6 +153,56 @@ export function Board(props: Props) {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [setView])
+
+  // Touch WebKit (iPad): pointer events fire first, then touch events. Cancelling the touches that
+  // became ink, erasing or a pinch stops iOS from synthesising click/dblclick (which opened the
+  // composer), starting a text selection, or showing the callout / loupe. Text fields keep theirs.
+  const toolRef = useRef(tool)
+  useLayoutEffect(() => {
+    toolRef.current = tool
+  }, [tool])
+  useEffect(() => {
+    const el = ref.current!
+    const held = new Set<number>()
+    const elementOf = (t: EventTarget | null) => (t instanceof Node && !(t instanceof Element) ? t.parentElement : t)
+    const onTouchStart = (e: TouchEvent) => {
+      if (!suppressBoardTouch(toolRef.current, mode.current?.kind ?? null, elementOf(e.target))) return
+      for (const t of Array.from(e.changedTouches)) held.add(t.identifier)
+      if (e.cancelable) e.preventDefault()
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!held.size) return
+      if (Array.from(e.changedTouches).some((t) => held.has(t.identifier)) && e.cancelable) e.preventDefault()
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      let mine = false
+      for (const t of Array.from(e.changedTouches)) mine = held.delete(t.identifier) || mine
+      if (mine && e.cancelable) e.preventDefault()
+    }
+    const onSelectStart = (e: Event) => {
+      if (blockBoardSelection(elementOf(e.target))) e.preventDefault()
+    }
+    // A stroke that wanders over the toolbar or a panel must not select it either.
+    const onDocSelectStart = (e: Event) => {
+      const kind = mode.current?.kind
+      if ((kind === 'draw' || kind === 'erase' || kind === 'pinch') && blockBoardSelection(elementOf(e.target))) e.preventDefault()
+    }
+    const opts = { passive: false } as const
+    el.addEventListener('touchstart', onTouchStart, opts)
+    el.addEventListener('touchmove', onTouchMove, opts)
+    el.addEventListener('touchend', onTouchEnd, opts)
+    el.addEventListener('touchcancel', onTouchEnd, opts)
+    el.addEventListener('selectstart', onSelectStart)
+    document.addEventListener('selectstart', onDocSelectStart)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
+      el.removeEventListener('selectstart', onSelectStart)
+      document.removeEventListener('selectstart', onDocSelectStart)
+    }
+  }, [])
 
   // A gesture that is cancelled, loses capture, or is interrupted must not become ink.
   // Layout, not a passive effect: the tool button updates before this returns, and pointerup must already see an empty gesture.
@@ -526,6 +577,9 @@ export function Board(props: Props) {
 
   const onDoubleClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-no-board]')) return
+    // iOS turns two quick taps or short marks (a dot, the bars of "=") into a dblclick. With an ink
+    // tool only a mouse double-click opens the composer; a pen or capacitive stylus (touch) never does.
+    if (ignoreBoardDoubleClick(tool, pointerTypeRef.current)) return
     dropDots()
     // pointer capture makes the board the click target even when the pointer is over a formula
     const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-formula]')
@@ -542,7 +596,7 @@ export function Board(props: Props) {
     <div
       ref={ref}
       className="kraft-page absolute inset-0 overflow-hidden"
-      style={{ touchAction: 'none', cursor }}
+      style={{ touchAction: 'none', cursor, userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', WebkitTapHighlightColor: 'transparent' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -577,7 +631,7 @@ export function Board(props: Props) {
             onDelete={props.onDelete}
           />
         ))}
-        <svg data-ink="" className="pointer-events-none absolute top-0 left-0 overflow-visible" width="1" height="1">
+        <svg data-ink="" className="pointer-events-none absolute top-0 left-0 overflow-visible select-none" width="1" height="1" style={{ touchAction: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}>
           <StrokeDefs />
           {doc.strokes.map((s) => (
             <g key={s.id} opacity={erasing.has(s.id) ? 0.15 : 1}>
