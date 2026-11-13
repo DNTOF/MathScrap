@@ -58,7 +58,8 @@ What each command actually produces:
     APPLE_API_KEY_PATH         path to the AuthKey .p8 already on that Mac
   Then: npm run pack:ios -- --device
 
-Minimum OS for the packaged shell is iOS 16.4 (WebAssembly SIMD for CoMER).
+Minimum OS for the packaged shell is iOS 15.0 (arm64). CoMER handwriting recognition needs
+WebAssembly SIMD (iOS 16.4+); on older systems the app reports it unavailable and ink still works.
 The bundle id is app.mathscrap. It must match the App ID inside the profile.
 EOF
   exit 3
@@ -123,7 +124,12 @@ if [[ "$target" == "unsigned" ]]; then
   exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")"
   minos="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist" 2>/dev/null || echo unknown)"
   bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")"
-  echo "bundle $bundle_id executable $exe MinimumOSVersion $minos"
+  archs="$(lipo -archs "$app/$exe")"
+  echo "bundle $bundle_id executable $exe MinimumOSVersion $minos archs $archs"
+  if [[ "$archs" != "arm64" ]]; then
+    echo "Expected a plain arm64 device slice (A8X and later, no arm64e), got: $archs" >&2
+    exit 1
+  fi
   # Optional ad-hoc "fake" signature so TrollStore keeps the entitlements. Not an Apple signature.
   fakesign="none"
   if command -v ldid >/dev/null 2>&1; then
@@ -145,6 +151,8 @@ if [[ "$target" == "unsigned" ]]; then
     echo "ios_fakesign=$fakesign"
     echo "ios_bundle_id=$bundle_id"
     echo "ios_minimum_os=$minos"
+    echo "ios_archs=$archs"
+    echo "ios_ocr=needs WebAssembly SIMD (iOS 16.4+); ink and the math engine work on older systems"
     echo "ios_install=TrollStore or a jailbroken device only; stock iOS refuses it"
   } > packaging/out/PROVENANCE-ios.txt
   node scripts/checksum-artifacts.mjs packaging/out

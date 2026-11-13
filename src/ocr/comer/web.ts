@@ -6,6 +6,7 @@ import { vocabFromJson, type Vocab } from './source.ts'
 import type { InkStroke } from './preprocess.ts'
 import { assetUrl } from '../../lib/asset.ts'
 import { t } from '../../i18n/locale.ts'
+import { ocrSupported } from '../support.ts'
 
 const ENC = assetUrl('models/comer/encoder_int8.onnx')
 const DEC = assetUrl('models/comer/decoder_int8.onnx')
@@ -38,6 +39,8 @@ function load() {
 }
 
 async function loadSessions() {
+  // No WASM SIMD (WebKit before 16.4): fail before downloading the models.
+  if (!ocrSupported()) throw new Error(t('ocrUnsupported'))
   const ort = await import('onnxruntime-web/wasm')
   ort.env.wasm.numThreads = 1
   ort.env.wasm.simd = true

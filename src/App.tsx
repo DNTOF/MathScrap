@@ -25,6 +25,7 @@ import { pageGroups } from '@/math/page'
 import { summarizeCard } from '@/math/scene'
 import { parseCard } from '@/math/statements'
 import { clusterStrokes, mockRecognizer, OCR_ACCEPT } from '@/ocr/recognizer'
+import { ocrSupported } from '@/ocr/support'
 import { InkDebugPanel } from '@/ink/InkDebugPanel'
 import { inkFlagsStore, shouldShowDebugPanel } from '@/ink/flags'
 import { PlotButton } from '@/plot/PlotButton'
@@ -292,6 +293,10 @@ export default function App() {
     const pool = unmarkedInk(docRef)
     if (!pool.length) {
       toast(t('writeFirst'))
+      return
+    }
+    if (!ocrSupported()) {
+      toast(t('ocrUnsupported'))
       return
     }
     const clusters = clusterStrokes(pool)

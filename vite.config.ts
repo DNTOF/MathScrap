@@ -60,6 +60,9 @@ export default defineConfig({
     port: 47322,
   },
   build: {
+    // iOS builds run in WKWebView down to iPadOS 15, so lower syntax and CSS for Safari 15 there.
+    // Other platforms keep Vite's default target. Tauri sets TAURI_ENV_PLATFORM for beforeBuildCommand.
+    ...(process.env.TAURI_ENV_PLATFORM === 'ios' ? { target: ['es2020', 'safari15'], cssTarget: ['safari15'] } : {}),
     // Plotly (~4.6 MB) is its own lazily imported chunk, loaded only when a plot opens.
     chunkSizeWarningLimit: 5000,
   },
