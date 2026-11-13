@@ -1,6 +1,10 @@
 /**
- * Decide whether a diff needs the full test job or a version check.
- * Unknown, renamed, deleted, added, or unreadable changes are full.
+ * Decide which CI path a diff needs.
+ *   docs       documentation only: consistency checks only
+ *   version    whitelisted version fields (optionally plus docs): consistency checks, packages still build on push
+ *   packaging  packaging scripts, icons, the iOS workflow (optionally plus docs/version): packaging validation, no math suite
+ *   full       anything else, including mixed or unclassified changes: the whole test suite
+ * Added, deleted, or renamed files are allowed only when every path involved is documentation or packaging.
  * A broken baseline fails the process instead of passing.
  */
 import { execFileSync } from 'node:child_process'
@@ -21,8 +25,40 @@ const VERSION_FILES = new Set([
   'mcp/server.ts',
 ])
 
+const DOC_ROOT_FILES = new Set(['README.md', 'CONTRIBUTING.md', 'NOTICE', 'LICENSE'])
+
 export function isDocsPath(path) {
-  return path === 'README.md' || path.startsWith('docs/') || path.startsWith('signing/') && path.endsWith('.md')
+  if (typeof path !== 'string' || !path) return false
+  if (DOC_ROOT_FILES.has(path)) return true
+  if (path.startsWith('docs/')) return true
+  if (path.startsWith('signing/') && path.endsWith('.md')) return true
+  if (path.startsWith('experiments/') && path.endsWith('.md')) return true
+  if (path.startsWith('.github/ISSUE_TEMPLATE/')) return true
+  if (/^\.github\/[^/]+\.md$/.test(path)) return true
+  return false
+}
+
+/** Binary files are accepted as documentation only under docs/ (screenshots). */
+function docsBinaryOk(path) {
+  return path.startsWith('docs/')
+}
+
+const PACKAGING_FILES = new Set([
+  '.github/workflows/package-ios.yml',
+  'scripts/checksum-artifacts.mjs',
+  'scripts/android-release-signing.mjs',
+  'scripts/compact-debug-apk.py',
+  'scripts/make-icon.mjs',
+  'scripts/make-rounded-icon.mjs',
+])
+
+export function isPackagingPath(path) {
+  if (typeof path !== 'string' || !path) return false
+  if (PACKAGING_FILES.has(path)) return true
+  if (/^scripts\/package-[\w-]+\.sh$/.test(path)) return true
+  if (path.startsWith('packaging/')) return true
+  if (path.startsWith('src-tauri/icons/')) return true
+  return false
 }
 
 function canon(value) {
@@ -117,43 +153,55 @@ export function versionFieldOnly(path, oldText, newText) {
   return false
 }
 
+const RANK = { docs: 0, version: 1, packaging: 2, full: 3 }
+
+const REASONS = {
+  docs: ['变化都是文档。', 'Every change is documentation.'],
+  version: ['变化都在文档或版本字段白名单内。', 'Every change is documentation or a whitelisted version field.'],
+  packaging: ['变化只涉及打包脚本、图标或 iOS 打包流程（可含文档和版本字段）。', 'The changes only touch packaging scripts, icons, or the iOS packaging workflow (plus documentation or version fields).'],
+}
+
+function hasNul(text) {
+  return (text || '').includes('\0')
+}
+
+/** Category of a single entry: docs, version, packaging, or full. */
+function classifyEntry(entry) {
+  const status = entry.status || ''
+  const paths = [entry.oldPath, entry.path].filter(Boolean)
+  if (!paths.length) return ['full', '(unknown) 无法识别']
+  const label = paths.join(' -> ')
+  if (paths.every(isDocsPath)) {
+    const binary = hasNul(entry.oldText) || hasNul(entry.newText)
+    if (binary && !paths.every(docsBinaryOk)) return ['full', `${label} 无法按文档文本识别`]
+    return ['docs', `${label} 只是文档`]
+  }
+  if (paths.every(isPackagingPath)) return ['packaging', `${label} 只是打包`]
+  if (status.startsWith('R') || status.startsWith('C') || status === 'T') return ['full', `${label} 被重命名或改变类型`]
+  if (status === 'D' || status === 'A') return ['full', `${entry.path} 被${status === 'D' ? '删除' : '新增'}`]
+  if (status !== 'M' || entry.oldMode !== entry.newMode) return ['full', `${entry.path || '(unknown)'} 无法按字段识别`]
+  if (VERSION_FILES.has(entry.path) && versionFieldOnly(entry.path, entry.oldText, entry.newText)) {
+    return ['version', `${entry.path} 只有版本字段变化`]
+  }
+  return ['full', `${entry.path} 含有版本字段以外的变化`]
+}
+
 export function classifyEntries(entries) {
   if (!Array.isArray(entries)) {
     return { mode: 'full', reasonZh: '分类输入无法读取，改走全量。', reasonEn: 'The classifier input could not be read, so the full test runs.' }
   }
   if (entries.length === 0) {
-    return { mode: 'light', reasonZh: '基线之间没有文件变化。', reasonEn: 'There are no file changes between the baselines.' }
+    return { mode: 'docs', reasonZh: '基线之间没有文件变化。', reasonEn: 'There are no file changes between the baselines.' }
   }
+  let mode = 'docs'
   const notes = []
+  const heavy = []
   for (const entry of entries) {
-    const status = entry.status || ''
-    if (status.startsWith('R') || status.startsWith('C') || status === 'T') {
-      notes.push(`${entry.path || entry.oldPath} 被重命名或改变类型`)
-      continue
-    }
-    if (status === 'D' || status === 'A') {
-      notes.push(`${entry.path} 被${status === 'D' ? '删除' : '新增'}`)
-      continue
-    }
-    if (status !== 'M' || entry.oldMode !== entry.newMode) {
-      notes.push(`${entry.path || '(unknown)'} 无法按字段识别`)
-      continue
-    }
-    if (isDocsPath(entry.path)) {
-      if ((entry.oldText || '').includes('\0') || (entry.newText || '').includes('\0')) {
-        notes.push(`${entry.path} 无法按文档文本识别`)
-        continue
-      }
-      notes.push(`${entry.path} 只是文档`)
-      continue
-    }
-    if (VERSION_FILES.has(entry.path) && versionFieldOnly(entry.path, entry.oldText, entry.newText)) {
-      notes.push(`${entry.path} 只有版本字段变化`)
-      continue
-    }
-    notes.push(`${entry.path} 含有版本字段以外的变化`)
+    const [kind, note] = classifyEntry(entry || {})
+    notes.push(note)
+    if (kind === 'full') heavy.push(note)
+    if (RANK[kind] > RANK[mode]) mode = kind
   }
-  const heavy = notes.filter((note) => !note.endsWith('只是文档') && !note.endsWith('只有版本字段变化'))
   if (heavy.length) {
     return {
       mode: 'full',
@@ -162,9 +210,9 @@ export function classifyEntries(entries) {
     }
   }
   return {
-    mode: 'light',
-    reasonZh: `变化都在文档或版本字段白名单内：${notes.join('；')}。`,
-    reasonEn: `Every change is documentation or a whitelisted version field: ${notes.join('; ')}.`,
+    mode,
+    reasonZh: `${REASONS[mode][0]}${notes.join('；')}。`,
+    reasonEn: `${REASONS[mode][1]} ${notes.join('; ')}.`,
   }
 }
 
@@ -241,23 +289,30 @@ export function classifyGit(cwd, base, head) {
   return { mergeBase, ...classifyEntries(entries) }
 }
 
+const MODE_NAMES = {
+  docs: '文档 / docs',
+  version: '版本 / version',
+  packaging: '打包 / packaging',
+  full: '全量 / full',
+}
+
 function writeSummary(result) {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
-  const modeName = result.mode === 'light' ? '轻量 / light' : '全量 / full'
+  const full = result.mode === 'full'
   const body = [
-    `### CI 范围：${modeName}`,
+    `### CI 范围：${MODE_NAMES[result.mode] || result.mode}`,
     '',
     result.reasonZh,
     '',
     result.reasonEn,
     '',
-    result.mode === 'light'
-      ? '轻量路径只核对各处版本号一致，并且都是 x.y.z。不一致就失败，不会记成通过。全量的 lint、Rust、smoke 和端到端测试这次不跑。'
-      : '全量路径会跑原有的 lint、Rust 测试、smoke，以及纸面、笔迹和公式的端到端测试。',
+    full
+      ? '全量路径会跑原有的 lint、Rust 测试、smoke，以及纸面、笔迹和公式的端到端测试。'
+      : '这次不跑数学测试套件（lint、Rust、smoke、端到端）。一致性检查照常运行：版本号一致且都是 x.y.z、分类器回归、打包脚本语法和工作流 YAML。不一致就失败，不会记成通过。' + (result.mode === 'packaging' ? '打包路径会实际构建安装包来验证。' : ''),
     '',
-    result.mode === 'light'
-      ? 'The light path only checks that the recorded versions match and are x.y.z. A mismatch fails this check. Lint, Rust, smoke, and end-to-end tests do not run.'
-      : 'The full path runs the existing lint, Rust tests, smoke tests, and the sheet, ink, and plot end-to-end tests.',
+    full
+      ? 'The full path runs the existing lint, Rust tests, smoke tests, and the sheet, ink, and plot end-to-end tests.'
+      : 'The math suite (lint, Rust, smoke, end-to-end) does not run. Consistency checks still run: matching x.y.z versions, the classifier regression, packaging script syntax, and workflow YAML. A failure fails the run.' + (result.mode === 'packaging' ? ' The packaging path builds the packages to validate them.' : ''),
     '',
   ].join('\n')
   console.log(body)

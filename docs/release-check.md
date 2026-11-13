@@ -16,6 +16,10 @@ MathScrap-0.0.1-windows-x64.exe
 MathScrap-0.0.1-android-arm64-v8a.apk
 ```
 
+从 0.0.2 起，CI 还会产出 `MathScrap-<版本>-ios-unsigned.ipa`。它没有苹果签名，也没有描述文件，只能用 TrollStore 或在已越狱的设备上安装，普通 iOS 会拒绝安装。如果构建机上有 `ldid`，包里只有一个 ad-hoc 伪签名，用来保留 entitlements，不是苹果签名。最低系统是 iOS 16.4。它的 SHA-256 和其他包一起写在 `SHA256SUMS` 里，核对方法相同。iOS 版不启动本机 MCP 监听，Android 也一样。
+
+图标：Windows、macOS、Linux 和网页的图标是由 `packaging/logo/app-icon.png` 生成的圆角版本（`packaging/logo/app-icon-rounded.png`，四角透明）。iOS 用不透明的方形原图，系统自己裁成圆角；如果预先做成透明圆角，会被裁两次或在角上露出黑色。Android 保留自适应图标和圆形图标。
+
 Git 标签 `v0.0.1` 的签名可以在本地用随包的公钥检查。签名 UID 是 `DNT_OF`，UID 上没有邮箱。标签对象里的 tagger 邮箱是 `3174600270@qq.com`。这是两个不同的字段。签名有效不等于 GitHub 上显示 Verified。
 
 # After you install
@@ -33,6 +37,10 @@ MathScrap-0.0.1-windows-x64-setup.exe
 MathScrap-0.0.1-windows-x64.exe
 MathScrap-0.0.1-android-arm64-v8a.apk
 ```
+
+Starting with 0.0.2, CI also produces `MathScrap-<version>-ios-unsigned.ipa`. It has no Apple signature and no provisioning profile. It installs only through TrollStore or on a jailbroken device; stock iOS refuses it. When `ldid` is on the builder, the app carries an ad-hoc fake signature that only preserves entitlements; it is not an Apple signature. The minimum OS is iOS 16.4. Its SHA-256 is listed in `SHA256SUMS` with the other packages and is checked the same way. The iOS build, like Android, does not start the local MCP listener.
+
+Icons: Windows, macOS, Linux and the web favicon use a rounded-corner icon generated from `packaging/logo/app-icon.png` (`packaging/logo/app-icon-rounded.png`, transparent corners). iOS uses the opaque square master and applies its own rounded mask; baked transparent corners would be masked twice or show black corners. Android keeps its adaptive and round launcher icons.
 
 The `v0.0.1` tag signature can be checked locally with the published public key. The signing UID is `DNT_OF` and that UID has no email. The tagger email stored on the tag object is `3174600270@qq.com`. Those are different fields. A valid signature is not the same as a GitHub Verified badge.
 

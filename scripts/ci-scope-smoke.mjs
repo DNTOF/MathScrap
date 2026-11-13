@@ -2,7 +2,7 @@
  * Regression cases for the CI scope classifier and the light version check.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { classifyEntries, classifyGit } from './ci-scope.mjs'
@@ -36,7 +36,7 @@ check('version fields only', classifyEntries([
   entry('crates/mathcore/Cargo.toml', '[package]\nname = "mathcore"\nversion = "0.0.1"\n\n[dependencies]\nserde = { version = "1" }\n', '[package]\nname = "mathcore"\nversion = "0.0.2"\n\n[dependencies]\nserde = { version = "1" }\n'),
   entry('package-lock.json', JSON.stringify({ version: '0.0.1', packages: { '': { version: '0.0.1', dependencies: { react: '^19.0.0' } }, react: { version: '19.0.0' } } }), JSON.stringify({ version: '0.0.2', packages: { '': { version: '0.0.2', dependencies: { react: '^19.0.0' } }, react: { version: '19.0.0' } } })),
   entry('src-tauri/Cargo.lock', '[[package]]\nname = "mathscrap"\nversion = "0.0.1"\n', '[[package]]\nname = "mathscrap"\nversion = "0.0.2"\n'),
-]).mode, 'light')
+]).mode, 'version')
 
 check('version plus function', classifyEntries([
   entry('package.json', pkg('0.0.1'), pkg('0.0.2')),
@@ -74,23 +74,98 @@ check('unknown', classifyEntries([
   entry('src/new-file.ts', 'a\n', 'b\n'),
 ]).mode, 'full')
 
-check('delete', classifyEntries([
-  { status: 'D', oldMode: '100644', newMode: '000000', path: 'README.md', oldText: 'a\n', newText: null },
+check('delete code', classifyEntries([
+  { status: 'D', oldMode: '100644', newMode: '000000', path: 'src/old.ts', oldText: 'a\n', newText: null },
 ]).mode, 'full')
 
-check('rename', classifyEntries([
-  { status: 'R100', oldMode: '100644', newMode: '100644', oldPath: 'README.md', path: 'docs/README.md', oldText: null, newText: null },
+check('rename code', classifyEntries([
+  { status: 'R100', oldMode: '100644', newMode: '100644', oldPath: 'src/a.ts', path: 'src/b.ts', oldText: null, newText: null },
 ]).mode, 'full')
+
+check('rename docs into code', classifyEntries([
+  { status: 'R100', oldMode: '100644', newMode: '100644', oldPath: 'docs/a.md', path: 'src/a.md', oldText: null, newText: null },
+]).mode, 'full')
+
+check('delete docs', classifyEntries([
+  { status: 'D', oldMode: '100644', newMode: '000000', path: 'README.md', oldText: 'a\n', newText: null },
+]).mode, 'docs')
+
+check('rename docs', classifyEntries([
+  { status: 'R100', oldMode: '100644', newMode: '100644', oldPath: 'README.md', path: 'docs/README.md', oldText: null, newText: null },
+]).mode, 'docs')
 
 check('docs only', classifyEntries([
   entry('README.md', '版本 `0.0.1`\n', '版本 `0.0.1`\n\n更多说明。\n'),
-]).mode, 'light')
+]).mode, 'docs')
+
+check('new CONTRIBUTING is docs', classifyEntries([
+  { status: 'A', oldMode: '000000', newMode: '100644', path: 'CONTRIBUTING.md', oldText: null, newText: '# hi\n' },
+]).mode, 'docs')
+
+check('docs screenshot', classifyEntries([
+  { status: 'A', oldMode: '000000', newMode: '100644', path: 'docs/shot.png', oldText: null, newText: '\0' },
+]).mode, 'docs')
+
+check('binary readme is full', classifyEntries([
+  entry('README.md', 'a\n', '\0'),
+]).mode, 'full')
+
+check('docs plus version', classifyEntries([
+  entry('README.md', 'a\n', 'b\n'),
+  entry('package.json', pkg('0.0.1'), pkg('0.0.2')),
+]).mode, 'version')
+
+check('packaging script', classifyEntries([
+  entry('scripts/package-ios.sh', 'echo a\n', 'echo b\n'),
+]).mode, 'packaging')
+
+check('ios workflow', classifyEntries([
+  entry('.github/workflows/package-ios.yml', 'name: a\n', 'name: b\n'),
+]).mode, 'packaging')
+
+check('new icon', classifyEntries([
+  { status: 'A', oldMode: '000000', newMode: '100644', path: 'src-tauri/icons/ios/AppIcon-1.png', oldText: null, newText: '\0' },
+]).mode, 'packaging')
+
+check('packaging plus docs plus version', classifyEntries([
+  entry('scripts/package-android.sh', 'a\n', 'b\n'),
+  entry('docs/release-check.md', 'a\n', 'b\n'),
+  entry('package.json', pkg('0.0.1'), pkg('0.0.2')),
+]).mode, 'packaging')
+
+check('packaging plus code', classifyEntries([
+  entry('scripts/package-ios.sh', 'a\n', 'b\n'),
+  entry('src/board/Board.tsx', 'a\n', 'b\n'),
+]).mode, 'full')
+
+check('docs plus code', classifyEntries([
+  entry('README.md', 'a\n', 'b\n'),
+  entry('src/ink/flags.ts', 'a\n', 'b\n'),
+]).mode, 'full')
+
+check('main package workflow stays full', classifyEntries([
+  entry('.github/workflows/package.yml', 'name: a\n', 'name: b\n'),
+]).mode, 'full')
+
+check('new workflow is full', classifyEntries([
+  { status: 'A', oldMode: '000000', newMode: '100644', path: '.github/workflows/new.yml', oldText: null, newText: 'name: x\n' },
+]).mode, 'full')
+
+check('tauri shell is full', classifyEntries([
+  entry('src-tauri/src/lib.rs', 'a\n', 'b\n'),
+]).mode, 'full')
+
+check('experiment code is full', classifyEntries([
+  entry('experiments/2026-11-12-ink-prediction/bench.ts', 'a\n', 'b\n'),
+]).mode, 'full')
+
+check('missing path is full', classifyEntries([{ status: 'M', oldMode: '100644', newMode: '100644' }]).mode, 'full')
 
 check('invalid json is full', classifyEntries([
   entry('package.json', pkg('0.0.1'), '{'),
 ]).mode, 'full')
 
-check('empty diff', classifyEntries([]).mode, 'light')
+check('empty diff', classifyEntries([]).mode, 'docs')
 
 function git(cwd, args) {
   execFileSync('git', args, { cwd, stdio: 'ignore' })
@@ -109,7 +184,7 @@ git(repo, ['commit', '-q', '-am', 'version one'])
 writeFileSync(join(repo, 'package.json'), pkg('0.0.3'))
 git(repo, ['commit', '-q', '-am', 'version two'])
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
-check('multi commit version', classifyGit(repo, base, head).mode, 'light')
+check('multi commit version', classifyGit(repo, base, head).mode, 'version')
 writeFileSync(join(repo, 'src-note.ts'), 'export const n = 1\n')
 git(repo, ['add', 'src-note.ts'])
 git(repo, ['commit', '-q', '-m', 'code'])
@@ -162,7 +237,7 @@ try {
 check('illegal semver fails', illegal, true)
 rmSync(tree, { recursive: true, force: true })
 
-check('repo versions agree', checkVersions(`${process.cwd()}/`), '0.0.1')
+check('repo versions agree', checkVersions(`${process.cwd()}/`), JSON.parse(readFileSync('package.json', 'utf8')).version)
 
 if (failed) {
   console.error(`${failed} failed`)
