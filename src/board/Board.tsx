@@ -1,4 +1,26 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { hitSweep } from '@/ink/capsule'
+import { inkDebugStats, type InkDebugStats } from '@/ink/debug'
+import { inkFlagsStore } from '@/ink/flags'
+import {
+  ADAPTIVE_DEFAULT_FRAME_MS,
+  PREDICTION_HISTORY_CAP,
+  frameAdaptivePrediction,
+  gateSamples,
+  nativePredictedTail,
+  predictionTailPath,
+  predictTail,
+  type InkSample,
+} from '@/ink/predict'
+import {
+  appendStrokePoint,
+  createIncrementalSmooth,
+  midpointBezierPolyline,
+  SMOOTH_MIN_DIST_DIP,
+  updateIncrementalSmooth,
+  type IncrementalSmoothState,
+} from '@/ink/smooth'
+import { dragThresholdWorld, hasRealPressure, hitToleranceWorld, isTapStroke, toPointerKind } from '@/ink/tolerance'
 import { InkFormula } from './InkFormula'
 import { hitStroke, hitStrokeCapsule } from './strokeGeom'
 import { StrokeDefs, StrokeShape } from './strokes'
@@ -38,7 +60,7 @@ interface Props {
   children?: React.ReactNode
 }
 
-type Mode = { kind: 'draw' } | { kind: 'erase' } | { kind: 'pan'; x: number; y: number; x0: number; y0: number; place: boolean } | { kind: 'pinch' }
+type Mode = { kind: 'draw' } | { kind: 'erase'; lx: number; ly: number } | { kind: 'pan'; x: number; y: number; x0: number; y0: number; place: boolean } | { kind: 'pinch' }
 
 export function Board(props: Props) {
   const { doc, view, setView, tool, pen, penOnly, showGrid } = props
@@ -58,6 +80,15 @@ export function Board(props: Props) {
   const penSeen = useRef(false)
   const active = useRef<number | null>(null)
   const lastErase = useRef<{ x: number; y: number } | null>(null)
+  // ink-feel experiment switches — all opt-in, off by default (see src/ink/flags.ts);
+  // live via the flags store so the debug panel can toggle them mid-stroke
+  const flags = useSyncExternalStore(inkFlagsStore.subscribe, inkFlagsStore.get)
+  const [predTail, setPredTail] = useState<number[]>([])
+  const samplesRef = useRef<InkSample[]>([])
+  const pointerTypeRef = useRef('mouse')
+  const [wetPts, setWetPts] = useState<number[] | null>(null)
+  const incSmoothRef = useRef<IncrementalSmoothState | null>(null)
+  const frameMsRef = useRef(ADAPTIVE_DEFAULT_FRAME_MS)
 
   const toWorld = useCallback((cx: number, cy: number) => {
     const r = ref.current!.getBoundingClientRect()
@@ -73,9 +104,13 @@ export function Board(props: Props) {
     mode.current = null
     active.current = null
     pointers.current.clear()
+    samplesRef.current = []
+    incSmoothRef.current = null
     if (!busy) return
     setLive(null)
     setErasing(new Set())
+    setPredTail([])
+    setWetPts(null)
   }, [])
 
   useEffect(() => {
@@ -130,6 +165,22 @@ export function Board(props: Props) {
     return () => window.removeEventListener('blur', onBlur)
   }, [abortLive])
 
+  // estimate the display refresh from rAF deltas so the prediction step/horizon
+  // can scale with the panel (only runs while the prediction experiment is on)
+  useEffect(() => {
+    if (!flags.prediction) return
+    let raf = 0
+    let last = performance.now()
+    const loop = (t: number) => {
+      const d = t - last
+      last = t
+      if (d > 0 && d < 100) frameMsRef.current = frameMsRef.current * 0.8 + d * 0.2
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [flags.prediction])
+
   // a lone dot waits a moment before it is inked, so the two clicks of a double-click leave no marks
   const pendingDots = useRef<{ s: Stroke; t: ReturnType<typeof setTimeout> }[]>([])
   const [dots, setDots] = useState<Stroke[]>([])
@@ -137,14 +188,29 @@ export function Board(props: Props) {
     const s = liveRef.current
     liveRef.current = null
     setLive(null)
+    samplesRef.current = []
+    incSmoothRef.current = null
+    if (predTail.length) setPredTail([]) // predicted points are display-only, never saved
+    if (wetPts) setWetPts(null)
     if (!s || s.pts.length < 3) return
-    if (s.pts.length > 3) return props.onAddStroke(s)
+    let stroke = s
+    // pointer-tolerance experiment: a quick press whose whole gesture stays
+    // within the per-type drag threshold (÷ zoom) is a tap — collapse it to the
+    // pen-down point. Slow deliberate ticks keep their (short) stroke.
+    if (flags.pointerTolerance && stroke.pts.length > 3 && isTapStroke(stroke.pts, dragThresholdWorld(toPointerKind(pointerTypeRef.current), viewRef.current.scale), Date.now() - stroke.createdAt)) {
+      stroke = { ...stroke, pts: [stroke.pts[0], stroke.pts[1], stroke.pts[2]] }
+    }
+    // bake the midpoint-Bézier smoothing into the saved stroke (dots and
+    // two-point strokes come back unchanged from midpointBezierPolyline)
+    const smooth = flags.smoothing ? midpointBezierPolyline(stroke.pts) : stroke.pts
+    const final = smooth === stroke.pts ? stroke : { ...stroke, pts: smooth }
+    if (final.pts.length > 3) return props.onAddStroke(final)
     const t = setTimeout(() => {
-      pendingDots.current = pendingDots.current.filter((d) => d.s !== s)
+      pendingDots.current = pendingDots.current.filter((d) => d.s !== final)
       setDots(pendingDots.current.map((d) => d.s))
-      props.onAddStroke(s)
+      props.onAddStroke(final)
     }, 320)
-    pendingDots.current.push({ s, t })
+    pendingDots.current.push({ s: final, t })
     setDots(pendingDots.current.map((d) => d.s))
   }
   const dropDots = () => {
@@ -161,9 +227,14 @@ export function Board(props: Props) {
     if (ids.length) props.onErase(ids)
   }
 
+  // eraser radius: main's eraserWorldRadius, or the per-pointer-type hit
+  // tolerance (DIP ÷ zoom) under the pointerTolerance experiment
+  const eraseRadius = () =>
+    flags.pointerTolerance ? hitToleranceWorld(toPointerKind(pointerTypeRef.current), viewRef.current.scale) : eraserWorldRadius(viewRef.current.scale)
+
   const eraseAt = (cx: number, cy: number) => {
     const w = toWorld(cx, cy)
-    const r = eraserWorldRadius(viewRef.current.scale)
+    const r = eraseRadius()
     const prev = lastErase.current
     lastErase.current = w
     let changed = false
@@ -186,8 +257,65 @@ export function Board(props: Props) {
     }
   }
 
+  // capsule the eraser swept through since the previous position, so fast motion
+  // cannot skip over a stroke the point test would miss
+  const eraseSweep = (x0: number, y0: number, x1: number, y1: number) => {
+    const r = eraseRadius()
+    let changed = false
+    for (const s of doc.strokes) {
+      if (!erasingRef.current.has(s.id) && hitSweep(s, x0, y0, x1, y1, r)) {
+        erasingRef.current.add(s.id)
+        changed = true
+      }
+    }
+    if (changed) setErasing(new Set(erasingRef.current))
+  }
+
+  /** display-only extrapolated tail for the live stroke; never touches the stroke data */
+  const updatePrediction = (e: React.PointerEvent, list: PointerEvent[]): number => {
+    const hist = samplesRef.current
+    for (const ev of list) {
+      const last = hist[hist.length - 1]
+      if (ev.timeStamp >= (last ? last.t : -Infinity)) hist.push({ x: ev.clientX, y: ev.clientY, t: ev.timeStamp })
+    }
+    if (hist.length > PREDICTION_HISTORY_CAP) hist.splice(0, hist.length - PREDICTION_HISTORY_CAP)
+    const gate = gateSamples(hist)
+    let screen: { x: number; y: number }[] = []
+    let source: InkDebugStats['predictedSource'] = 'off'
+    if (gate.predict) {
+      const native = nativePredictedTail(e.nativeEvent).map((p) => ({ x: p.clientX, y: p.clientY }))
+      if (native.length) {
+        screen = native
+        source = 'native'
+      } else {
+        // step/horizon scale with the display's frame interval (rAF estimate),
+        // absolute cap preserved inside predictTail
+        const adapt = frameAdaptivePrediction(frameMsRef.current)
+        const horizon = gate.verdict === 'curve' ? adapt.curveHorizonMs : adapt.horizonMs
+        screen = predictTail(hist, { horizonMs: horizon, stepMs: adapt.stepMs }).map((s) => ({ x: s.x, y: s.y }))
+        source = 'self'
+      }
+    }
+    inkDebugStats.predictedCount = screen.length
+    inkDebugStats.predictedSource = source
+    if (!screen.length || !liveRef.current) {
+      if (predTail.length) setPredTail([])
+      return screen.length
+    }
+    const pressure = liveRef.current.pts[liveRef.current.pts.length - 1] ?? 0.5
+    const flat: number[] = []
+    for (const p of screen) {
+      const w = toWorld(p.x, p.y)
+      flat.push(w.x, w.y, pressure)
+    }
+    setPredTail(flat)
+    return screen.length
+  }
+
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-no-board]')) return
+    pointerTypeRef.current = e.pointerType
+    inkDebugStats.pointerType = e.pointerType
     if (e.pointerType === 'pen' && !penSeen.current) {
       penSeen.current = true
       props.onPenDetected()
@@ -203,6 +331,9 @@ export function Board(props: Props) {
       erasingRef.current = new Set()
       setErasing(new Set())
       lastErase.current = null
+      incSmoothRef.current = null
+      if (predTail.length) setPredTail([])
+      if (wetPts) setWetPts(null)
       const [a, b] = touches
       pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, view: viewRef.current }
       mode.current = { kind: 'pinch' }
@@ -230,7 +361,8 @@ export function Board(props: Props) {
     capture(e)
     active.current = e.pointerId
     if (tool === 'eraser') {
-      mode.current = { kind: 'erase' }
+      const w = toWorld(e.clientX, e.clientY)
+      mode.current = { kind: 'erase', lx: w.x, ly: w.y }
       lastErase.current = null
       eraseAt(e.clientX, e.clientY)
       return
@@ -246,6 +378,9 @@ export function Board(props: Props) {
     }
     liveRef.current = s
     setLive(s)
+    incSmoothRef.current = null
+    if (wetPts) setWetPts(null)
+    if (flags.prediction) samplesRef.current = [{ x: e.clientX, y: e.clientY, t: e.nativeEvent.timeStamp }]
     mode.current = { kind: 'draw' }
   }
 
@@ -280,26 +415,50 @@ export function Board(props: Props) {
       return
     }
     if (m.kind === 'erase') {
-      const evs = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : []
-      const list = evs.length ? evs : [e.nativeEvent]
-      for (const ev of list) eraseAt(ev.clientX, ev.clientY)
+      if (flags.capsuleEraser) {
+        const w = toWorld(e.clientX, e.clientY)
+        eraseSweep(m.lx, m.ly, w.x, w.y)
+        m.lx = w.x
+        m.ly = w.y
+      } else {
+        const evs = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : []
+        const list = evs.length ? evs : [e.nativeEvent]
+        for (const ev of list) eraseAt(ev.clientX, ev.clientY)
+      }
       return
     }
     if (m.kind === 'draw' && liveRef.current) {
+      const t0 = performance.now()
       const evs = typeof e.nativeEvent.getCoalescedEvents === 'function' ? e.nativeEvent.getCoalescedEvents() : []
       const list = evs.length ? evs : [e.nativeEvent]
-      const pts = liveRef.current.pts.slice()
+      // flags off → the exact main behaviour: looser 0.8 px near-point threshold, no prediction
+      const minDist = flags.smoothing ? SMOOTH_MIN_DIST_DIP : 0.8
+      let pts = liveRef.current.pts.slice()
       for (const ev of list) {
         const w = toWorld(ev.clientX, ev.clientY)
-        const lx = pts[pts.length - 3]
-        const ly = pts[pts.length - 2]
-        if (Math.hypot(w.x - lx, w.y - ly) * viewRef.current.scale < 0.8) continue
-        pts.push(w.x, w.y, ev.pointerType === 'pen' ? ev.pressure || 0.5 : 0.5)
+        pts = appendStrokePoint(pts, { x: w.x, y: w.y, pressure: ev.pointerType === 'pen' ? ev.pressure || 0.5 : 0.5 }, minDist, viewRef.current.scale)
       }
       const next = { ...liveRef.current, pts }
       liveRef.current = next
       // A deferred pointermove must not resurrect a stroke that an interruption already dropped.
       setLive(() => (liveRef.current === next ? next : null))
+      // wet-ink incremental redraw: extend the cached smooth polyline by the one
+      // newly-final segment instead of resampling the whole stroke per frame
+      if (flags.smoothing && flags.wetIncremental) {
+        const st = incSmoothRef.current ?? (incSmoothRef.current = createIncrementalSmooth())
+        updateIncrementalSmooth(st, pts)
+        setWetPts(st.pts)
+      } else if (wetPts) {
+        setWetPts(null)
+      }
+      if (flags.prediction) updatePrediction(e, list)
+      else if (predTail.length) setPredTail([])
+      // debug-panel bookkeeping (hidden unless ?ink-debug=1; no behaviour change)
+      inkDebugStats.nativePredicted = typeof e.nativeEvent.getPredictedEvents === 'function'
+      inkDebugStats.hasPressure = hasRealPressure(liveRef.current.pts)
+      inkDebugStats.strokePoints = liveRef.current.pts.length / 3
+      inkDebugStats.handlerMs = performance.now() - t0
+      inkDebugStats.lastMoveAt = t0
     }
   }
 
@@ -343,6 +502,21 @@ export function Board(props: Props) {
   }
 
   const drawing = tool === 'pen' || tool === 'marker' || tool === 'eraser'
+  // wet-ink display: smoothing and the predicted tail are overlays on the live
+  // stroke only — they never mutate liveRef, which is what gets saved
+  const PREDICTION_GHOST_OPACITY = 0.4
+  const wetBase = live ? (flags.smoothing ? (flags.wetIncremental && wetPts ? wetPts : midpointBezierPolyline(live.pts)) : live.pts) : null
+  const liveDisplay = (() => {
+    if (!live || wetBase == null) return null
+    const merged = flags.prediction && predTail.length && !flags.predictionGhost
+    if (!merged) return wetBase === live.pts ? live : { ...live, pts: wetBase }
+    return { ...live, pts: [...wetBase, ...predTail] }
+  })()
+  // ghost tail: the prediction rendered as its own translucent path, starting at the stroke tip
+  const tailDisplay = (() => {
+    if (!live || wetBase == null || !flags.prediction || !flags.predictionGhost || !predTail.length) return null
+    return { ...live, pts: predictionTailPath(wetBase, predTail) }
+  })()
   const fingerSelects = penOnly || penSeen.current
   const passThrough = useCallback(
     (e: React.PointerEvent) => (drawing || space) && !(e.pointerType === 'touch' && fingerSelects),
@@ -413,7 +587,12 @@ export function Board(props: Props) {
           {dots.map((s) => (
             <StrokeShape key={s.id} s={s} />
           ))}
-          {live && <StrokeShape s={live} />}
+          {liveDisplay && <StrokeShape s={liveDisplay} />}
+          {tailDisplay && (
+            <g opacity={PREDICTION_GHOST_OPACITY}>
+              <StrokeShape s={tailDisplay} />
+            </g>
+          )}
         </svg>
       </div>
     </div>

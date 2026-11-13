@@ -25,6 +25,8 @@ import { pageGroups } from '@/math/page'
 import { summarizeCard } from '@/math/scene'
 import { parseCard } from '@/math/statements'
 import { clusterStrokes, mockRecognizer, OCR_ACCEPT } from '@/ocr/recognizer'
+import { InkDebugPanel } from '@/ink/InkDebugPanel'
+import { inkFlagsStore, shouldShowDebugPanel } from '@/ink/flags'
 import { PlotButton } from '@/plot/PlotButton'
 import { PlotPanel } from '@/plot/PlotPanel'
 import { PlotPane } from '@/plot/PlotPane'
@@ -470,6 +472,8 @@ export default function App() {
   const floated = plot.open && !plot.details && !plot.full
   const docked = plot.open && plot.details && !plot.full && !compact
   const modal = plot.open && (plot.full || (plot.details && compact))
+  // ink debug panel: ?ink-debug=1 (or a dev build with any ink experiment on) — production never shows it
+  const inkDebugVisible = shouldShowDebugPanel(window.location.search, import.meta.env.DEV, inkFlagsStore.get())
 
   return (
     <div className="fixed inset-0 flex overflow-hidden">
@@ -514,6 +518,8 @@ export default function App() {
         >
           <ShortcutHints visible={showHints} compact={compact} placement={anchor && anchor.top < sheet.h / 2 ? 'bottom' : 'top'} />
         </Board>
+
+        {inkDebugVisible && <InkDebugPanel />}
 
         <TopBar
           compact={compact}
