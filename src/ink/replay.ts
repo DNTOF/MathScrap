@@ -25,12 +25,12 @@ export function mulberry32(seed: number): () => number {
 export type TrajectoryScenario = 'straight' | 'fastArc' | 'sharpTurn' | 'jitter' | 'pause' | 'slowTick'
 
 export const SCENARIO_LABELS: Record<TrajectoryScenario, string> = {
-  straight: '直线',
-  fastArc: '快弧(小半径)',
-  sharpTurn: '急转',
-  jitter: '抖动',
-  pause: '停笔',
-  slowTick: '慢短笔',
+  straight: 'straight line',
+  fastArc: 'fast arc (small radius)',
+  sharpTurn: 'sharp turn',
+  jitter: 'jitter',
+  pause: 'pause',
+  slowTick: 'slow short tick',
 }
 
 const SCENARIO_DURATION_MS: Record<TrajectoryScenario, number> = {

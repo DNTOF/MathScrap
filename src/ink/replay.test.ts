@@ -27,7 +27,7 @@ test('makeTrajectory: reproducible, monotonic time, noise bounded around exact t
 
 test('replayTrajectory: deterministic and counts moments', () => {
   const traj = makeTrajectory('straight', { rateHz: 60, seed: 42 })
-  const cand: ReplayCandidate = { name: 'A-现行默认' }
+  const cand: ReplayCandidate = { name: 'A-current-default' }
   const s1 = replayTrajectory(traj, cand, 60)
   const s2 = replayTrajectory(traj, cand, 60)
   assert.deepEqual(s1, s2)
