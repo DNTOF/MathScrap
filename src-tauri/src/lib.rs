@@ -3,7 +3,9 @@ use mcpserve::Hub;
 pub fn mcp_stdio() {
     mcpserve::stdio_main();
 }
-use tauri::{Emitter, Manager};
+#[cfg(desktop)]
+use tauri::Emitter;
+use tauri::Manager;
 
 fn close_mcp(app: &impl Manager<tauri::Wry>) {
     if let Some(hub) = app.try_state::<Hub>() {
@@ -38,9 +40,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            let handle = app.handle().clone();
-            let dispatch = std::sync::Arc::new(move |job: serde_json::Value| handle.emit("mcp-call", job).is_ok());
-            let hub = Hub::start(dispatch).unwrap_or_else(|_| Hub::disabled());
+            // The loopback MCP listener is a desktop feature. iOS and Android never open it.
+            #[cfg(desktop)]
+            let hub = {
+                let handle = app.handle().clone();
+                let dispatch = std::sync::Arc::new(move |job: serde_json::Value| handle.emit("mcp-call", job).is_ok());
+                Hub::start(dispatch).unwrap_or_else(|_| Hub::disabled())
+            };
+            #[cfg(mobile)]
+            let hub = Hub::disabled();
             app.manage(hub);
             Ok(())
         })

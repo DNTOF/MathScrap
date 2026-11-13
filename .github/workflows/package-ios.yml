@@ -1,16 +1,23 @@
 name: package-ios
 
-# Manual only. A macOS runner is required and this file does not run on push.
+# Manual, or called by package.yml. A macOS runner is required.
+# unsigned: device IPA with no Apple signature, for TrollStore or a jailbroken device only.
 on:
   workflow_dispatch:
     inputs:
       target:
-        description: simulator builds a .app for the iOS Simulator. device exports an IPA only when signing secrets are set.
+        description: unsigned = device IPA without an Apple signature (TrollStore / jailbreak sideload). simulator = .app for the iOS Simulator. device = signed IPA, only when signing secrets are set.
         type: choice
         options:
+          - unsigned
           - simulator
           - device
-        default: simulator
+        default: unsigned
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        default: unsigned
 
 permissions:
   contents: read
@@ -18,6 +25,7 @@ permissions:
 jobs:
   ios:
     runs-on: macos-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -31,9 +39,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: CocoaPods
-        run: brew install cocoapods
+      - name: Build tools
+        run: |
+          brew install cocoapods xcodegen
+          brew install ldid || echo "ldid is unavailable; the IPA will carry no ad-hoc signature."
       - run: npm ci
+      - name: Unsigned IPA
+        if: inputs.target == 'unsigned'
+        run: bash scripts/package-ios.sh --unsigned
+      - name: Check the unsigned IPA
+        if: inputs.target == 'unsigned'
+        run: |
+          cd packaging/out
+          ls -l
+          shasum -a 256 -c SHA256SUMS
+          ipa="$(ls *-ios-unsigned.ipa)"
+          unzip -l "$ipa" | grep -E 'Payload/[^/]+\.app/(Info\.plist|AppIcon)' | head -20
+          cat PROVENANCE-ios.txt
       - name: Simulator app
         if: inputs.target == 'simulator'
         run: bash scripts/package-ios.sh --simulator
@@ -48,9 +70,18 @@ jobs:
           APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
         run: bash scripts/package-ios.sh --device
       - uses: actions/upload-artifact@v4
-        if: always() && hashFiles('packaging/out/**') != ''
+        if: inputs.target == 'unsigned'
         with:
           name: mathscrap-ios
+          path: |
+            packaging/out/*.ipa
+            packaging/out/PROVENANCE-ios.txt
+            packaging/out/SHA256SUMS
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.target != 'unsigned' && hashFiles('packaging/out/**') != ''
+        with:
+          name: mathscrap-ios-${{ inputs.target }}
           path: |
             packaging/out/*
             src-tauri/gen/apple/**/*.app

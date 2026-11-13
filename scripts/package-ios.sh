@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# iOS Simulator .app, or a signed IPA when Apple signing inputs are present.
+# iOS Simulator .app, a signed IPA when Apple signing inputs are present,
+# or (--unsigned) an unsigned device IPA for TrollStore / jailbroken sideloading.
 # This script never enrolls in the Apple Developer Program and never creates a certificate.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -9,9 +10,10 @@ for arg in "$@"; do
   case "$arg" in
     --simulator) target="simulator" ;;
     --device) target="device" ;;
+    --unsigned) target="unsigned" ;;
     *)
       echo "Unknown argument: $arg" >&2
-      echo "Usage: scripts/package-ios.sh [--simulator|--device]" >&2
+      echo "Usage: scripts/package-ios.sh [--simulator|--device|--unsigned]" >&2
       exit 2
       ;;
   esac
@@ -71,6 +73,27 @@ if [[ ! -d src-tauri/gen/apple ]]; then
   npx tauri ios init --ci
 fi
 
+# The generated project starts with the template icon. Copy the committed opaque
+# square icons (made from packaging/logo/app-icon.png) over it. iOS applies the
+# rounded mask itself, so no transparent corners are baked in.
+iconset="src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset"
+if [[ -d "$iconset" ]]; then
+  copied=0
+  for png in "$iconset"/*.png; do
+    [[ -e "$png" ]] || continue
+    src="src-tauri/icons/ios/$(basename "$png")"
+    if [[ -f "$src" ]]; then
+      cp "$src" "$png"
+      copied=$((copied + 1))
+    fi
+  done
+  if [[ "$copied" -eq 0 ]]; then
+    echo "No AppIcon file in $iconset matched src-tauri/icons/ios. Refusing to ship the template icon." >&2
+    exit 4
+  fi
+  echo "app icon: copied $copied files from src-tauri/icons/ios"
+fi
+
 version="$(node -p "require('./package.json').version")"
 mkdir -p packaging/out
 
@@ -79,6 +102,54 @@ if [[ "$target" == "simulator" ]]; then
   echo "Simulator build finished. Search src-tauri/gen/apple for the .app."
   echo "This is not an IPA and is not installable on an iPhone."
   find src-tauri/gen/apple -name '*.app' -type d | head -20
+  exit 0
+fi
+
+if [[ "$target" == "unsigned" ]]; then
+  # Archive without code signing; tauri wraps Payload/MathScrap.app into an .ipa.
+  npx tauri ios build --target aarch64 --no-sign --ci
+  built="$(find src-tauri/gen/apple/build -type f -name '*.ipa' | sort | head -1)"
+  if [[ -z "$built" ]]; then
+    echo "tauri ios build --no-sign finished but no .ipa was found under src-tauri/gen/apple/build." >&2
+    exit 1
+  fi
+  work="$(mktemp -d)"
+  unzip -q "$built" -d "$work"
+  app="$(find "$work/Payload" -maxdepth 1 -type d -name '*.app' | head -1)"
+  if [[ -z "$app" ]]; then
+    echo "The IPA has no Payload/*.app." >&2
+    exit 1
+  fi
+  exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")"
+  minos="$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist" 2>/dev/null || echo unknown)"
+  bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")"
+  echo "bundle $bundle_id executable $exe MinimumOSVersion $minos"
+  # Optional ad-hoc "fake" signature so TrollStore keeps the entitlements. Not an Apple signature.
+  fakesign="none"
+  if command -v ldid >/dev/null 2>&1; then
+    ent="$(find src-tauri/gen/apple -maxdepth 2 -name '*.entitlements' | head -1)"
+    if [[ -n "$ent" ]]; then
+      ldid -S"$ent" "$app/$exe"
+    else
+      ldid -S "$app/$exe"
+    fi
+    fakesign="ldid"
+  fi
+  dest="packaging/out/MathScrap-${version}-ios-unsigned.ipa"
+  rm -f "$dest"
+  (cd "$work" && zip -qry "$OLDPWD/$dest" Payload)
+  rm -rf "$work"
+  {
+    echo "ios_ipa=$(basename "$dest")"
+    echo "ios_signing=unsigned (no Apple certificate or provisioning profile)"
+    echo "ios_fakesign=$fakesign"
+    echo "ios_bundle_id=$bundle_id"
+    echo "ios_minimum_os=$minos"
+    echo "ios_install=TrollStore or a jailbroken device only; stock iOS refuses it"
+  } > packaging/out/PROVENANCE-ios.txt
+  node scripts/checksum-artifacts.mjs packaging/out
+  echo "artifact $dest"
+  echo "This IPA is unsigned. It installs only through TrollStore or on a jailbroken device."
   exit 0
 fi
 
