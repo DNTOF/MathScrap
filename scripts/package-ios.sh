@@ -58,8 +58,8 @@ What each command actually produces:
     APPLE_API_KEY_PATH         path to the AuthKey .p8 already on that Mac
   Then: npm run pack:ios -- --device
 
-Minimum OS for the packaged shell is iOS 15.0 (arm64). CoMER handwriting recognition needs
-WebAssembly SIMD (iOS 16.4+); on older systems the app reports it unavailable and ink still works.
+Minimum OS for the packaged shell is iOS 15.0 (arm64). CoMER uses WebAssembly SIMD on iOS 16.4+;
+older systems fall back to the slower non-SIMD runtime (onnxruntime-web 1.18), manual Recognize only.
 The bundle id is app.mathscrap. It must match the App ID inside the profile.
 EOF
   exit 3
@@ -152,7 +152,7 @@ if [[ "$target" == "unsigned" ]]; then
     echo "ios_bundle_id=$bundle_id"
     echo "ios_minimum_os=$minos"
     echo "ios_archs=$archs"
-    echo "ios_ocr=needs WebAssembly SIMD (iOS 16.4+); ink and the math engine work on older systems"
+    echo "ios_ocr=WebAssembly SIMD on iOS 16.4+; older systems use the slower non-SIMD compat runtime (manual Recognize)"
     echo "ios_install=TrollStore or a jailbroken device only; stock iOS refuses it"
   } > packaging/out/PROVENANCE-ios.txt
   node scripts/checksum-artifacts.mjs packaging/out

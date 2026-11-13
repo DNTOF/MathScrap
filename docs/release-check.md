@@ -16,7 +16,7 @@ MathScrap-0.0.1-windows-x64.exe
 MathScrap-0.0.1-android-arm64-v8a.apk
 ```
 
-从 0.0.2 起，CI 还会产出 `MathScrap-<版本>-ios-unsigned.ipa`。它没有苹果签名，也没有描述文件，只能用 TrollStore 或在已越狱的设备上安装，普通 iOS 会拒绝安装。如果构建机上有 `ldid`，包里只有一个 ad-hoc 伪签名，用来保留 entitlements，不是苹果签名。最低系统是 iOS 15.0（arm64）。iPadOS 15 上笔迹和数学引擎可用；手写识别需要 WebAssembly SIMD（iOS 16.4 起），在 iPadOS 15 上会提示不可用，这一点还没有真机验证。它的 SHA-256 和其他包一起写在 `SHA256SUMS` 里，核对方法相同。iOS 版不启动本机 MCP 监听，Android 也一样。
+从 0.0.2 起，CI 还会产出 `MathScrap-<版本>-ios-unsigned.ipa`。它没有苹果签名，也没有描述文件，只能用 TrollStore 或在已越狱的设备上安装，普通 iOS 会拒绝安装。如果构建机上有 `ldid`，包里只有一个 ad-hoc 伪签名，用来保留 entitlements，不是苹果签名。最低系统是 iOS 15.0（arm64）。iPadOS 15 上笔迹和数学引擎可用；手写识别在 iOS 16.4 起用 WebAssembly SIMD；iPadOS 15 没有 SIMD，会改用非 SIMD 兼容运行时（onnxruntime-web 1.18，结果相同、慢数倍、只手动识别），这一点还没有真机验证。它的 SHA-256 和其他包一起写在 `SHA256SUMS` 里，核对方法相同。iOS 版不启动本机 MCP 监听，Android 也一样。
 
 图标：Windows、macOS、Linux 和网页的图标是由 `packaging/logo/app-icon.png` 生成的圆角版本（`packaging/logo/app-icon-rounded.png`，四角透明）。iOS 用不透明的方形原图，系统自己裁成圆角；如果预先做成透明圆角，会被裁两次或在角上露出黑色。Android 保留自适应图标和圆形图标。
 
@@ -38,7 +38,7 @@ MathScrap-0.0.1-windows-x64.exe
 MathScrap-0.0.1-android-arm64-v8a.apk
 ```
 
-Starting with 0.0.2, CI also produces `MathScrap-<version>-ios-unsigned.ipa`. It has no Apple signature and no provisioning profile. It installs only through TrollStore or on a jailbroken device; stock iOS refuses it. When `ldid` is on the builder, the app carries an ad-hoc fake signature that only preserves entitlements; it is not an Apple signature. The minimum OS is iOS 15.0 (arm64). On iPadOS 15, ink and the math engine work; handwriting recognition needs WebAssembly SIMD (iOS 16.4 and later) and reports itself unavailable on iPadOS 15. This has not been verified on a device. Its SHA-256 is listed in `SHA256SUMS` with the other packages and is checked the same way. The iOS build, like Android, does not start the local MCP listener.
+Starting with 0.0.2, CI also produces `MathScrap-<version>-ios-unsigned.ipa`. It has no Apple signature and no provisioning profile. It installs only through TrollStore or on a jailbroken device; stock iOS refuses it. When `ldid` is on the builder, the app carries an ad-hoc fake signature that only preserves entitlements; it is not an Apple signature. The minimum OS is iOS 15.0 (arm64). On iPadOS 15, ink and the math engine work; handwriting recognition uses WebAssembly SIMD from iOS 16.4; iPadOS 15 has no SIMD and falls back to a non-SIMD runtime (onnxruntime-web 1.18: same results, several times slower, manual Recognize only). This has not been verified on a device. Its SHA-256 is listed in `SHA256SUMS` with the other packages and is checked the same way. The iOS build, like Android, does not start the local MCP listener.
 
 Icons: Windows, macOS, Linux and the web favicon use a rounded-corner icon generated from `packaging/logo/app-icon.png` (`packaging/logo/app-icon-rounded.png`, transparent corners). iOS uses the opaque square master and applies its own rounded mask; baked transparent corners would be masked twice or show black corners. Android keeps its adaptive and round launcher icons.
 

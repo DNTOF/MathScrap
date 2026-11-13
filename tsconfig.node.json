@@ -12,6 +12,9 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "paths": {
+      "onnxruntime-web-nosimd/wasm": ["./src/ocr/comer/ort-compat.d.ts"]
+    },
 
     /* Linting */
     "noUnusedLocals": true,

@@ -15,18 +15,31 @@ function ortFilesIn(dir: string): string[] {
   })
 }
 
+/**
+ * Non-SIMD fallback for WebKit before iOS / iPadOS 16.4: onnxruntime-web 1.18's plain `ort-wasm.wasm`
+ * (npm alias `onnxruntime-web-nosimd`). Fetched only when the SIMD probe fails or `?ocr-compat=1`.
+ */
+const ORT_COMPAT_FILES = ['ort-wasm.wasm']
+
 /** Serve ONNX Runtime's WASM next to the page so the recognizer can load it on LAN. */
 function ortRuntime(): Plugin {
   const dist = path.resolve('node_modules/onnxruntime-web/dist')
+  const compatDist = path.resolve('node_modules/onnxruntime-web-nosimd/dist')
   const files = () => ortFilesIn(dist)
   const serve = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
     const url = (req.url ?? '').split('?')[0] ?? ''
-    if (!url.startsWith('/ort/')) return next()
-    const name = url.slice('/ort/'.length)
-    if (!files().includes(name)) return next()
+    let file: string | null = null
+    if (url.startsWith('/ort/')) {
+      const name = url.slice('/ort/'.length)
+      if (files().includes(name)) file = path.join(dist, name)
+    } else if (url.startsWith('/ort-compat/')) {
+      const name = url.slice('/ort-compat/'.length)
+      if (ORT_COMPAT_FILES.includes(name)) file = path.join(compatDist, name)
+    }
+    if (!file) return next()
     res.statusCode = 200
-    res.setHeader('content-type', name.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
-    fs.createReadStream(path.join(dist, name)).pipe(res)
+    res.setHeader('content-type', file.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+    fs.createReadStream(file).pipe(res)
   }
   return {
     name: 'ort-runtime',
@@ -37,9 +50,13 @@ function ortRuntime(): Plugin {
       server.middlewares.use(serve)
     },
     writeBundle(options) {
-      const dir = path.join(options.dir ?? path.resolve('dist'), 'ort')
+      const out = options.dir ?? path.resolve('dist')
+      const dir = path.join(out, 'ort')
       fs.mkdirSync(dir, { recursive: true })
       for (const name of files()) fs.copyFileSync(path.join(dist, name), path.join(dir, name))
+      const compat = path.join(out, 'ort-compat')
+      fs.mkdirSync(compat, { recursive: true })
+      for (const name of ORT_COMPAT_FILES) fs.copyFileSync(path.join(compatDist, name), path.join(compat, name))
     },
   }
 }

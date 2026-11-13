@@ -590,3 +590,27 @@ assert.equal(tokensToSource(['\\ln', '(', 'x', ')']).replace(/\s+/g, ''), 'ln(x)
 assert.equal(tokensToSource(['\\log', '_', '{', '2', '}', '(', 'x', ')']).replace(/\s+/g, ''), 'log_2(x)')
 assert.equal(tokensToSource(['\\lg', '(', 'x', ')']).replace(/\s+/g, ''), 'lg(x)')
 console.log('ocr log source ok')
+
+// Runtime choice: SIMD WebViews keep onnxruntime-web 1.22; no SIMD (WebKit before 16.4) gets the
+// non-SIMD compat runtime instead of "unavailable"; no WebAssembly at all is the only "none".
+{
+  const { pickOcrRuntime } = await import('../src/ocr/support.ts')
+  const simdProbe = (bytes: Uint8Array) => bytes.length > 8 && bytes.includes(253)
+  const desktop = { validate: () => true }
+  const ipad15 = { validate: (bytes: Uint8Array) => !simdProbe(bytes) }
+  const throws = {
+    validate: () => {
+      throw new Error('boom')
+    },
+  }
+  assert.equal(pickOcrRuntime(desktop, false), 'simd')
+  assert.equal(pickOcrRuntime(desktop, true), 'compat', '?ocr-compat=1 forces the fallback for testing')
+  assert.equal(pickOcrRuntime(ipad15, false), 'compat')
+  assert.equal(pickOcrRuntime(undefined, false), 'none')
+  assert.equal(pickOcrRuntime(throws, false), 'none', 'a throwing probe never crashes the app')
+  assert.equal(pickOcrRuntime((globalThis as { WebAssembly?: { validate: (b: Uint8Array) => boolean } }).WebAssembly, false), 'simd', 'this Node has SIMD')
+  const web = readFileSync('src/ocr/comer/web.ts', 'utf8')
+  assert.match(web, /onnxruntime-web-nosimd\/wasm/)
+  assert.match(web, /decoder_int8_compat\.onnx/)
+  console.log('ocr runtime choice ok')
+}
