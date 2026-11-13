@@ -1,6 +1,6 @@
 [package]
 name = "mathcore"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 description = "Fast math helpers (parse, sample, solve, geometry inference) for the MathScrap kraft notebook, compiled to WASM."
 # wasm-pack copies this field into src/wasm/pkg/package.json. Keep both Apache-2.0.
