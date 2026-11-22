@@ -19,19 +19,26 @@ import { classifyInk } from '../src/ocr/gate.ts'
 import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
 import { arrowLetter, inkFixtures, isolatedSigma, pointPair, proseNote, sumBar, sumGlyph } from '../src/ocr/comer/samples.ts'
 import { vocabFromJson } from '../src/ocr/comer/source.ts'
+import { loadCompatOrt } from './ort-compat-node.ts'
 
-const ort = await import('onnxruntime-web/wasm')
-const dist = path.resolve('node_modules/onnxruntime-web/dist')
-ort.env.wasm.numThreads = 1
-ort.env.wasm.simd = true
-ort.env.wasm.wasmPaths = pathToFileURL(`${dist}/`).href
+// MATHSCRAP_OCR_COMPAT=1 runs the non-SIMD fallback (onnxruntime-web 1.18 `ort-wasm.wasm`)
+// that WebKit before iOS / iPadOS 16.4 loads. Same models, same decode path.
+const compat = process.env.MATHSCRAP_OCR_COMPAT === '1'
+const compatRt = compat ? await loadCompatOrt() : null
+const ort = compatRt ? compatRt.ort : await import('onnxruntime-web/wasm')
+if (!compatRt) {
+  ort.env.wasm.numThreads = 1
+  ort.env.wasm.simd = true
+  ort.env.wasm.wasmPaths = pathToFileURL(`${path.resolve('node_modules/onnxruntime-web/dist')}/`).href
+}
+console.log(`runtime: onnxruntime-web ${ort.env.versions?.web ?? '?'} ${compat ? 'non-SIMD compat' : 'SIMD'}`)
 
 const vocab = vocabFromJson(JSON.parse(readFileSync('public/models/comer/vocab.json', 'utf8')))
 const opts = { executionProviders: ['wasm' as const] }
-const [encoder, decoder] = await Promise.all([
-  ort.InferenceSession.create(readFileSync('public/models/comer/encoder_int8.onnx'), opts).then(wrap),
-  ort.InferenceSession.create(readFileSync('public/models/comer/decoder_int8.onnx'), opts).then(wrap),
-])
+const open = (file: string) => (compatRt ? compatRt.create(readFileSync(file)) : ort.InferenceSession.create(readFileSync(file), opts))
+const encoder = wrap(await open('public/models/comer/encoder_int8.onnx'))
+// 1.18 has no Trilu kernel; the compat decoder builds the same causal mask without it.
+const decoder = wrap(await open(compat ? 'public/models/comer/decoder_int8_compat.onnx' : 'public/models/comer/decoder_int8.onnx'))
 
 const outDir = '/tmp/mathscrap-ocr'
 mkdirSync(outDir, { recursive: true })
@@ -80,7 +87,8 @@ const pointHits = await recognizeStrokes(pointPair(), encoder, decoder, vocab, 2
 console.log('point', pointHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
 assert.match(pointHits[0]?.text ?? '', /^A\(2, 2\)$/)
 
-console.log('ocr live ok')
+compatRt?.close()
+console.log(`ocr live ok (${compat ? 'non-SIMD compat' : 'SIMD'})`)
 
 function loose(name: string) {
   if (name === 'y-eq-2') return /^[yY] = 2$/

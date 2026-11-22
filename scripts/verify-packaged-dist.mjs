@@ -25,6 +25,7 @@ if (!existsSync(dist)) fail('dist/ is missing. Run npm run build first. This che
 need('index.html', 100)
 need('models/comer/encoder_int8.onnx', 1_000_000)
 need('models/comer/decoder_int8.onnx', 1_000_000)
+need('models/comer/decoder_int8_compat.onnx', 1_000_000)
 need('models/comer/vocab.json', 100)
 need('models/comer/LICENSE', 100)
 need('models/comer/NOTICE.md', 50)
@@ -40,6 +41,9 @@ for (const name of ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs']
 if (!ort.some((name) => name === 'ort-wasm-simd.wasm')) {
   console.log('note: ort-wasm-simd.wasm (non-threaded) is not in this onnxruntime-web build; the threaded file is the one the page requests with numThreads = 1')
 }
+
+// non-SIMD fallback (onnxruntime-web 1.18) for WebKit before iOS / iPadOS 16.4
+need('ort-compat/ort-wasm.wasm', 1_000_000)
 
 const assets = path.join(dist, 'assets')
 const wasm = existsSync(assets) ? readdirSync(assets).filter((name) => name.endsWith('.wasm')) : []

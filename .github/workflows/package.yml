@@ -1,5 +1,12 @@
 name: package
 
+# Change-aware CI. The scope job classifies the diff (scripts/ci-scope.mjs):
+#   docs       consistency checks only; no math suite, no packages
+#   version    consistency checks; packages build on push to main (release bump)
+#   packaging  consistency checks plus real package builds (also on pull requests); no math suite
+#   full       the whole math suite, then packages on push to main
+# Mixed or unclassified changes are full. ci-ok is the single status to require:
+# skipped jobs pass it, failed or cancelled jobs fail it.
 on:
   push:
     branches:
@@ -15,9 +22,13 @@ on:
         type: boolean
         default: false
       sign_android:
-        description: Sign the release APK with ANDROID_KEY_* 
+        description: Sign the release APK with ANDROID_KEY_*
         type: boolean
         default: false
+      build_ios:
+        description: Build the unsigned iOS IPA (TrollStore / jailbreak sideload only)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -27,8 +38,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  scope:
     runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.scope.outputs.mode }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,7 +49,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: Classify changes
         id: scope
         env:
@@ -48,22 +60,58 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: node scripts/ci-scope.mjs
+
+  # Lightweight consistency checks. They run for every change, in seconds.
+  checks:
+    needs: scope
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Check recorded versions
-        if: steps.scope.outputs.mode == 'light'
         run: node scripts/ci-version-check.mjs
+      - name: Classifier regression
+        run: node scripts/ci-scope-smoke.mjs
+      - name: Packaging script syntax
+        run: |
+          for f in scripts/package-*.sh; do bash -n "$f"; echo "ok $f"; done
+          for f in scripts/*.mjs; do node --check "$f"; done
+          set +e
+          bash scripts/package-ios.sh --unsigned > /tmp/ios.txt 2>&1
+          code=$?
+          set -e
+          if [ "$code" -ne 3 ]; then cat /tmp/ios.txt; echo "package-ios.sh on Linux should stop with exit 3, got $code"; exit 1; fi
+      - name: Workflow YAML
+        run: |
+          python3 - <<'PY'
+          import glob, yaml
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              with open(path, encoding='utf-8') as fh:
+                  doc = yaml.safe_load(fh)
+              assert isinstance(doc, dict) and doc.get('jobs'), path
+              print('ok', path)
+          PY
+
+  # The math suite. Only for full changes.
+  test:
+    needs: scope
+    if: needs.scope.outputs.mode == 'full'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - uses: dtolnay/rust-toolchain@stable
-        if: steps.scope.outputs.mode == 'full'
         with:
           toolchain: 1.90.0
       - uses: Swatinem/rust-cache@v2
-        if: steps.scope.outputs.mode == 'full'
         with:
           workspaces: crates/mathcore
-      - name: Classifier regression
-        if: steps.scope.outputs.mode == 'full'
-        run: node scripts/ci-scope-smoke.mjs
       - name: Chrome for sheet end-to-end
-        if: steps.scope.outputs.mode == 'full'
         run: |
           if ! command -v google-chrome >/dev/null 2>&1 && ! command -v google-chrome-stable >/dev/null 2>&1; then
             sudo apt-get update
@@ -72,29 +120,20 @@ jobs:
           fi
           (google-chrome --version || google-chrome-stable --version)
       - run: npm ci
-        if: steps.scope.outputs.mode == 'full'
       - run: npm run lint
-        if: steps.scope.outputs.mode == 'full'
       - run: npm run test:rust
-        if: steps.scope.outputs.mode == 'full'
       - name: Packaged MCP protocol
-        if: steps.scope.outputs.mode == 'full'
         run: cargo test --manifest-path crates/mcpserve/Cargo.toml
       - run: npm run smoke
-        if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke:ocr
-        if: steps.scope.outputs.mode == 'full'
       - name: Real CoMER smoke
-        if: steps.scope.outputs.mode == 'full'
         run: npx tsx scripts/ocr-real-smoke.ts
       - run: npm run smoke:ai
-        if: steps.scope.outputs.mode == 'full'
       - run: npm run test:pack
-        if: steps.scope.outputs.mode == 'full'
       - run: npm run smoke:ink
-        if: steps.scope.outputs.mode == 'full'
+      - name: Ink unit tests
+        run: npx tsx --test src/ink/*.test.ts
       - name: Start the dev server
-        if: steps.scope.outputs.mode == 'full'
         run: |
           npm run dev > dev-server.log 2>&1 &
           echo $! > dev-server.pid
@@ -108,17 +147,14 @@ jobs:
           cat dev-server.log
           exit 1
       - name: Sheet end-to-end
-        if: steps.scope.outputs.mode == 'full'
         env:
           SHOTS: e2e-shots
         run: npm run e2e:sheet
       - name: Ink gestures
-        if: steps.scope.outputs.mode == 'full'
         env:
           SHOTS: e2e-shots
         run: npm run e2e:ink
       - name: Per-formula plot end-to-end
-        if: steps.scope.outputs.mode == 'full'
         env:
           SHOTS: e2e-plots
         run: npm run e2e
@@ -134,8 +170,13 @@ jobs:
           if-no-files-found: ignore
 
   web:
-    needs: test
-    if: github.event_name != 'pull_request'
+    needs: [scope, checks, test]
+    if: >-
+      !cancelled() && needs.scope.result == 'success' && needs.checks.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.scope.outputs.mode != 'docs') ||
+       (github.event_name == 'pull_request' && needs.scope.outputs.mode == 'packaging'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -152,8 +193,13 @@ jobs:
           if-no-files-found: error
 
   android:
-    needs: test
-    if: github.event_name != 'pull_request'
+    needs: [scope, checks, test]
+    if: >-
+      !cancelled() && needs.scope.result == 'success' && needs.checks.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.scope.outputs.mode != 'docs') ||
+       (github.event_name == 'pull_request' && needs.scope.outputs.mode == 'packaging'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -174,7 +220,7 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - name: Debug APK
-        if: github.event_name != 'workflow_dispatch' || inputs.sign_android == false
+        if: github.event_name != 'workflow_dispatch' || !inputs.sign_android
         run: bash scripts/package-android.sh --debug --install-sdk
       - name: Release APK
         if: github.event_name == 'workflow_dispatch' && inputs.sign_android
@@ -192,8 +238,13 @@ jobs:
           if-no-files-found: error
 
   windows:
-    needs: test
-    if: github.event_name != 'pull_request'
+    needs: [scope, checks, test]
+    if: >-
+      !cancelled() && needs.scope.result == 'success' && needs.checks.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.scope.outputs.mode != 'docs') ||
+       (github.event_name == 'pull_request' && needs.scope.outputs.mode == 'packaging'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -238,3 +289,68 @@ jobs:
             packaging/out/*.msi
             packaging/out/SHA256SUMS
           if-no-files-found: error
+
+  ios:
+    needs: [scope, checks, test]
+    if: >-
+      !cancelled() && needs.scope.result == 'success' && needs.checks.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.scope.outputs.mode != 'docs') ||
+       (github.event_name == 'pull_request' && needs.scope.outputs.mode == 'packaging')) &&
+      (github.event_name != 'workflow_dispatch' || inputs.build_ios)
+    uses: ./.github/workflows/package-ios.yml
+    with:
+      target: unsigned
+
+  # One SHA256SUMS over every package, next to the per-job sums.
+  checksums:
+    needs: [android, windows, ios]
+    if: >-
+      !cancelled() && needs.android.result == 'success' && needs.windows.result == 'success' &&
+      (needs.ios.result == 'success' || needs.ios.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mathscrap-*
+          path: artifacts
+      - name: Verify per-job sums and combine
+        run: |
+          mkdir -p release
+          for d in artifacts/mathscrap-android artifacts/mathscrap-windows artifacts/mathscrap-ios; do
+            [ -d "$d" ] || continue
+            (cd "$d" && sha256sum -c --ignore-missing SHA256SUMS)
+            find "$d" -maxdepth 1 -type f ! -name SHA256SUMS ! -name 'PROVENANCE*' -exec cp {} release/ \;
+          done
+          node scripts/checksum-artifacts.mjs release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mathscrap-release-checksums
+          path: release/SHA256SUMS
+          if-no-files-found: error
+
+  # The one status to require on main. Skipped jobs pass; failed or cancelled jobs fail.
+  ci-ok:
+    if: always()
+    needs: [scope, checks, test, web, android, windows, ios, checksums]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.NEEDS)
+            let bad = 0
+            for (const [name, job] of Object.entries(needs)) {
+              console.log(name.padEnd(10), job.result)
+              if (job.result === "failure" || job.result === "cancelled") bad++
+            }
+            if (needs.scope.result !== "success") bad++
+            process.exit(bad ? 1 : 0)
+          '

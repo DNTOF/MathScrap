@@ -18,6 +18,7 @@ import { recognizeStrokes } from '../src/ocr/comer/engine.ts'
 import { vocabFromJson } from '../src/ocr/comer/source.ts'
 import type { ComerSession, ComerTensor } from '../src/ocr/comer/decode.ts'
 import { OCR_ACCEPT } from '../src/ocr/threshold.ts'
+import { loadCompatOrt } from './ort-compat-node.ts'
 
 const modelDir = 'public/models/comer'
 const pins = JSON.parse(readFileSync('scripts/ocr-model-pins.json', 'utf8')) as Record<string, string>
@@ -87,6 +88,21 @@ const pointHits = await recognizeStrokes(pointPair(), encoder, decoder, vocab, 2
 console.log('synthetic point', pointHits.map((h) => `${h.text} (${h.confidence.toFixed(2)})`).join(' | ') || '(empty)')
 assert.match(pointHits[0]?.text ?? '', /^A\(2, 2\)$/)
 assert.equal(ran, 4)
+
+// Non-SIMD fallback (WebKit before iOS / iPadOS 16.4): onnxruntime-web 1.18 `ort-wasm.wasm` with the
+// Trilu-free decoder must read the same fixtures the same way as the SIMD runtime.
+const compatRt = await loadCompatOrt()
+const compatEncoder = wrapWith(compatRt.ort, await compatRt.create(readFileSync(path.join(modelDir, 'encoder_int8.onnx'))))
+const compatDecoder = wrapWith(compatRt.ort, await compatRt.create(readFileSync(path.join(modelDir, 'decoder_int8_compat.onnx'))))
+for (const strokes of [...['y-eq-2', 'y-eq-x', 'frac', 'a2-eq-b'].map((name) => fixtures.find((item) => item.name === name)!.strokes), sumGlyph(), pointPair()]) {
+  const want = await recognizeStrokes(strokes, encoder, decoder, vocab, 2)
+  const t0 = Date.now()
+  const got = await recognizeStrokes(strokes, compatEncoder, compatDecoder, vocab, 2)
+  console.log(`compat ${got[0]?.text ?? '(empty)'} ${Date.now() - t0}ms`)
+  assert.deepEqual(got.map((h) => h.text), want.map((h) => h.text), 'compat runtime reads like the SIMD runtime')
+  for (let i = 0; i < got.length; i++) assert.ok(Math.abs(got[i]!.confidence - want[i]!.confidence) < 1e-3, 'compat confidence')
+}
+compatRt.close()
 console.log('ocr-real-smoke ok (synthetic strokes; confidence is not accuracy; no handwriting scan in the repo)')
 
 function boom(): ComerSession {
@@ -106,12 +122,16 @@ function copyData(data: ArrayBufferView): Float32Array | Uint8Array | BigInt64Ar
   return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength))
 }
 
-function wrap(session: { run: (feeds: Record<string, unknown>) => Promise<Record<string, { data: ArrayBufferView; dims: readonly number[]; dispose?: () => void }>> }): ComerSession {
+function wrap(session: Parameters<typeof wrapWith>[1]): ComerSession {
+  return wrapWith(ort, session)
+}
+
+function wrapWith(rt: typeof ort, session: { run: (feeds: Record<string, unknown>) => Promise<Record<string, { data: ArrayBufferView; dims: readonly number[]; dispose?: () => void }>> }): ComerSession {
   return {
     async run(feeds) {
       const mapped: Record<string, { dispose?: () => void }> = {}
       for (const [name, tensor] of Object.entries(feeds)) {
-        mapped[name] = new ort.Tensor(tensor.type, tensor.data as never, tensor.dims)
+        mapped[name] = new rt.Tensor(tensor.type, tensor.data as never, tensor.dims)
       }
       const out = await session.run(mapped)
       for (const value of Object.values(mapped)) value.dispose?.()

@@ -1,7 +1,7 @@
 {
   "name": "mathscrap",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -42,6 +42,7 @@
     "katex": "^0.19.1",
     "lucide-react": "^1.65.0",
     "onnxruntime-web": "^1.22.0",
+    "onnxruntime-web-nosimd": "npm:onnxruntime-web@1.18.0",
     "perfect-freehand": "^1.2.3",
     "plotly.js-dist-min": "^4.2.0",
     "react": "^19.3.1",

@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "onnxruntime-web-nosimd/wasm": [
+        "./src/ocr/comer/ort-compat.d.ts"
       ]
     }
   },

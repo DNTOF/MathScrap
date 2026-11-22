@@ -25,6 +25,9 @@ import { pageGroups } from '@/math/page'
 import { summarizeCard } from '@/math/scene'
 import { parseCard } from '@/math/statements'
 import { clusterStrokes, mockRecognizer, OCR_ACCEPT } from '@/ocr/recognizer'
+import { ocrRuntime, ocrSupported } from '@/ocr/support'
+import { InkDebugPanel } from '@/ink/InkDebugPanel'
+import { inkFlagsStore, shouldShowDebugPanel } from '@/ink/flags'
 import { PlotButton } from '@/plot/PlotButton'
 import { PlotPanel } from '@/plot/PlotPanel'
 import { PlotPane } from '@/plot/PlotPane'
@@ -135,6 +138,7 @@ export default function App() {
   const [confirmClear, setConfirmClear] = useState(false)
   const ocrGen = useRef(0)
   const ocrSettled = useRef(new Set<string>())
+  const compatNoted = useRef(false)
   const dragBase = useRef<Doc | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -286,12 +290,24 @@ export default function App() {
     [commitRecognized, docRef],
   )
 
+  const noteCompat = useCallback(() => {
+    if (compatNoted.current) return
+    compatNoted.current = true
+    toast(t('ocrCompat'))
+  }, [t])
+
   const recognize = useCallback(() => {
     const pool = unmarkedInk(docRef)
     if (!pool.length) {
       toast(t('writeFirst'))
       return
     }
+    if (!ocrSupported()) {
+      toast(t('ocrUnsupported'))
+      return
+    }
+    // no WASM SIMD (WebKit before 16.4): the slower compat runtime reads it; say so once
+    if (ocrRuntime() === 'compat') noteCompat()
     const clusters = clusterStrokes(pool)
     if (!clusters.length) return
     document.documentElement.dataset.ocr = 'run'
@@ -310,12 +326,18 @@ export default function App() {
         }
       })
     }
-  }, [acceptInk, docRef, t])
+  }, [acceptInk, docRef, noteCompat, t])
 
   // Settled ink is read on its own. A confident reading is written onto the sheet and the
   // corner plot updates. Nothing is drawn over the paper while that happens.
   useEffect(() => {
     if (!prefs.autoOcr || composer.open) return
+    // The compat runtime takes seconds per formula on the main thread; reading after every pause
+    // would stall the pen. On those WebViews recognition is manual (Recognize / R).
+    if (ocrRuntime() === 'compat') {
+      noteCompat()
+      return
+    }
     const fresh = doc.strokes.filter((s) => !s.recognized && s.style !== 'marker')
     if (!fresh.length) {
       document.documentElement.dataset.ocr = 'idle'
@@ -347,7 +369,7 @@ export default function App() {
       })
     }, 900)
     return () => clearTimeout(t)
-  }, [doc.strokes, prefs.autoOcr, composer.open, acceptInk, docRef])
+  }, [doc.strokes, prefs.autoOcr, composer.open, acceptInk, docRef, noteCompat])
 
   const writeSample = (blocks: string[]) => {
     const placed = writeBlocks(blocks)
@@ -470,6 +492,8 @@ export default function App() {
   const floated = plot.open && !plot.details && !plot.full
   const docked = plot.open && plot.details && !plot.full && !compact
   const modal = plot.open && (plot.full || (plot.details && compact))
+  // ink debug panel: ?ink-debug=1 (or a dev build with any ink experiment on) — production never shows it
+  const inkDebugVisible = shouldShowDebugPanel(window.location.search, import.meta.env.DEV, inkFlagsStore.get())
 
   return (
     <div className="fixed inset-0 flex overflow-hidden">
@@ -514,6 +538,8 @@ export default function App() {
         >
           <ShortcutHints visible={showHints} compact={compact} placement={anchor && anchor.top < sheet.h / 2 ? 'bottom' : 'top'} />
         </Board>
+
+        {inkDebugVisible && <InkDebugPanel />}
 
         <TopBar
           compact={compact}
