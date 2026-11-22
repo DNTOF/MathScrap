@@ -1,0 +1,79 @@
+   Compiling comer-native v0.0.0 (C:\Users\AllowCache\Desktop\开发\MathScrap-rust-ocr\crates\comer-native)
+warning: variable does not need to be mutable
+   --> src\source.rs:133:17
+    |
+133 |             let mut take = |mark: &str, i: &mut usize, out: &mut String| {
+    |                 ----^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: field `x0` is never read
+  --> src\sigma.rs:73:5
+   |
+72 | struct Bounds {
+   |        ------ field in this struct
+73 |     x0: f64,
+   |     ^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `comer-native` (lib) generated 2 warnings (run `cargo fix --lib -p comer-native` to apply 1 suggestion)
+warning: unused variable: `sum_diff`
+   --> src\main.rs:166:13
+    |
+166 |         let sum_diff = (image.tensor.iter().map(|&v| v as f64).sum::<f64>() - fixture.tensor_sum).abs();
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sum_diff`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: fields `height` and `width` are never read
+  --> src\main.rs:21:5
+   |
+20 | struct Dims {
+   |        ---- fields in this struct
+21 |     height: usize,
+   |     ^^^^^^
+22 |     width: usize,
+   |     ^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: fields `dims` and `tensor_abs_sum` are never read
+  --> src\main.rs:41:5
+   |
+38 | struct Fixture {
+   |        ------- fields in this struct
+...
+41 |     dims: Dims,
+   |     ^^^^
+...
+45 |     tensor_abs_sum: f64,
+   |     ^^^^^^^^^^^^^^
+
+warning: `comer-native` (bin "comer-native") generated 3 warnings
+    Finished `release` profile [optimized] target(s) in 3.59s
+     Running `target\release\comer-native.exe --models ../../public/models/comer --fixtures fixtures/fixtures.json --repeat 3`
+engine: ort (ONNX Runtime native) | baseline: onnxruntime-web 1.22.0 | fixtures: 13
+y-eq-2-w3    W=320  parity=n/a      latex=OK  confΔ=1.93e-2 text=OK  textΔ=0.00e0 fullT=69.5ms infer 1st=  134.6ms rep(min)=   72.2ms enc=57.5ms pre=766µs
+y-eq-x-w3    W=320  parity=n/a      latex=OK  confΔ=1.94e-2 text=OK  textΔ=1.94e-2 fullT=81.5ms infer 1st=  146.9ms rep(min)=   81.5ms enc=65.8ms pre=1113µs
+a2-eq-b-w3   W=320  parity=n/a      latex=OK  confΔ=7.56e-4 text=OK  textΔ=0.00e0 fullT=103.2ms infer 1st=  164.8ms rep(min)=  106.0ms enc=60.1ms pre=754µs
+frac-w3      W=128  parity=1.93e-2  latex=OK  confΔ=1.87e-3 text=OK  textΔ=0.00e0 fullT=57.9ms infer 1st=   89.5ms rep(min)=   58.9ms enc=29.8ms pre=351µs
+y-eq-2-w5    W=320  parity=n/a      latex=OK  confΔ=1.19e-2 text=OK  textΔ=2.77e-3 fullT=67.8ms infer 1st=  117.2ms rep(min)=   74.0ms enc=55.5ms pre=858µs
+y-eq-x-w5    W=320  parity=n/a      latex=OK  confΔ=9.02e-3 text=OK  textΔ=9.02e-3 fullT=82.3ms infer 1st=  126.5ms rep(min)=   73.5ms enc=54.6ms pre=914µs
+a2-eq-b-w5   W=320  parity=n/a      latex=FAIL confΔ=4.17e-2 text=OK  textΔ=0.00e0 fullT=108.8ms infer 1st=  165.4ms rep(min)=  104.7ms enc=56.4ms pre=1169µs
+              latex got:  "a ^ { 2 } = b" (1.000) | "a ^ { 2 } = b \cdot b" (0.414)
+              latex want: "a ^ { 2 } = b" (1.000) | "a ^ { 2 } = b b" (0.372)
+              text got:  "a^2 = b" (0.970)
+              text want: "a^2 = b" (0.970)
+frac-w5      W=128  parity=n/a      latex=OK  confΔ=7.30e-4 text=OK  textΔ=0.00e0 fullT=63.5ms infer 1st=   90.6ms rep(min)=   59.4ms enc=27.5ms pre=391µs
+arrow-w3     W=192  parity=n/a      latex=OK  confΔ=1.70e-2 text=OK  textΔ=0.00e0 fullT=54.6ms infer 1st=   79.2ms rep(min)=   43.7ms enc=34.5ms pre=352µs
+sum-w3       W=128  parity=n/a      latex=OK  confΔ=7.72e-3 text=OK  textΔ=7.72e-3 fullT=31.8ms infer 1st=   57.8ms rep(min)=   31.2ms enc=28.6ms pre=360µs
+sum-bar-w3   W=128  parity=n/a      latex=OK  confΔ=2.16e-2 text=OK  textΔ=0.00e0 fullT=34.0ms infer 1st=   55.8ms rep(min)=   37.0ms enc=25.2ms pre=407µs
+sigma-w3     W=192  parity=2.05e-2  latex=OK  confΔ=4.42e-3 text=OK  textΔ=0.00e0 fullT=43.4ms infer 1st=   77.0ms rep(min)=   41.3ms enc=39.1ms pre=342µs
+point-w3     W=512  parity=n/a      latex=OK  confΔ=1.52e-2 text=OK  textΔ=1.52e-2 fullT=141.6ms infer 1st=  202.0ms rep(min)=  140.1ms enc=69.7ms pre=1399µs
+
+summary: engine=ort (ONNX Runtime native) latex pass=13 fail=0 text top-1 pass=13 fail=0 maxConfΔ=4.17e-2 maxTextConfΔ=1.94e-2 maxTensorDiff=2.05e-2
+  preprocess(avg)=705µs infer(1st avg)=115.9ms infer(repeat min)=31.2ms enc(avg)=46.5ms
+exit=0

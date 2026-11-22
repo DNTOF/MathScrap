@@ -1,0 +1,59 @@
+# WIP：comer-native 移动端/桌面构建验证（手动触发）。
+#
+# 只为 `crates/comer-native`（原生 CoMER 推理原型）服务，不触发 MathScrap 的
+# 常规 release 流程。iOS 用官方 CocoaPods `onnxruntime-objc` 包，Android 用官方
+# Maven `onnxruntime-android` AAR —— 均为微软官方预编译二进制，不自编 ORT。
+name: rust-ocr-native (WIP)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  desktop-parity:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo test
+        run: cargo test -p comer-native
+      - name: 13-fixture parity vs onnxruntime-web baseline
+        run: cargo run -p comer-native --release --features ort -- --models public/models/comer --fixtures crates/comer-native/fixtures/fixtures.json
+
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add aarch64-apple-ios
+      - name: Pull the official iOS binary (CocoaPods onnxruntime-objc 1.22.0)
+        run: |
+          mkdir ort-pod && cd ort-pod
+          printf 'platform :ios, "15.0"\ntarget "ortstub" do\n  use_frameworks! :linkage => :static\n  pod "onnxruntime-objc", "1.22.0"\nend\n' > Podfile
+          pod install --no-repo-update || pod install
+          BIN=$(find Pods -path "*ios-arm64*" -name onnxruntime -type f | head -1)
+          echo "found $BIN"
+          mkdir -p ../ortlib
+          cp "$BIN" ../ortlib/libonnxruntime.a
+      - name: cargo build (aarch64-apple-ios, static link to the pod binary)
+        run: ORT_LIB_LOCATION=$GITHUB_WORKSPACE/ortlib cargo build -p comer-native --release --target aarch64-apple-ios --features ort
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+          add-to-path: false
+      - name: Pull the official Android binary (Maven AAR onnxruntime-android 1.22.0)
+        run: |
+          curl -sL -o ort.aar https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.22.0/onnxruntime-android-1.22.0.aar
+          mkdir ortlib && cd ortlib && unzip -o -q ../ort.aar "jni/arm64-v8a/*"
+      - name: cargo build (aarch64-linux-android, load-dynamic against the AAR .so)
+        run: ORT_LIB_LOCATION=$GITHUB_WORKSPACE/ortlib cargo build -p comer-native --release --target aarch64-linux-android --features ort,load-dynamic
+        env:
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.ndk.outputs.ndk-toolchain-dir }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang

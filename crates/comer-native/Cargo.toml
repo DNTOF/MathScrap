@@ -1,0 +1,50 @@
+[package]
+name = "comer-native"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Native CoMER INT8 inference prototype: preprocessing, decode loop, and the full post-processing pipeline in Rust, with a parity CLI against the onnxruntime-web baseline."
+publish = false
+rust-version = "1.90"
+
+[lib]
+name = "comer_native"
+path = "src/lib.rs"
+
+[[bin]]
+name = "comer-native"
+path = "src/main.rs"
+
+[features]
+default = []
+# engine candidates; build with exactly one for a parity run:
+#   cargo run -p comer-native --features tract -- --models ../../public/models/comer --fixtures fixtures/fixtures.json
+#   cargo run -p comer-native --features ort   -- --models ../../public/models/comer --fixtures fixtures/fixtures.json
+tract = ["dep:tract-onnx"]
+ort = ["dep:ort"]
+# forward ort's runtime-dylib mode for mobile builds (Android: AAR's libonnxruntime.so)
+load-dynamic = ["ort?/load-dynamic"]
+
+[dependencies]
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dependencies.tract-onnx]
+version = "0.22"
+optional = true
+
+# enable tract-linalg's rayon-backed multi-thread matmuls (not a tract-onnx default)
+[dependencies.tract-linalg]
+version = "0.22"
+optional = true
+features = ["multithread-mm"]
+
+[dependencies.ort]
+version = "=2.0.0-rc.10"
+optional = true
+default-features = false
+features = ["std", "download-binaries", "copy-dylibs"]
+
+[profile.dev.package."*"]
+opt-level = 2

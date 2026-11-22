@@ -44,3 +44,9 @@ packaging/out
 *.mobileprovision
 keystore.properties
 
+
+# rust-ocr rounds 1-4 local artifacts (never commit)
+.ort-mobile/
+tauri-test-out.txt
+crates/comer-native/tract-run-stderr.log
+crates/comer-native/ort-run-stderr.log

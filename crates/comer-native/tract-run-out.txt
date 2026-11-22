@@ -1,0 +1,96 @@
+   Compiling comer-native v0.0.0 (C:\Users\AllowCache\Desktop\开发\MathScrap-rust-ocr\crates\comer-native)
+warning: unused variable: `sum_diff`
+   --> src\main.rs:175:13
+    |
+175 |         let sum_diff = (image.tensor.iter().map(|&v| v as f64).sum::<f64>() - fixture.tensor_sum).abs();
+    |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_sum_diff`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: fields `height` and `width` are never read
+  --> src\main.rs:33:5
+   |
+32 | struct Dims {
+   |        ---- fields in this struct
+33 |     height: usize,
+   |     ^^^^^^
+34 |     width: usize,
+   |     ^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: fields `text` and `confidence` are never read
+  --> src\main.rs:45:5
+   |
+44 | struct TextCand {
+   |        -------- fields in this struct
+45 |     text: String,
+   |     ^^^^
+46 |     confidence: f64,
+   |     ^^^^^^^^^^
+
+warning: fields `dims`, `tensor_abs_sum`, and `text` are never read
+  --> src\main.rs:53:5
+   |
+50 | struct Fixture {
+   |        ------- fields in this struct
+...
+53 |     dims: Dims,
+   |     ^^^^
+...
+57 |     tensor_abs_sum: f64,
+   |     ^^^^^^^^^^^^^^
+...
+64 |     text: Vec<TextCand>,
+   |     ^^^^
+
+warning: method `len` is never used
+  --> src\decode.rs:27:12
+   |
+26 | impl Tensor {
+   | ----------- method in this implementation
+27 |     pub fn len(&self) -> usize {
+   |            ^^^
+
+warning: field `mask_width` is never read
+  --> src\preprocess.rs:37:9
+   |
+30 | pub struct PreprocessResult {
+   |            ---------------- field in this struct
+...
+37 |     pub mask_width: usize,
+   |         ^^^^^^^^^^
+   |
+   = note: `PreprocessResult` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: field `word2idx` is never read
+  --> src\source.rs:19:9
+   |
+17 | pub struct Vocab {
+   |            ----- field in this struct
+18 |     #[serde(default)]
+19 |     pub word2idx: HashMap<String, i64>,
+   |         ^^^^^^^^
+   |
+   = note: `Vocab` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `comer-native` (bin "comer-native") generated 7 warnings
+    Finished `release` profile [optimized] target(s) in 2.19s
+     Running `target\release\comer-native.exe --models ../../public/models/comer --fixtures fixtures/fixtures.json --repeat 1`
+engine: tract-onnx | baseline: onnxruntime-web 1.22.0 | fixtures: 13
+y-eq-2-w3    W=320  parity=n/a      latex=OK  confΔ=1.17e-2 infer 1st= 4842.4ms rep(min/avg)= 4842.4/4842.4ms enc=1466.3ms pre=770µs
+y-eq-x-w3    W=320  parity=n/a      latex=OK  confΔ=1.56e-2 infer 1st= 5276.8ms rep(min/avg)= 5276.8/5276.8ms enc=1620.5ms pre=678µs
+a2-eq-b-w3   W=320  parity=n/a      latex=OK  confΔ=1.81e-3 infer 1st= 7842.2ms rep(min/avg)= 7842.2/7842.2ms enc=1653.2ms pre=755µs
+frac-w3      W=128  parity=1.93e-2  latex=OK  confΔ=4.81e-3 infer 1st= 5975.4ms rep(min/avg)= 5975.4/5975.4ms enc=1144.6ms pre=337µs
+y-eq-2-w5    W=320  parity=n/a      latex=OK  confΔ=1.08e-2 infer 1st= 5259.2ms rep(min/avg)= 5259.2/5259.2ms enc=1662.8ms pre=1051µs
+y-eq-x-w5    W=320  parity=n/a      latex=OK  confΔ=4.26e-3 infer 1st= 5222.4ms rep(min/avg)= 5222.4/5222.4ms enc=1680.1ms pre=726µs
+a2-eq-b-w5   W=320  parity=n/a      latex=OK  confΔ=7.34e-3 infer 1st= 7893.6ms rep(min/avg)= 7893.6/7893.6ms enc=1732.7ms pre=918µs
+frac-w5      W=128  parity=n/a      latex=OK  confΔ=8.33e-3 infer 1st= 6058.5ms rep(min/avg)= 6058.5/6058.5ms enc=1241.9ms pre=355µs
+arrow-w3     W=192  parity=n/a      latex=OK  confΔ=3.77e-3 infer 1st= 3638.2ms rep(min/avg)= 3638.2/3638.2ms enc=1308.0ms pre=339µs
+sum-w3       W=128  parity=n/a      latex=OK  confΔ=1.13e-2 infer 1st= 3355.6ms rep(min/avg)= 3355.6/3355.6ms enc=1233.7ms pre=295µs
+sum-bar-w3   W=128  parity=n/a      latex=OK  confΔ=2.07e-2 infer 1st= 3319.0ms rep(min/avg)= 3319.0/3319.0ms enc=1187.8ms pre=373µs
+sigma-w3     W=192  parity=2.05e-2  latex=OK  confΔ=4.60e-3 infer 1st= 3470.5ms rep(min/avg)= 3470.5/3470.5ms enc=1435.7ms pre=371µs
+point-w3     W=512  parity=n/a      latex=OK  confΔ=1.18e-2 infer 1st= 9268.1ms rep(min/avg)= 9268.1/9268.1ms enc=2269.8ms pre=1127µs
+
+summary: engine=tract-onnx pass=13 fail=0 preprocess(avg)=622µs infer(1st avg)=5494.0ms infer(repeat min)=3319.0ms
+exit=0

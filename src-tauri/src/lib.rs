@@ -34,6 +34,24 @@ fn mcp_result(
     hub.complete(&id, ok, result, error)
 }
 
+// opt-in native OCR (cargo feature `native-ocr`, runtime flag `?ocr-native=1`).
+// The handler registration below switches with the feature so the plain shell
+// builds unchanged. The module is public so the integration test
+// (tests/native_ocr.rs) can drive the exact command implementation.
+#[cfg(feature = "native-ocr")]
+pub mod ocr_native;
+#[cfg(feature = "native-ocr")]
+use ocr_native::ocr_native_recognize;
+
+#[cfg(feature = "native-ocr")]
+macro_rules! native_handler {
+    ($($cmd:tt)*) => { tauri::generate_handler![$($cmd)*, ocr_native_recognize] };
+}
+#[cfg(not(feature = "native-ocr"))]
+macro_rules! native_handler {
+    ($($cmd:tt)*) => { tauri::generate_handler![$($cmd)*] };
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -52,7 +70,7 @@ pub fn run() {
             app.manage(hub);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![mcp_ready, mcp_idle, mcp_result])
+        .invoke_handler(native_handler![mcp_ready, mcp_idle, mcp_result])
         .on_window_event(|window, event| {
             // CloseMainWindow delivers WM_CLOSE here. The runtime then calls
             // process::exit, which does not run Hub's Drop.

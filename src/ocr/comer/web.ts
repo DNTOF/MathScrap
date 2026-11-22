@@ -7,6 +7,7 @@ import type { InkStroke } from './preprocess.ts'
 import { assetUrl } from '../../lib/asset.ts'
 import { t } from '../../i18n/locale.ts'
 import { ocrRuntime } from '../support.ts'
+import { nativeRuntimeAvailable, recognizeNative } from './native.ts'
 
 const ENC = assetUrl('models/comer/encoder_int8.onnx')
 const DEC = assetUrl('models/comer/decoder_int8.onnx')
@@ -20,11 +21,26 @@ let chain: Promise<unknown> = Promise.resolve()
 /**
  * Browser session. A layout gate runs first: ordinary writing never reaches CoMER.
  * Formula-like ink is fetched into the on-device model. Weights stay on this device.
+ *
+ * Opt-in native path (round 3): when `?ocr-native=1` (or the localStorage
+ * override) is set AND the shell is Tauri, recognition runs through the Rust
+ * backend; any native failure falls back to this onnxruntime-web path.
  */
 export function recognizeMath(strokes: Stroke[]): Promise<OcrCandidate[]> {
   const ink = toInk(strokes)
   if (!ink.length || classifyInk(ink) === 'text') return Promise.resolve([])
-  const job = chain.then(() => load().then((ready) => recognizeStrokes(ink, ready.encoder, ready.decoder, ready.vocab, 2)))
+  const run = () => load().then((ready) => recognizeStrokes(ink, ready.encoder, ready.decoder, ready.vocab, 2))
+  if (nativeRuntimeAvailable()) {
+    const native = chain
+      .then(() => recognizeNative(strokes))
+      .catch(() => run())
+    chain = native.then(
+      () => undefined,
+      () => undefined,
+    )
+    return native
+  }
+  const job = chain.then(run)
   chain = job.then(
     () => undefined,
     () => undefined,
@@ -107,7 +123,7 @@ function copyData(data: ArrayBufferView): Float32Array | Uint8Array | BigInt64Ar
   return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength))
 }
 
-function toInk(strokes: Stroke[]): InkStroke[] {
+export function toInk(strokes: Stroke[]): InkStroke[] {
   const out: InkStroke[] = []
   for (const stroke of strokes) {
     if (stroke.style === 'marker' || stroke.pts.length < 6) continue
